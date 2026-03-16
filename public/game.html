@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Realm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#c9a84c;--gold-d:#8a6e2a;--gold-l:#f0d080;
+  --dark:#0b0904;--bg:#100d08;--panel:#13100b;--panel2:#18140d;
+  --border:#2e2416;--border2:#3d3020;
+  --text:#d0c4a0;--muted:#6e6248;
+  --online:#4ade80;--red:#b94040;--blue:#5080c0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Topbar ─────────────────────────────────────────────────────────────── */
+#topbar{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;height:56px;flex-shrink:0;gap:12px}
+.logo{font-family:'Cinzel Decorative',serif;font-size:14px;color:var(--gold);letter-spacing:.08em;white-space:nowrap}
+.logo span{opacity:.5;font-size:18px}
+#topbar .sep{flex:1}
+.player-badge{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:2px;padding:6px 12px}
+.player-badge .avatar{font-size:20px}
+.player-badge .info{line-height:1.3}
+.player-badge .name{font-family:'Cinzel',serif;font-size:13px;color:var(--gold)}
+.player-badge .meta{font-size:11px;color:var(--muted)}
+.badge-role{font-size:10px;letter-spacing:.1em;padding:2px 7px;border-radius:10px;border:1px solid;font-family:'Cinzel',serif}
+.badge-role.admin{border-color:#c05050;color:#e08080}
+.badge-role.gamemaster{border-color:var(--gold);color:var(--gold)}
+.badge-role.player{border-color:var(--border2);color:var(--muted)}
+#btn-logout{background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s}
+#btn-logout:hover{border-color:var(--red);color:var(--red)}
+
+/* ── Main ────────────────────────────────────────────────────────────────── */
+#main{display:grid;grid-template-columns:220px 1fr 300px;flex:1;overflow:hidden}
+
+/* ── Left sidebar ────────────────────────────────────────────────────────── */
+.sidebar{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+.sidebar-section{border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-section-title{font-family:'Cinzel',serif;font-size:10px;letter-spacing:.2em;color:var(--muted);padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between}
+.dot-online{width:6px;height:6px;border-radius:50%;background:var(--online);display:inline-block;margin-right:5px;box-shadow:0 0 6px var(--online)}
+#player-list{list-style:none;padding:0 8px 8px;overflow-y:auto;max-height:220px}
+#player-list li{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:2px;cursor:pointer;transition:background .15s}
+#player-list li:hover{background:rgba(255,255,255,.04)}
+#player-list li.active-dm{background:rgba(201,168,76,.08)}
+#player-list li .p-avatar{font-size:18px;line-height:1}
+#player-list li .p-info{flex:1;min-width:0}
+#player-list li .p-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#player-list li .p-class{font-size:10px;color:var(--muted)}
+#player-list li .p-online{width:7px;height:7px;border-radius:50%;background:var(--border2);flex-shrink:0}
+#player-list li .p-online.on{background:var(--online);box-shadow:0 0 5px var(--online)}
+#events-panel{overflow-y:auto;padding:8px;flex:1}
+.event-card{background:var(--panel2);border:1px solid var(--border);border-radius:2px;padding:10px;margin-bottom:8px;transition:border-color .2s}
+.event-card:hover{border-color:var(--border2)}
+.event-title{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);margin-bottom:3px}
+.event-desc{font-size:12px;color:var(--text);opacity:.8;margin-bottom:6px;line-height:1.4}
+.event-meta{font-size:10px;color:var(--muted);margin-bottom:6px}
+.event-status{display:inline-block;font-size:9px;letter-spacing:.1em;padding:2px 7px;border-radius:8px;border:1px solid;font-family:'Cinzel',serif;margin-bottom:5px}
+.event-status.open{border-color:rgba(201,168,76,.4);color:var(--gold)}
+.event-status.active{border-color:rgba(74,222,128,.4);color:#4ade80}
+.event-status.completed{border-color:var(--border);color:var(--muted)}
+.event-participants{font-size:11px;color:var(--muted);margin-bottom:6px}
+.event-actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn-sm{background:none;border:1px solid var(--border2);color:var(--text);font-size:11px;padding:4px 10px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .15s}
+.btn-sm:hover{background:rgba(255,255,255,.05)}
+.btn-sm.accept{border-color:rgba(74,222,128,.4);color:#4ade80}
+.btn-sm.accept:hover{background:rgba(74,222,128,.1)}
+.btn-sm.decline{border-color:rgba(185,64,64,.4);color:#e08080}
+.btn-sm.decline:hover{background:rgba(185,64,64,.1)}
+.btn-sm.gold{border-color:var(--gold-d);color:var(--gold)}
+.btn-sm.gold:hover{background:rgba(201,168,76,.1)}
+#invites-section{flex-shrink:0;border-top:1px solid var(--border)}
+#invites-list{padding:8px}
+.invite-item{background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.2);border-radius:2px;padding:8px;margin-bottom:6px;font-size:12px}
+.invite-item .inv-title{font-family:'Cinzel',serif;font-size:11px;color:var(--gold);margin-bottom:3px}
+.invite-item .inv-actions{display:flex;gap:6px;margin-top:5px}
+.no-events{text-align:center;color:var(--muted);font-style:italic;font-size:12px;padding:16px 8px}
+
+/* ── Town Square ─────────────────────────────────────────────────────────── */
+#town-square-area{display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+.ts-scene{
+  flex:1;position:relative;overflow:hidden;
+  background:#1a1410 url('/town-square.jpg') center center / cover no-repeat;
+}
+
+/* Day/Night tint overlay */
+#ts-tint{
+  position:absolute;inset:0;
+  pointer-events:none;z-index:1;
+  background:rgba(0,8,24,.62); /* updated by JS */
+  transition:background 8s ease;
+}
+
+/* Stars overlay (night) */
+#ts-stars{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:0;transition:opacity 4s}
+#ts-stars.visible{opacity:1}
+.star{position:absolute;border-radius:50%;background:#fff;animation:twinkle var(--d,3s) ease-in-out var(--del,0s) infinite}
+@keyframes twinkle{0%,100%{opacity:.15}50%{opacity:.9}}
+
+/* Vignette (always, adds depth) */
+.ts-vignette{
+  position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%);
+}
+
+/* Mist layer (subtle, always present) */
+.ts-mist{
+  position:absolute;bottom:0;left:0;right:0;height:30%;pointer-events:none;z-index:3;
+  background:linear-gradient(0deg,rgba(80,70,60,.18) 0%,transparent 100%);
+}
+
+/* ── Hotspot Labels ───────────────────────────────────────────────────────── */
+.ts-hotspot{
+  position:absolute;z-index:10;
+  display:flex;flex-direction:column;align-items:center;
+  cursor:pointer;
+  /* individual left/top set inline */
+}
+.ts-hotspot:hover .hs-label{
+  transform:translateY(-3px) scale(1.04);
+  box-shadow:0 6px 20px rgba(0,0,0,.7),0 0 0 1px rgba(201,168,76,.5),inset 0 1px 0 rgba(255,255,255,.35);
+}
+.ts-hotspot:hover .hs-connector{background:var(--gold)}
+
+/* Parchment label */
+.hs-label{
+  background:linear-gradient(180deg,#f8efd0 0%,#ecdab8 45%,#dfc898 100%);
+  border:1.5px solid #8a6828;
+  border-radius:3px;
+  padding:6px 14px 7px;
+  text-align:center;
+  box-shadow:0 3px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.1);
+  transition:transform .18s,box-shadow .18s;
+  white-space:nowrap;
+}
+.hs-name{
+  font-family:'Cinzel',serif;font-size:12px;color:#1e1006;
+  letter-spacing:.07em;line-height:1.3;
+}
+.hs-sub{
+  font-family:'Crimson Pro',serif;font-size:10px;color:#5a3c18;
+  font-style:italic;line-height:1.2;margin-top:1px;
+}
+/* Small downward connector dot */
+.hs-connector{
+  width:2px;height:8px;
+  background:rgba(139,104,40,.7);
+  transition:background .18s;
+  margin-top:0;
+}
+.hs-connector::after{
+  content:'';display:block;width:6px;height:6px;border-radius:50%;
+  background:inherit;margin-left:-2px;margin-top:2px;
+}
+
+/* ── Game Clock ──────────────────────────────────────────────────────────── */
+/* Positioned top-right — image already has a compass rose at top-left */
+#game-clock{
+  position:absolute;top:12px;right:12px;z-index:20;
+  background:rgba(6,4,2,.75);border:1px solid rgba(201,168,76,.35);
+  border-radius:4px;padding:7px 13px;
+  backdrop-filter:blur(6px);
+  display:flex;flex-direction:column;gap:2px;
+  box-shadow:0 2px 14px rgba(0,0,0,.65);
+}
+#game-clock-period{font-family:'Cinzel',serif;font-size:10px;letter-spacing:.16em;color:rgba(201,168,76,.85);line-height:1}
+#game-clock-time{font-family:'Cinzel Decorative',serif;font-size:20px;color:#f0e8d0;line-height:1;letter-spacing:.04em;text-shadow:0 0 10px rgba(255,230,160,.3)}
+
+/* ── Right Chat Panel ────────────────────────────────────────────────────── */
+#chat-area{border-left:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+#chat-header{background:var(--panel);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+#chat-title{font-family:'Cinzel',serif;font-size:13px;color:var(--gold)}
+#chat-subtitle{font-size:11px;color:var(--muted);font-style:italic}
+#messages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:1px}
+.msg{display:flex;gap:8px;align-items:flex-start;padding:4px 6px;border-radius:2px;transition:background .1s}
+.msg:hover{background:rgba(255,255,255,.03)}
+.msg.private{background:rgba(80,120,192,.08);border-left:2px solid rgba(80,120,192,.4)}
+.msg.system{justify-content:center}
+.msg.system .msg-content{color:var(--muted);font-style:italic;font-size:12px}
+.msg-avatar{font-size:18px;flex-shrink:0;margin-top:2px}
+.msg-body{flex:1;min-width:0}
+.msg-meta{display:flex;align-items:baseline;gap:6px;margin-bottom:1px}
+.msg-author{font-family:'Cinzel',serif;font-size:11px;color:var(--gold)}
+.msg-author.self{color:var(--gold-l)}
+.msg-time{font-size:10px;color:var(--muted)}
+.msg-dm-tag{font-size:10px;color:var(--blue);background:rgba(80,120,192,.15);padding:1px 5px;border-radius:8px}
+.msg-content{font-size:14px;line-height:1.5;word-break:break-word}
+#typing-indicator{padding:3px 22px;font-size:11px;font-style:italic;color:var(--muted);min-height:20px;flex-shrink:0}
+#chat-input-area{padding:10px 12px;border-top:1px solid var(--border);background:var(--panel);flex-shrink:0}
+.dm-indicator{background:rgba(80,120,192,.12);border:1px solid rgba(80,120,192,.3);border-radius:2px 2px 0 0;padding:4px 10px;font-size:11px;color:#80a0e0;display:flex;align-items:center;justify-content:space-between}
+.dm-indicator button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 3px}
+#input-row{display:flex;gap:6px;margin-top:3px}
+#msg-input{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:2px;color:var(--text);font-family:'Crimson Pro',serif;font-size:14px;padding:8px 12px;outline:none;transition:border-color .2s;resize:none;height:40px}
+#msg-input:focus{border-color:rgba(201,168,76,.4)}
+#btn-send{background:linear-gradient(180deg,rgba(201,168,76,.12),rgba(201,168,76,.06));border:1px solid var(--gold-d);color:var(--gold);font-family:'Cinzel',serif;font-size:11px;padding:0 14px;cursor:pointer;border-radius:2px;transition:all .2s;white-space:nowrap}
+#btn-send:hover{background:rgba(201,168,76,.2)}
+
+/* ── Building Popup ──────────────────────────────────────────────────────── */
+.bld-popup{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.88);
+  z-index:300;
+  background:linear-gradient(180deg,#1e180e,#160e08);
+  border:1px solid var(--gold-d);
+  border-radius:3px;
+  padding:32px 44px;text-align:center;
+  box-shadow:0 0 0 1px rgba(201,168,76,.12),0 0 80px rgba(0,0,0,.9),0 0 30px rgba(201,168,76,.08);
+  opacity:0;pointer-events:none;transition:all .22s;min-width:260px;
+}
+.bld-popup.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.bld-popup-icon{font-size:48px;display:block;margin-bottom:12px;filter:drop-shadow(0 2px 8px rgba(201,168,76,.4))}
+.bld-popup-name{font-family:'Cinzel Decorative',serif;font-size:17px;color:var(--gold);margin-bottom:8px;letter-spacing:.06em}
+.bld-popup-divider{width:60px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-d),transparent);margin:0 auto 12px}
+.bld-popup-sub{font-size:14px;color:var(--text);font-style:italic;margin-bottom:22px;line-height:1.6;opacity:.85}
+.bld-popup-close{background:none;border:1px solid var(--border2);color:var(--muted);font-size:12px;padding:7px 22px;cursor:pointer;border-radius:2px;font-family:'Cinzel',serif;transition:all .2s;letter-spacing:.08em}
+.bld-popup-close:hover{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.06)}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+#toast{position:fixed;bottom:24px;right:24px;z-index:200;background:var(--panel);border:1px solid var(--gold-d);color:var(--gold);padding:12px 20px;border-radius:2px;font-family:'Cinzel',serif;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5);transform:translateY(80px);opacity:0;transition:all .3s}
+#toast.show{transform:translateY(0);opacity:1}
+
+[hidden]{display:none!important}
+
+/* ── Modals ──────────────────────────────────────────────────────────────── */
+#modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center}
+#modal-overlay.open{display:flex}
+#modal{background:var(--panel);border:1px solid var(--border2);border-radius:2px;width:480px;max-height:85vh;overflow-y:auto;padding:32px;position:relative;box-shadow:0 0 60px rgba(0,0,0,.8)}
+#modal h2{font-family:'Cinzel Decorative',serif;font-size:15px;color:var(--gold);margin-bottom:24px}
+.modal-field{margin-bottom:16px}
+.modal-field label{display:block;font-size:11px;letter-spacing:.12em;color:var(--muted);margin-bottom:6px;text-transform:uppercase}
+.modal-field input,.modal-field textarea{width:100%;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:1px;color:var(--text);font-family:'Crimson Pro',serif;font-size:14px;padding:9px 12px;outline:none}
+.modal-field input:focus,.modal-field textarea:focus{border-color:rgba(201,168,76,.4)}
+.modal-field textarea{min-height:80px;resize:vertical}
+#invite-checkboxes{display:flex;flex-wrap:wrap;gap:8px}
+.invite-cb-label{display:flex;align-items:center;gap:6px;border:1px solid var(--border);padding:5px 10px;border-radius:2px;cursor:pointer;font-size:13px;transition:border-color .15s}
+.invite-cb-label:hover{border-color:var(--border2)}
+.invite-cb-label input[type=checkbox]{accent-color:var(--gold)}
+#modal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+#btn-create-event{background:linear-gradient(180deg,rgba(201,168,76,.12),rgba(201,168,76,.06));border:1px solid var(--gold-d);color:var(--gold);font-family:'Cinzel',serif;font-size:12px;letter-spacing:.1em;padding:12px 24px;cursor:pointer;border-radius:2px;transition:all .2s;width:100%;margin-top:8px}
+#btn-create-event:hover{background:rgba(201,168,76,.18)}
+#pw-modal{position:fixed;inset:0;z-index:160;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center}
+#pw-modal.open{display:flex}
+#pw-box{background:var(--panel);border:1px solid var(--border2);border-radius:2px;width:380px;padding:28px;position:relative;box-shadow:0 0 60px rgba(0,0,0,.9)}
+#pw-box h2{font-family:'Cinzel Decorative',serif;font-size:14px;color:var(--gold);margin-bottom:20px}
+#pw-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+.pw-field{margin-bottom:14px}
+.pw-field label{display:block;font-size:11px;letter-spacing:.12em;color:var(--muted);margin-bottom:5px;text-transform:uppercase}
+.pw-field input{width:100%;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:1px;color:var(--text);font-family:'Crimson Pro',serif;font-size:14px;padding:9px 12px;outline:none}
+.pw-field input:focus{border-color:rgba(201,168,76,.4)}
+#pw-error{color:#e08080;font-size:12px;margin-bottom:10px;display:none}
+#pw-submit{background:linear-gradient(180deg,rgba(201,168,76,.12),rgba(201,168,76,.06));border:1px solid var(--gold-d);color:var(--gold);font-family:'Cinzel',serif;font-size:12px;letter-spacing:.1em;padding:11px;cursor:pointer;border-radius:2px;transition:all .2s;width:100%}
+#pw-submit:hover{background:rgba(201,168,76,.18)}
+#admin-panel{position:fixed;inset:0;z-index:150;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center}
+#admin-panel.open{display:flex}
+#admin-box{background:var(--panel);border:1px solid var(--border2);border-radius:2px;width:520px;max-height:80vh;overflow-y:auto;padding:28px;position:relative;box-shadow:0 0 60px rgba(0,0,0,.9)}
+#admin-box h2{font-family:'Cinzel Decorative',serif;font-size:14px;color:var(--gold);margin-bottom:20px}
+.admin-user-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.admin-user-row:last-child{border-bottom:none}
+.admin-user-info{flex:1;font-size:13px}
+.admin-user-info .uname{font-family:'Cinzel',serif;font-size:12px;color:var(--gold)}
+.admin-user-info .umeta{font-size:11px;color:var(--muted)}
+#admin-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+#mobile-nav{display:none;flex-shrink:0;background:var(--panel);border-top:1px solid var(--border);flex-direction:row;height:52px}
+#mobile-nav button{flex:1;background:none;border:none;border-top:2px solid transparent;color:var(--muted);font-family:'Cinzel',serif;font-size:10px;letter-spacing:.08em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:all .2s;padding:0}
+#mobile-nav button.active{color:var(--gold);border-top-color:var(--gold)}
+#mobile-nav button span.nav-icon{font-size:18px}
+@media(max-width:860px){
+  #main{grid-template-columns:1fr;grid-template-rows:1fr;position:relative}
+  .sidebar{display:none;position:absolute;inset:0;z-index:10;border:none;overflow-y:auto}
+  #town-square-area{grid-column:1;grid-row:1;height:100%}
+  #chat-area{display:none;position:absolute;inset:0;z-index:10;border:none}
+  .sidebar.mobile-active{display:flex}
+  #chat-area.mobile-active{display:flex}
+  #mobile-nav{display:flex}
+  #topbar{padding:0 10px;gap:8px;height:50px}
+  .player-badge .meta,.badge-role{display:none}
+  #btn-logout{font-size:11px;padding:5px 8px}
+  #modal{width:95vw;padding:20px}
+  #pw-box,#admin-box{width:95vw;padding:20px}
+  .hs-name{font-size:10px}
+  .hs-sub{font-size:9px}
+  .hs-label{padding:4px 9px 5px}
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo"><span>🐉</span> Family Realm</div>
+  <div class="sep"></div>
+  <div class="player-badge">
+    <span class="avatar" id="my-avatar">⚔️</span>
+    <div class="info">
+      <div class="name" id="my-name">...</div>
+      <div class="meta" id="my-meta">...</div>
+    </div>
+    <span class="badge-role player" id="my-role-badge">Player</span>
+  </div>
+  <button id="btn-admin" style="display:none" onclick="openAdmin()">👑 Admin</button>
+  <button onclick="openPwModal()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔑 Password</button>
+  <button id="btn-logout">Logout</button>
+</div>
+
+<div id="main">
+
+  <!-- LEFT: Players + Events -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">
+        <span><span class="dot-online"></span>Adventurers</span>
+        <span id="online-count">0</span>
+      </div>
+    </div>
+    <ul id="player-list"></ul>
+    <div class="sidebar-section" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px">
+      <div class="sidebar-section-title" style="padding:0;border:none">⚔ Quests</div>
+      <button class="btn-sm gold" id="btn-open-event-modal" style="display:none" onclick="openEventModal()">+ New</button>
+    </div>
+    <div id="events-panel"><div class="no-events" id="no-events">No quests yet</div></div>
+    <div id="invites-section" style="display:none">
+      <div class="sidebar-section-title" style="border-bottom:none;padding-top:10px">📨 Invitations</div>
+      <div id="invites-list"></div>
+    </div>
+  </div>
+
+  <!-- CENTRE: Town Square (image + overlays) -->
+  <div id="town-square-area">
+    <div class="ts-scene" id="ts-scene">
+
+      <!-- Day/night colour tint — updated by JS -->
+      <div id="ts-tint"></div>
+
+      <!-- Subtle star layer (night only) -->
+      <div id="ts-stars"></div>
+
+      <!-- Depth vignette -->
+      <div class="ts-vignette"></div>
+
+      <!-- Ground mist -->
+      <div class="ts-mist"></div>
+
+      <!-- ══ Clickable building hotspots ══
+           Positions mapped to actual buildings in town-square.jpg.
+           Image compass roses are top-left and bottom-right — clock goes top-right. -->
+
+      <!-- The Royal Keep — central gothic cathedral, dominant building -->
+      <div class="ts-hotspot" style="left:38%;top:2%"
+           onclick="onBuildingClick('The Royal Keep','🏰','Seat of power for the realm. Speak with the Governor, receive royal decrees, and settle matters of law.','Town Hall · Level 3')">
+        <div class="hs-label">
+          <div class="hs-name">The Royal Keep</div>
+          <div class="hs-sub">Town Hall · Level 3</div>
+        </div>
+        <div class="hs-connector"></div>
+      </div>
+
+      <!-- The Lion's Head Inn — large half-timbered building, far left -->
+      <div class="ts-hotspot" style="left:1%;top:14%"
+           onclick="onBuildingClick('The Lion\'s Head Inn','🍺','A warm hearth and honest ale. The first choice of weary travellers — and those who wish to overhear useful things.','Inn &amp; Lodgings')">
+        <div class="hs-label">
+          <div class="hs-name">The Lion's Head Inn</div>
+          <div class="hs-sub">Inn &amp; Lodgings</div>
+        </div>
+        <div class="hs-connector"></div>
+      </div>
+
+      <!-- Town Blacksmith — left-centre forge, smoke & fire visible -->
+      <div class="ts-hotspot" style="left:22%;top:23%"
+           onclick="onBuildingClick('Town Blacksmith','⚒️','Master Aldric\'s forge burns from first light to last. Fine weapons, sturdy armour, and reliable repairs.','Forging &amp; Repairs')">
+        <div class="hs-label">
+          <div class="hs-name">Town Blacksmith</div>
+          <div class="hs-sub">Forging &amp; Repairs</div>
+        </div>
+        <div class="hs-connector"></div>
+      </div>
+
+      <!-- Market Square — lower centre-left, tent canopies and campfire -->
+      <div class="ts-hotspot" style="left:11%;top:50%"
+           onclick="onBuildingClick('Market Square','🛒','The beating heart of the town\'s commerce. Merchants, herbalists, and traders gather here daily around the central fire.','Trading &amp; Supplies')">
+        <div class="hs-label">
+          <div class="hs-name">Market Square</div>
+          <div class="hs-sub">Trading &amp; Supplies</div>
+        </div>
+        <div class="hs-connector"></div>
+      </div>
+
+      <!-- The Boar's Tusk Tavern — right side, tudor building with hanging sign -->
+      <div class="ts-hotspot" style="left:57%;top:31%"
+           onclick="onBuildingClick('The Boar\'s Tusk Tavern','🍻','Louder and livelier than the Inn. A favourite of off-duty guards and gamblers. Ask the barkeep about the back room.','Tavern &amp; Gaming')">
+        <div class="hs-label">
+          <div class="hs-name">The Boar's Tusk Tavern</div>
+          <div class="hs-sub">Tavern &amp; Gaming</div>
+        </div>
+        <div class="hs-connector"></div>
+      </div>
+
+      <!-- Gatehouse Defenses — right-mid, stone fortress towers -->
+      <div class="ts-hotspot" style="left:65%;top:17%"
+           onclick="onBuildingClick('Gatehouse Defenses','🛡️','The town\'s fortified entrance. Speak to the Captain of the Guard about threats, bounties, and passage permits.','Town Gate &amp; Garrison')">
+        <div class="hs-label">
+          <div class="hs-name">Gatehouse Defenses</div>
+          <div class="hs-sub">Town Gate &amp; Garrison</div>
+        </div>
+        <div class="hs-connector"></div>
+      </div>
+
+      <!-- Game Clock — top-right, clear of the image's built-in compass roses -->
+      <div id="game-clock">
+        <div id="game-clock-period">Day</div>
+        <div id="game-clock-time">12:00</div>
+      </div>
+
+    </div><!-- /ts-scene -->
+  </div><!-- /town-square-area -->
+
+  <!-- RIGHT: Public Chat -->
+  <div id="chat-area">
+    <div id="chat-header">
+      <div>
+        <div id="chat-title">💬 Public Chat</div>
+        <div id="chat-subtitle">Town Square — all can see</div>
+      </div>
+    </div>
+    <div id="messages"></div>
+    <div id="typing-indicator"></div>
+    <div id="chat-input-area">
+      <div class="dm-indicator" id="dm-indicator" style="display:none">
+        📨 Private to <strong id="dm-target-name"></strong>
+        <button onclick="clearDM()">✕</button>
+      </div>
+      <div id="input-row">
+        <textarea id="msg-input" placeholder="Speak, adventurer…" rows="1"></textarea>
+        <button id="btn-send">Send ⚔</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- Building Popup -->
+<div class="bld-popup" id="bld-popup">
+  <span class="bld-popup-icon" id="bld-popup-icon">🏰</span>
+  <div class="bld-popup-name" id="bld-popup-name">Building</div>
+  <div class="bld-popup-divider"></div>
+  <div class="bld-popup-sub" id="bld-popup-sub"></div>
+  <button class="bld-popup-close" onclick="closeBldPopup()">Close</button>
+</div>
+
+<!-- Create Event Modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <button id="modal-close" onclick="closeEventModal()">✕</button>
+    <h2>📜 Create New Quest</h2>
+    <div class="modal-field"><label>Quest Title</label><input type="text" id="ev-title" placeholder="The Dragon's Lair…"></div>
+    <div class="modal-field"><label>Description</label><textarea id="ev-desc" placeholder="Describe the quest…"></textarea></div>
+    <div class="modal-field"><label>Scheduled For (optional)</label><input type="datetime-local" id="ev-date"></div>
+    <div class="modal-field"><label>Invite Adventurers</label><div id="invite-checkboxes"></div></div>
+    <button id="btn-create-event" onclick="submitEvent()">📜 Post Quest</button>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div id="pw-modal">
+  <div id="pw-box">
+    <button id="pw-close" onclick="closePwModal()">✕</button>
+    <h2>🔑 Change Password</h2>
+    <div id="pw-error"></div>
+    <div class="pw-field"><label>Current Password</label><input type="password" id="pw-current" placeholder="••••••••"></div>
+    <div class="pw-field"><label>New Password</label><input type="password" id="pw-new" placeholder="••••••••"></div>
+    <div class="pw-field"><label>Confirm New Password</label><input type="password" id="pw-confirm" placeholder="••••••••"></div>
+    <button id="pw-submit" onclick="submitPwChange()">Update Password</button>
+  </div>
+</div>
+
+<!-- Admin Panel -->
+<div id="admin-panel">
+  <div id="admin-box">
+    <button id="admin-close" onclick="closeAdmin()">✕</button>
+    <h2>👑 Admin Panel</h2>
+    <div id="admin-user-list"></div>
+  </div>
+</div>
+
+<!-- Mobile nav -->
+<div id="mobile-nav">
+  <button id="nav-town" class="active" onclick="mobileTab('town')"><span class="nav-icon">🏰</span>Town</button>
+  <button id="nav-players" onclick="mobileTab('players')"><span class="nav-icon">⚔️</span>Party</button>
+  <button id="nav-chat" onclick="mobileTab('chat')"><span class="nav-icon">💬</span>Chat</button>
+</div>
+<div id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/game.js"></script>
+<script>
+// ── Building popup ────────────────────────────────────────────────────────────
+function onBuildingClick(name, icon, desc) {
+  document.getElementById('bld-popup-icon').textContent = icon;
+  document.getElementById('bld-popup-name').textContent = name;
+  document.getElementById('bld-popup-sub').textContent  = desc;
+  document.getElementById('bld-popup').classList.add('show');
+}
+function closeBldPopup() { document.getElementById('bld-popup').classList.remove('show'); }
+document.addEventListener('click', e => {
+  const popup = document.getElementById('bld-popup');
+  if (popup.classList.contains('show') && !popup.contains(e.target) && !e.target.closest('.ts-hotspot')) {
+    popup.classList.remove('show');
+  }
+});
+
+// ── Day/Night tint & clock ────────────────────────────────────────────────────
+(function(){
+  // Tint keyframes: [hour, rgba string]
+  // Image is already dark and overcast — daytime tint is zero, night adds a subtle cool-dark wash
+  const TINTS = [
+    [ 0, 'rgba(0,4,18,0.50)'],
+    [ 4, 'rgba(4,2,14,0.44)'],
+    [ 5, 'rgba(60,18,6,0.24)'],
+    [ 6, 'rgba(90,38,8,0.15)'],
+    [ 7, 'rgba(100,55,10,0.07)'],
+    [ 9, 'rgba(0,0,0,0.00)'],
+    [16, 'rgba(0,0,0,0.00)'],
+    [17, 'rgba(110,50,8,0.12)'],
+    [18, 'rgba(70,26,6,0.26)'],
+    [19, 'rgba(20,6,36,0.40)'],
+    [20, 'rgba(0,4,18,0.48)'],
+    [22, 'rgba(0,4,18,0.50)'],
+    [24, 'rgba(0,4,18,0.50)'],
+  ];
+  const PERIODS = ['Night','Night','Night','Night','Pre-Dawn','Dawn','Sunrise','Morning','Morning','Day','Day','Day','Noon','Afternoon','Afternoon','Afternoon','Golden Hour','Evening','Evening','Dusk','Twilight','Night','Night','Night'];
+
+  // Parse rgba string to [r,g,b,a]
+  function parseRGBA(s){ const m=s.match(/[\d.]+/g); return m.map(Number); }
+  function lerpRGBA(a,b,t){ return a.map((v,i)=>i<3?Math.round(v+(b[i]-v)*t):+(v+(b[i]-v)*t).toFixed(3)); }
+  function toRGBA(c){ return `rgba(${c[0]},${c[1]},${c[2]},${c[3]})`; }
+
+  function getTint(h, m){
+    const t = h + m/60;
+    let i=0;
+    for(let k=0;k<TINTS.length-1;k++){ if(t>=TINTS[k][0]&&t<TINTS[k+1][0]){i=k;break;} }
+    const frac=(t-TINTS[i][0])/(TINTS[i+1][0]-TINTS[i][0]);
+    return toRGBA(lerpRGBA(parseRGBA(TINTS[i][1]),parseRGBA(TINTS[i+1][1]),frac));
+  }
+
+  // Generate stars
+  const starsEl = document.getElementById('ts-stars');
+  for(let i=0;i<60;i++){
+    const s=document.createElement('div');
+    s.className='star';
+    const sz=(Math.random()*1.8+0.8).toFixed(1);
+    s.style.cssText=`width:${sz}px;height:${sz}px;top:${(Math.random()*55).toFixed(1)}%;left:${(Math.random()*100).toFixed(1)}%;--d:${(Math.random()*3+2).toFixed(1)}s;--del:${(Math.random()*5).toFixed(1)}s`;
+    starsEl.appendChild(s);
+  }
+
+  function update(){
+    const now=new Date(), h=now.getHours(), m=now.getMinutes(), t=h+m/60;
+    document.getElementById('ts-tint').style.background = getTint(h,m);
+    const isNight = t<6.5||t>19;
+    document.getElementById('ts-stars').classList.toggle('visible', isNight);
+    document.getElementById('game-clock-time').textContent   = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+    document.getElementById('game-clock-period').textContent = PERIODS[h]||'Night';
+  }
+
+  update();
+  const now=new Date();
+  setTimeout(()=>{ update(); setInterval(update,30000); }, (60-now.getSeconds())*1000);
+})();
+</script>
+</body>
+</html>
