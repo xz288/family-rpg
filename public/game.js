@@ -1,3 +1,4 @@
+/* global MONSTER_DEFS, MONSTER_SVGS, PLAYER_SVGS, MONSTER_SKILLS, ZONE_MONSTER_POOL, TIER_COLORS, TIER_BASE_XP, CLASS_SKILLS, ANIM_PROJECTILE, SKILL_TREES, FOREST_ZONES */
 // ── State ─────────────────────────────────────────────────────────────────────
 const token   = localStorage.getItem('rpg_token');
 const meRaw   = localStorage.getItem('rpg_user');
@@ -36,8 +37,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (isGM) document.getElementById('btn-open-event-modal').style.display = '';
   // Show Admin button
   if (me.role === 'admin') document.getElementById('btn-admin').style.display = '';
+  // Hall of Fame always visible
+  document.getElementById('btn-hof').style.display = '';
+
+  // Load season topic
+  loadSeasonBadge();
 
   // Load data
+  // Load forest progress from server before anything tries to render the map
+  const progressRes = await api('GET', '/api/me/progress');
+  _forestProgress = progressRes?.forest_progress ?? 0;
+
   await Promise.all([loadUsers(), loadPublicHistory(), loadEvents(), loadMyInvites(), loadQuestLog()]);
 
   // Listeners
@@ -456,12 +466,16 @@ let dragItem    = null;   // { invId, itemSlot } — active drag from inventory
 document.getElementById('char-panel').addEventListener('click', e => {
   if (e.target === document.getElementById('char-panel')) closeCharPanel();
 });
+document.getElementById('hof-panel').addEventListener('click', e => {
+  if (e.target === document.getElementById('hof-panel')) closeHallOfFame();
+});
 
 async function openCharPanel(tab) {
   document.getElementById('char-panel').classList.add('show');
-  document.getElementById('cp-avatar').textContent     = me.avatar || '⚔️';
-  document.getElementById('cp-name').textContent       = me.username;
+  document.getElementById('cp-avatar').textContent      = me.avatar || '⚔️';
+  document.getElementById('cp-name').textContent        = me.username;
   document.getElementById('cp-class-badge').textContent = me.class || '—';
+  document.getElementById('cp-level').textContent       = `Lv.${charCache?.level ?? me.level ?? 1}`;
 
   if (!charCache) {
     document.getElementById('char-content').innerHTML =
@@ -555,14 +569,46 @@ function renderCharEquipment(data) {
     }
   }
 
-  // Stats panel for left column
-  const s = data.stats || {};
+  // Stats panel for left column — split into Basic (distributable) and Derived
+  const s    = data.stats    || {};
+  const base = data.classBase || {};
+  const dist = data.attrStats || {};
+  const ap   = data.attrPoints ?? 0;
+
+  // For each basic stat show: total | base+gear+dist breakdown hint
+  const basicRows = [
+    ['💪','STR','str'], ['🏹','DEX','dex'], ['📚','INT','int'], ['✨','SP','spirit'],
+  ].map(([ic, lb, key]) => {
+    const total    = s[key === 'spirit' ? 'spirit' : key] ?? '—';
+    const baseVal  = base[key] ?? 0;
+    const distVal  = dist[key] ?? 0;
+    const hint     = distVal ? `${baseVal}+${distVal}pts` : `base ${baseVal}`;
+    const btn      = ap > 0
+      ? `<button class="esl-plus" onclick="assignAttrPoint('${key}')" title="Spend 1 attribute point">+</button>`
+      : '';
+    return `<div class="esl-row">
+      <span class="esl-key">${ic} ${lb}</span>
+      <span class="esl-hint">${hint}</span>
+      <span class="esl-val">${total}</span>${btn}
+    </div>`;
+  }).join('');
+
+  const derivedRows = [
+    ['⚔️','ATK','atk'], ['🛡️','DEF','def'], ['❤️','HP','hp'], ['💧','MP','mp'],
+  ].map(([ic, lb, key]) =>
+    `<div class="esl-row"><span class="esl-key">${ic} ${lb}</span><span class="esl-val">${s[key]??'—'}</span></div>`
+  ).join('');
+
+  const attrBanner = ap > 0
+    ? `<div class="esl-attr-banner">✨ ${ap} attribute point${ap > 1 ? 's' : ''} to spend</div>`
+    : '';
+
   const statsPanel = `<div class="equip-stats-left">
-    <div class="esl-title">Stats</div>
-    ${[['⚔️','ATK',s.atk],['🛡️','DEF',s.def],['❤️','HP',s.hp],['💧','MP',s.mp],
-       ['💪','STR',s.str],['🏹','DEX',s.dex],['📚','INT',s.int],['✨','SP',s.spirit]]
-      .map(([ic,lb,v])=>`<div class="esl-row"><span class="esl-key">${ic} ${lb}</span><span class="esl-val">${v??'—'}</span></div>`)
-      .join('')}
+    ${attrBanner}
+    <div class="esl-section-label">Basic</div>
+    ${basicRows}
+    <div class="esl-section-label" style="margin-top:6px">Derived</div>
+    ${derivedRows}
   </div>`;
 
   return `<div class="equip-combined">
@@ -577,6 +623,18 @@ function renderCharEquipment(data) {
       <div class="inv-grid-scroll"><div class="inv-grid">${cells.join('')}</div></div>
     </div>
   </div>`;
+}
+
+async function assignAttrPoint(attr) {
+  const res = await api('POST', '/api/me/attributes/assign', { attr });
+  if (res.error) { showToast(`❌ ${res.error}`); return; }
+  // Re-fetch so derived stats (HP, MP, ATK, DEF) update correctly
+  const [stats, skillData] = await Promise.all([
+    api('GET', '/api/me/stats'),
+    api('GET', '/api/me/skills'),
+  ]);
+  charCache = { ...stats, skillData };
+  switchCharTab('equipment');
 }
 
 function gearBonusStr(item) {
@@ -1011,11 +1069,14 @@ const FOREST_ZONES = [
   { id: 'demon', name: '☠ Demon in the Forest',  sub: '??? · Do not face it alone',      pos: { left:'50%', top:'12%' }, danger: true },
 ];
 
-function getForestProgress() {
-  return parseInt(localStorage.getItem(`fp_${me.username}`) || '0', 10);
-}
-function setForestProgress(v) {
-  localStorage.setItem(`fp_${me.username}`, String(v));
+// Forest progress is stored server-side; cached locally for sync reads during a session
+let _forestProgress = 0;
+
+function getForestProgress() { return _forestProgress; }
+
+async function setForestProgress(v) {
+  _forestProgress = v;
+  await api('POST', '/api/me/progress', { forest_progress: v });
 }
 
 function renderForestMap() {
@@ -1104,9 +1165,14 @@ function startCombat(zoneId) {
   // Spawn 1-3 monsters (single-monster zones like B-tier still cap at 1)
   const maxCount = pool.length === 1 ? 1 : randInt(1, 3);
   const monsters = Array.from({ length: maxCount }, () => {
-    const id  = pool[randInt(0, pool.length - 1)];
-    const def = MONSTER_DEFS[id];
-    return { ...def, monsterId: id, curHp: def.hp };
+    const id   = pool[randInt(0, pool.length - 1)];
+    const base = MONSTER_DEFS[id];
+    const lv   = base.level || 1;
+    const hp   = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
+    const atk  = Math.round(base.atk * (1 + (lv - 1) * 0.10));
+    const def  = Math.round(base.def * (1 + (lv - 1) * 0.10));
+    const xp   = Math.round((TIER_BASE_XP[base.tier] || 5) * (1 + (lv - 1) * 0.2));
+    return { ...base, monsterId: id, hp, atk, def, xp, curHp: hp };
   });
 
   const firstTier = monsters[0].tier;
@@ -1160,7 +1226,7 @@ function renderMonsterCards() {
     return `<div class="cb-monster-card" id="cb-mon-card-${i}" onclick="onMonsterClick(${i})">
       <div id="cb-mon-fig-${i}" class="cb-monster-figure">${MONSTER_SVGS[mon.monsterId] || ''}</div>
       <div class="cb-name">${escHtml(mon.name)}</div>
-      <span class="cb-tier" style="background:${tc.bg};color:${tc.text};font-size:9px;padding:1px 6px">${mon.tier}</span>
+      <span class="cb-tier" style="background:${tc.bg};color:${tc.text};font-size:9px;padding:1px 6px">${mon.tier} · Lv.${mon.level}</span>
       <div class="cb-bar-track" style="width:80px">
         <div id="cb-mon-hp-${i}" class="cb-bar-fill cb-hp-fill" style="width:100%"></div>
       </div>
@@ -1486,12 +1552,66 @@ async function handleCombatWin() {
   }
 
   if (leveledUp) {
-    showToast(`🎉 Level up! You gained ${xpRes.newSkillPoints} skill point${xpRes.newSkillPoints > 1 ? 's' : ''}!`);
+    showToast(`🎉 Level up! +${xpRes.newSkillPoints} skill point${xpRes.newSkillPoints > 1 ? 's' : ''}, +${xpRes.newAttrPoints ?? 5} attribute points!`);
   }
 
-  // Show loot panel
-  showLootPanel(lootRes);
   combatState._pendingZoneIdx = combatState.zoneIdx;
+
+  // If inventory is over 100, make player drop items before seeing loot
+  const inv = charCache?.inventory || [];
+  if (inv.length > 100) {
+    showBagFullModal(lootRes);
+  } else {
+    showLootPanel(lootRes);
+  }
+}
+
+function showBagFullModal(lootRes) {
+  _bagLootRes = lootRes;
+  const over  = (charCache?.inventory || []).length - 100;
+  document.getElementById('bag-full-modal').style.display = 'flex';
+  renderBagFullList(over, lootRes);
+}
+
+function renderBagFullList(over, lootRes) {
+  const inv = charCache?.inventory || [];
+  const el   = document.getElementById('bag-full-list');
+  const hdr  = document.getElementById('bag-full-count');
+
+  hdr.textContent = over > 0
+    ? `Bag full! Drop ${over} item${over > 1 ? 's' : ''} to continue.`
+    : '✅ Bag cleared — collect your loot!';
+  hdr.style.color = over > 0 ? '#e08080' : '#4eff91';
+
+  const btn = document.getElementById('bag-full-done');
+  btn.disabled   = over > 0;
+  btn.style.opacity = over > 0 ? '0.4' : '1';
+  btn.onclick = () => {
+    document.getElementById('bag-full-modal').style.display = 'none';
+    showLootPanel(lootRes);
+  };
+
+  el.innerHTML = inv.map(item => {
+    const rCls = RARITY_COLORS[item.rarity] || 'rarity-normal';
+    const meta = SLOT_META[item.slot] || {};
+    return `<div class="bf-row" id="bf-row-${item.inv_id}">
+      <span class="bf-icon">${escHtml(item.icon || meta.icon || '🎒')}</span>
+      <div class="bf-info">
+        <span class="bf-name ${rCls}">${escHtml(item.name)}</span>
+        <span class="bf-slot">${escHtml(meta.label || item.slot)}</span>
+      </div>
+      <button class="bf-drop-btn" onclick="bagDropItem(${item.inv_id})">Drop</button>
+    </div>`;
+  }).join('');
+}
+
+let _bagLootRes = null;  // holds lootRes across drop actions
+
+async function bagDropItem(invId) {
+  const res = await api('DELETE', `/api/me/inventory/${invId}`);
+  if (res.error) { showToast(`❌ ${res.error}`); return; }
+  charCache = { ...charCache, inventory: (charCache.inventory || []).filter(i => i.inv_id !== invId) };
+  renderBagFullList(charCache.inventory.length - 100, _bagLootRes);
 }
 
 function showLootPanel(lootRes) {
@@ -1517,10 +1637,10 @@ function showLootPanel(lootRes) {
   </div>`;
 }
 
-function collectLoot() {
+async function collectLoot() {
   const zoneIdx = combatState?._pendingZoneIdx;
   closeCombat();
-  if (zoneIdx !== undefined && zoneIdx === getForestProgress()) setForestProgress(zoneIdx + 1);
+  if (zoneIdx !== undefined && zoneIdx === getForestProgress()) await setForestProgress(zoneIdx + 1);
   renderForestMap();
   if (zoneIdx !== undefined) {
     const next = FOREST_ZONES[zoneIdx + 1];
@@ -1561,8 +1681,8 @@ function fleeCombat() {
 async function healAtRoyalKeep() {
   const res = await api('POST', '/api/me/heal').catch(() => null);
   if (res?.ok) {
-    if (charCache) charCache.curHp = res.curHp;
-    showToast(`🩹 HP fully restored! (${res.curHp} HP)`);
+    if (charCache) { charCache.curHp = res.curHp; charCache.curMp = res.curMp; }
+    showToast(`🩹 HP & MP fully restored! (${res.curHp} HP / ${res.curMp} MP)`);
     closeBldPopup();
   } else {
     showToast('❌ Could not restore HP.');
@@ -1638,6 +1758,71 @@ window.addEventListener('resize', () => {
   }
 });
 
+// ── Season badge ─────────────────────────────────────────────────────────────
+async function loadSeasonBadge() {
+  const res = await api('GET', '/api/season');
+  const el  = document.getElementById('season-badge');
+  if (res.topic || res.number) {
+    const label = res.topic ? `🌟 ${res.topic} #${res.number}` : `🌟 Season #${res.number}`;
+    el.textContent   = label;
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ── Hall of Fame ──────────────────────────────────────────────────────────────
+async function openHallOfFame() {
+  document.getElementById('hof-panel').style.display = 'flex';
+  const seasons = await api('GET', '/api/seasons');
+  const select  = document.getElementById('hof-season-select');
+  select.innerHTML = seasons.map(s =>
+    `<option value="${s.number}">${s.ended_at ? '' : '▶ '}Season #${s.number}${s.topic ? ` — ${s.topic}` : ''}</option>`
+  ).join('');
+  // Default to current (first in list, highest number)
+  if (seasons.length) await loadHofRankings(seasons[0].number);
+}
+
+function closeHallOfFame() {
+  document.getElementById('hof-panel').style.display = 'none';
+}
+
+async function hofChangeSeason() {
+  const n = parseInt(document.getElementById('hof-season-select').value, 10);
+  await loadHofRankings(n);
+}
+
+async function loadHofRankings(seasonNum) {
+  document.getElementById('hof-list').innerHTML = '<div class="hof-empty">Loading…</div>';
+  const data = await api('GET', `/api/seasons/${seasonNum}/rankings`);
+  if (data.error) { document.getElementById('hof-list').innerHTML = `<div class="hof-empty">${data.error}</div>`; return; }
+
+  const { season, rankings } = data;
+  const isLive = !season.ended_at;
+  document.getElementById('hof-subtitle').textContent =
+    isLive ? 'Current Season — Live Rankings' : `Ended ${new Date(season.ended_at).toLocaleDateString()}`;
+
+  if (!rankings.length) {
+    document.getElementById('hof-list').innerHTML = '<div class="hof-empty">No players yet this season.</div>';
+    return;
+  }
+
+  const rankClass = r => r === 1 ? 'gold' : r === 2 ? 'silver' : r === 3 ? 'bronze' : '';
+  const rankIcon  = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`;
+
+  document.getElementById('hof-list').innerHTML = rankings.map(p =>
+    `<div class="hof-row">
+      <div class="hof-rank ${rankClass(p.rank)}">${rankIcon(p.rank)}</div>
+      <div class="hof-avatar">${escHtml(p.avatar || '⚔️')}</div>
+      <div class="hof-info">
+        <div class="hof-name">${escHtml(p.username)}</div>
+        <div class="hof-meta">${escHtml(p.class)}</div>
+      </div>
+      <div class="hof-stats">Lv.${p.level}<br><span style="font-size:10px;color:var(--muted)">${p.xp} XP</span></div>
+    </div>`
+  ).join('');
+}
+
 // ── Admin Panel ───────────────────────────────────────────────────────────────
 function openAdmin() {
   document.getElementById('admin-panel').classList.add('open');
@@ -1673,6 +1858,7 @@ async function renderAdminUsers() {
         <button class="btn-sm ${isBanned?'accept':'decline'}" onclick="toggleBan('${escHtml(u.username)}',${!isBanned})">
           ${isBanned ? '✅ Unban' : '🚫 Ban'}
         </button>
+        <button class="btn-sm" style="border-color:#c08030;color:#c08030" onclick="resetProgression('${escHtml(u.username)}')">↺ Reset XP</button>
         <button class="btn-sm decline" onclick="deleteUser('${escHtml(u.username)}')">🗑 Delete</button>
       </div>
     `;
@@ -1683,6 +1869,37 @@ async function renderAdminUsers() {
 async function changeRole(username, select) {
   await api('PATCH', `/api/users/${username}/role`, { role: select.value });
   showToast(`${username} is now ${select.value}`);
+}
+
+async function adminSetSeason(clear = false) {
+  const topic = clear ? '' : document.getElementById('admin-season-input').value.trim();
+  if (!clear && !topic) { showToast('Enter a season topic first'); return; }
+  await api('POST', '/api/admin/season', { topic });
+  document.getElementById('admin-season-input').value = '';
+  loadSeasonBadge();
+  showToast(topic ? `🌟 Season set: ${topic}` : 'Season topic cleared');
+}
+
+async function adminNewSeason() {
+  const topic = document.getElementById('admin-season-input').value.trim();
+  const msg = topic
+    ? `Start new season "${topic}"?\n\nThis resets ALL players to Lv.1 with 0 XP, skill points, and attribute points.`
+    : 'Start a new season?\n\nThis resets ALL players to Lv.1 with 0 XP, skill points, and attribute points.\n\n(Tip: enter a season topic above first)';
+  if (!confirm(msg)) return;
+  const res = await api('POST', '/api/admin/new-season', { topic });
+  if (res.error) { showToast(`❌ ${res.error}`); return; }
+  document.getElementById('admin-season-input').value = '';
+  await loadSeasonBadge();
+  showToast(res.topic ? `🌟 Season #${res.number} started: ${res.topic}` : `🌟 Season #${res.number} started — all progression reset`);
+  renderAdminUsers();
+}
+
+async function resetProgression(username) {
+  if (!confirm(`Reset ${username}'s XP, level, skill points and attribute points to zero? This cannot be undone.`)) return;
+  const res = await api('POST', `/api/admin/users/${username}/reset-progression`);
+  if (res.error) { showToast(`❌ ${res.error}`); return; }
+  showToast(`↺ ${username}'s progression has been reset`);
+  renderAdminUsers();
 }
 
 async function toggleBan(username, ban) {

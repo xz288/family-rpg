@@ -25,13 +25,13 @@ const SLOTS = ['head', 'chest', 'gloves', 'pants', 'boots', 'mainhand', 'offhand
  *                        { str, dex, int, spirit, hp, mp, atk, def }
  * @returns {{ str, dex, int, spirit, hp, mp, atk, def }}
  */
-function calcStats(cls, gear = {}) {
+function calcStats(cls, gear = {}, attrs = {}) {
   const base = CLASSES[cls] || CLASSES.Warrior;
 
-  const str    = base.str    + (gear.str    || 0);
-  const dex    = base.dex    + (gear.dex    || 0);
-  const int_   = base.int    + (gear.int    || 0);
-  const spirit = base.spirit + (gear.spirit || 0);
+  const str    = base.str    + (gear.str    || 0) + (attrs.str    || 0);
+  const dex    = base.dex    + (gear.dex    || 0) + (attrs.dex    || 0);
+  const int_   = base.int    + (gear.int    || 0) + (attrs.int    || 0);
+  const spirit = base.spirit + (gear.spirit || 0) + (attrs.spirit || 0);
 
   return {
     str,
@@ -156,4 +156,15 @@ function generateItemAffixes(slot, rarity) {
   return { affixes, bonuses };
 }
 
-module.exports = { CLASSES, SLOTS, calcStats, sumGear, RARITIES, RARITY_AFFIXES, AFFIX_POOL, generateItemAffixes };
+// Canonical class → avatar emoji mapping (single source of truth)
+const CLASS_AVATARS = {
+  Warrior: '⚔️',
+  Paladin: '🛡️',
+  Rogue:   '🗡️',
+  Ranger:  '🏹',
+  Mage:    '🔮',
+  Healer:  '💚',
+  Sage:    '🧙',
+};
+
+module.exports = { CLASSES, SLOTS, CLASS_AVATARS, calcStats, sumGear, RARITIES, RARITY_AFFIXES, AFFIX_POOL, generateItemAffixes };

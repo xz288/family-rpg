@@ -184,6 +184,63 @@ async function initDb() {
     _db._save();
   }
 
+  // ── V6 Migration: distributed attribute points ───────────────────────────────
+  const userColsV6 = (_db.exec('PRAGMA table_info(users)')[0]?.values || []).map(r => r[1]);
+  if (!userColsV6.includes('attr_points')) {
+    _db.exec("ALTER TABLE users ADD COLUMN attr_points INTEGER NOT NULL DEFAULT 0");
+    _db.exec("ALTER TABLE users ADD COLUMN attr_str     INTEGER NOT NULL DEFAULT 0");
+    _db.exec("ALTER TABLE users ADD COLUMN attr_dex     INTEGER NOT NULL DEFAULT 0");
+    _db.exec("ALTER TABLE users ADD COLUMN attr_int     INTEGER NOT NULL DEFAULT 0");
+    _db.exec("ALTER TABLE users ADD COLUMN attr_spirit  INTEGER NOT NULL DEFAULT 0");
+    // Retroactive: 5 attribute points per level beyond 1
+    _db.exec("UPDATE users SET attr_points = MAX(0, level - 1) * 5");
+    _db._save();
+  }
+
+  // ── V7 Migration: settings table (key-value store for server config) ─────────
+  const settingsExists = _db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'");
+  if (!settingsExists.length) {
+    _db.exec(`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`);
+    _db.exec(`INSERT INTO settings (key, value) VALUES ('season_topic', '')`);
+    _db._save();
+  }
+
+  // ── V8 Migration: seasons + season_rankings tables ────────────────────────────
+  const seasonsExists = _db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='seasons'");
+  if (!seasonsExists.length) {
+    _db.exec(`
+      CREATE TABLE seasons (
+        number     INTEGER PRIMARY KEY,
+        topic      TEXT    NOT NULL DEFAULT '',
+        started_at TEXT    NOT NULL,
+        ended_at   TEXT
+      );
+      CREATE TABLE season_rankings (
+        season_number INTEGER NOT NULL REFERENCES seasons(number),
+        rank          INTEGER NOT NULL,
+        username      TEXT    NOT NULL,
+        class         TEXT    NOT NULL,
+        avatar        TEXT    NOT NULL DEFAULT '',
+        level         INTEGER NOT NULL,
+        xp            INTEGER NOT NULL,
+        PRIMARY KEY (season_number, username)
+      );
+    `);
+    // Seed Season #1 using any existing topic from settings
+    const topicRow = _db.exec("SELECT value FROM settings WHERE key='season_topic'");
+    const existingTopic = topicRow[0]?.values?.[0]?.[0] || '';
+    const now = new Date().toISOString();
+    _db.exec(`INSERT INTO seasons (number, topic, started_at) VALUES (1, ?, ?)`, [existingTopic, now]);
+    _db._save();
+  }
+
+  // ── V9 Migration: forest_progress column on users ────────────────────────────
+  const userColsV9 = (_db.exec('PRAGMA table_info(users)')[0]?.values || []).map(r => r[1]);
+  if (!userColsV9.includes('forest_progress')) {
+    _db.exec('ALTER TABLE users ADD COLUMN forest_progress INTEGER NOT NULL DEFAULT 0');
+    _db._save();
+  }
+
   return _db;
 }
 
@@ -402,6 +459,11 @@ const addGold = {
     run('UPDATE users SET gold = gold + ? WHERE username = ?', [amount, username]),
 };
 
+const adjustAttrPoints = {
+  run: (delta, username) =>
+    run('UPDATE users SET attr_points = attr_points + ? WHERE username = ?', [delta, username]),
+};
+
 // Expose raw db for ad-hoc queries in server.js
 const db = { prepare: (sql) => ({ run: (...args) => run(sql, args) }) };
 
@@ -438,4 +500,5 @@ module.exports = {
   assignSkillPoint,
   adjustSkillPoints,
   addGold,
+  adjustAttrPoints,
 };

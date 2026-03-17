@@ -13,6 +13,9 @@
   --border:#2e2416;--border2:#3d3020;
   --text:#d0c4a0;--muted:#6e6248;
   --online:#4ade80;--red:#b94040;--blue:#5080c0;
+  /* ── Map backgrounds — swap the URL to change a scene ── */
+  --map-town:    url('/town-square.jpg');
+  --map-forest:  url('/dark-forest.jpg');
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
@@ -32,6 +35,12 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .badge-role.gamemaster{border-color:var(--gold);color:var(--gold)}
 .badge-role.player{border-color:var(--border2);color:var(--muted)}
 .gold-badge{font-size:11px;color:var(--gold);background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:2px 8px;letter-spacing:.04em}
+#season-badge{font-family:'Cinzel',serif;font-size:12px;font-weight:700;color:#4eff91;
+  border:1px solid rgba(78,255,145,.35);border-radius:10px;padding:3px 12px;letter-spacing:.06em;
+  text-shadow:0 0 8px rgba(78,255,145,.7),0 0 20px rgba(78,255,145,.35);
+  animation:season-pulse 2.5s ease-in-out infinite;}
+@keyframes season-pulse{0%,100%{text-shadow:0 0 8px rgba(78,255,145,.7),0 0 20px rgba(78,255,145,.35)}
+  50%{text-shadow:0 0 14px rgba(78,255,145,1),0 0 36px rgba(78,255,145,.6)}}
 #btn-logout{background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s}
 #btn-logout:hover{border-color:var(--red);color:var(--red)}
 
@@ -85,7 +94,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 
 .ts-scene{
   flex:1;position:relative;overflow:hidden;
-  background:#1a1410 url('/town-square.jpg') center center / cover no-repeat;
+  background:#1a1410 var(--map-town) center center / cover no-repeat;
 }
 
 /* Day/Night tint overlay */
@@ -270,6 +279,32 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .admin-user-info .uname{font-family:'Cinzel',serif;font-size:12px;color:var(--gold)}
 .admin-user-info .umeta{font-size:11px;color:var(--muted)}
 #admin-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+#bag-full-box{background:linear-gradient(180deg,#1c1509,#120d05);border:1px solid var(--border2);border-radius:3px;width:min(460px,100%);max-height:78vh;display:flex;flex-direction:column;padding:22px;box-shadow:0 0 60px rgba(0,0,0,.95)}
+#bag-full-list{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:4px;margin-bottom:4px}
+.bf-row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:2px;border:1px solid var(--border);background:rgba(255,255,255,.02)}
+.bf-icon{font-size:20px;flex-shrink:0}
+.bf-info{flex:1;display:flex;flex-direction:column;gap:1px}
+.bf-name{font-size:12px}
+.bf-slot{font-size:10px;color:var(--muted)}
+.bf-drop-btn{background:rgba(220,60,60,.12);border:1px solid #c05050;color:#e08080;font-size:11px;padding:4px 10px;border-radius:2px;cursor:pointer;flex-shrink:0;font-family:'Cinzel',serif;transition:background .15s}
+.bf-drop-btn:hover{background:rgba(220,60,60,.25)}
+#btn-hof{background:none;border:1px solid rgba(78,255,145,.35);color:#4eff91;font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Cinzel',serif;letter-spacing:.05em;transition:all .2s}
+#btn-hof:hover{background:rgba(78,255,145,.08);border-color:#4eff91}
+#hof-box{background:linear-gradient(180deg,#1c1509 0%,#120d05 100%);border:1px solid var(--border2);border-radius:3px;width:min(560px,100%);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 60px rgba(0,0,0,.95)}
+#hof-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+#hof-list{overflow-y:auto;padding:16px 20px;flex:1}
+.hof-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.hof-row:last-child{border-bottom:none}
+.hof-rank{font-family:'Cinzel',serif;font-size:18px;font-weight:700;width:36px;text-align:center;flex-shrink:0}
+.hof-rank.gold{color:#ffd700;text-shadow:0 0 8px rgba(255,215,0,.6)}
+.hof-rank.silver{color:#c0c0c0;text-shadow:0 0 6px rgba(192,192,192,.5)}
+.hof-rank.bronze{color:#cd7f32;text-shadow:0 0 6px rgba(205,127,50,.5)}
+.hof-avatar{font-size:22px;flex-shrink:0}
+.hof-info{flex:1}
+.hof-name{font-family:'Cinzel',serif;font-size:13px;color:var(--gold)}
+.hof-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.hof-stats{text-align:right;font-family:'Cinzel',serif;font-size:12px;color:var(--text)}
+.hof-empty{text-align:center;color:var(--muted);padding:40px 0;font-size:13px}
 
 /* ── Character Bar ───────────────────────────────────────────────────────── */
 #char-bar{
@@ -318,6 +353,10 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .cp-class-badge{
   font-family:'Cinzel',serif;font-size:10px;letter-spacing:.1em;
   padding:2px 9px;border-radius:10px;border:1px solid var(--gold-d);color:var(--gold-d);
+}
+.cp-level-badge{
+  font-family:'Cinzel',serif;font-size:17px;font-weight:700;letter-spacing:.05em;
+  color:#ffe066;text-shadow:0 0 8px rgba(255,200,0,.55);
 }
 #char-panel-head .cp-close{
   background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;
@@ -441,8 +480,25 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   font-family:'Cinzel',serif;font-size:11px;
 }
 .esl-row:last-child{border-bottom:none}
-.esl-key{color:var(--muted);font-size:9px;letter-spacing:.1em;display:flex;align-items:center;gap:4px}
-.esl-val{color:var(--gold)}
+.esl-key{color:var(--muted);font-size:9px;letter-spacing:.1em;display:flex;align-items:center;gap:4px;min-width:52px}
+.esl-val{color:var(--gold);margin-left:auto}
+.esl-hint{font-size:8px;color:var(--muted);opacity:.6;margin-left:4px;white-space:nowrap}
+.esl-section-label{
+  font-family:'Cinzel',serif;font-size:8px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);opacity:.55;margin:4px 0 2px;
+}
+.esl-plus{
+  background:none;border:1px solid rgba(201,168,76,.4);color:var(--gold);
+  font-size:11px;line-height:1;padding:0 5px;border-radius:2px;cursor:pointer;
+  margin-left:5px;flex-shrink:0;font-family:'Cinzel',serif;
+  transition:background .15s;
+}
+.esl-plus:hover{background:rgba(201,168,76,.15)}
+.esl-attr-banner{
+  background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);
+  border-radius:2px;padding:4px 8px;font-size:10px;color:var(--gold);
+  text-align:center;margin-bottom:6px;font-family:'Cinzel',serif;
+}
 
 /* ── Combined D2 Equipment + Inventory ───────────────────────────────────── */
 .equip-combined{display:flex;gap:18px;min-height:360px}
@@ -577,7 +633,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 /* Forest map */
 #forest-map{
   display:none;position:absolute;inset:0;overflow:hidden;
-  background:url('/dark-forest.jpg') center center / cover no-repeat;
+  background:var(--map-forest) center center / cover no-repeat;
 }
 #forest-map::before{
   content:'';position:absolute;inset:0;
@@ -852,6 +908,8 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
     <span class="badge-role player" id="my-role-badge">Player</span>
         <span id="my-gold" class="gold-badge">💰 0</span>
   </div>
+  <span id="season-badge" style="display:none"></span>
+  <button id="btn-hof" style="display:none" onclick="openHallOfFame()">🏆 Hall of Fame</button>
   <button id="btn-admin" style="display:none" onclick="openAdmin()">👑 Admin</button>
   <button onclick="openPwModal()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔑 Password</button>
   <button id="btn-logout">Logout</button>
@@ -1057,7 +1115,49 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   <div id="admin-box">
     <button id="admin-close" onclick="closeAdmin()">✕</button>
     <h2>👑 Admin Panel</h2>
+    <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div style="font-family:'Cinzel',serif;font-size:11px;color:var(--gold);letter-spacing:.08em;margin-bottom:10px">🌟 Season</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="admin-season-input" type="text" maxlength="80" placeholder="Season topic…"
+          style="flex:1;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-size:13px;padding:6px 10px;border-radius:2px;font-family:'Crimson Pro',serif">
+        <button class="btn-sm gold" onclick="adminSetSeason()">Set Topic</button>
+        <button class="btn-sm" style="border-color:#aaa;color:#aaa" onclick="adminSetSeason(true)">Clear</button>
+      </div>
+      <button onclick="adminNewSeason()" style="width:100%;background:rgba(220,60,60,.12);border:1px solid #c05050;color:#e08080;font-family:'Cinzel',serif;font-size:11px;letter-spacing:.08em;padding:8px;cursor:pointer;border-radius:2px">
+        ⚠ Start New Season — Reset ALL Progression
+      </button>
+    </div>
     <div id="admin-user-list"></div>
+  </div>
+</div>
+
+<!-- Bag Full Modal -->
+<div id="bag-full-modal" style="display:none;position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.82);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px">
+  <div id="bag-full-box">
+    <div style="font-family:'Cinzel Decorative',serif;font-size:14px;color:var(--gold);margin-bottom:6px">🎒 Bag Full</div>
+    <div id="bag-full-count" style="font-size:12px;margin-bottom:14px"></div>
+    <div id="bag-full-list"></div>
+    <button id="bag-full-done" class="cb-collect-btn" style="margin-top:14px;width:100%;opacity:.4" disabled>Collect Loot →</button>
+  </div>
+</div>
+
+<!-- Hall of Fame Panel -->
+<div id="hof-panel" style="display:none;position:fixed;inset:0;z-index:230;background:rgba(0,0,0,.78);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px">
+  <div id="hof-box">
+    <div id="hof-head">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="font-size:28px">🏆</span>
+        <div>
+          <div style="font-family:'Cinzel Decorative',serif;font-size:15px;color:var(--gold)">Hall of Fame</div>
+          <div id="hof-subtitle" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <select id="hof-season-select" onchange="hofChangeSeason()" style="background:var(--panel2);border:1px solid var(--border2);color:var(--gold);font-family:'Cinzel',serif;font-size:11px;padding:5px 8px;border-radius:2px;cursor:pointer"></select>
+        <button onclick="closeHallOfFame()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+    </div>
+    <div id="hof-list"></div>
   </div>
 </div>
 
@@ -1069,6 +1169,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
         <span class="cp-avatar" id="cp-avatar">⚔️</span>
         <span class="cp-name" id="cp-name">—</span>
         <span class="cp-class-badge" id="cp-class-badge">—</span>
+        <span class="cp-level-badge" id="cp-level">Lv.1</span>
       </div>
       <button class="cp-close" onclick="closeCharPanel()">✕</button>
     </div>
@@ -1154,6 +1255,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 <div id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/assets.js"></script>
 <script src="/monsters.js"></script>
 <script src="/skilltree.js"></script>
 <script src="/game.js"></script>

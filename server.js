@@ -5,8 +5,8 @@ const path = require('path');
 
 const dbModule = require('./database');
 const { hashPassword, checkPassword, signToken, verifyToken, requireAuth, requireGM, requireAdmin } = require('./auth');
-const { calcStats, sumGear, CLASSES, SLOTS, generateItemAffixes } = require('./classes');
-const { query, run } = dbModule;
+const { calcStats, sumGear, CLASSES, SLOTS, CLASS_AVATARS, generateItemAffixes } = require('./classes');
+const { query, run, adjustAttrPoints } = dbModule;
 
 // Parse affixes JSON for items returned from DB
 function parseAffixes(items) {
@@ -81,11 +81,10 @@ app.post('/api/register', (req, res) => {
   const { username, password, class: charClass, avatar } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-  const validClasses = ['Warrior', 'Mage', 'Rogue', 'Healer', 'Ranger', 'Paladin'];
-  const validAvatars = { Warrior:'⚔️', Mage:'🔮', Rogue:'🗡️', Healer:'💚', Ranger:'🏹', Paladin:'🛡️' };
+  const validClasses = Object.keys(CLASSES);
 
   const chosenClass = validClasses.includes(charClass) ? charClass : 'Warrior';
-  const chosenAvatar = avatar || validAvatars[chosenClass];
+  const chosenAvatar = avatar || CLASS_AVATARS[chosenClass];
 
   try {
     db.createUser.run({
@@ -177,11 +176,13 @@ app.patch('/api/users/:username/ban', requireAuth, requireAdmin, (req, res) => {
 app.get('/api/me/stats', requireAuth, (req, res) => {
   const user = db.getUserByUsername.get(req.user.username);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const equipped  = parseAffixes(db.getEquipment.all(user.username));
-  const inventory = parseAffixes(db.getInventory.all(user.username));
-  const quests    = db.getPlayerQuests.all(user.username);
-  const stats     = calcStats(user.class, sumGear(equipped));
-  res.json({ class: user.class, stats, equipped, slots: SLOTS, inventory, quests, gold: user.gold || 0, curHp: user.hp !== undefined ? user.hp : stats.hp });
+  const equipped   = parseAffixes(db.getEquipment.all(user.username));
+  const inventory  = parseAffixes(db.getInventory.all(user.username));
+  const quests     = db.getPlayerQuests.all(user.username);
+  const attrStats  = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
+  const classBase  = CLASSES[user.class] || CLASSES.Warrior;
+  const stats      = calcStats(user.class, sumGear(equipped), attrStats);
+  res.json({ class: user.class, level: user.level, xp: user.xp, stats, classBase, attrStats, attrPoints: user.attr_points||0, equipped, slots: SLOTS, inventory, quests, gold: user.gold||0, curHp: user.hp !== undefined ? user.hp : stats.hp });
 });
 
 // Available items (optionally ?slot=head etc.)
@@ -250,6 +251,26 @@ app.post('/api/me/quests/gatehouse', requireAuth, (req, res) => {
   res.json({ ok: true, items });
 });
 
+// Forest map progress — stored server-side so it persists across devices and resets with seasons
+app.get('/api/me/progress', requireAuth, (req, res) => {
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ forest_progress: user.forest_progress ?? 0 });
+});
+
+app.post('/api/me/progress', requireAuth, (req, res) => {
+  const { forest_progress } = req.body;
+  if (!Number.isInteger(forest_progress) || forest_progress < 0 || forest_progress > 99)
+    return res.status(400).json({ error: 'Invalid progress' });
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  // Only allow advancing, never rolling back via this endpoint
+  if (forest_progress > (user.forest_progress ?? 0)) {
+    run('UPDATE users SET forest_progress=? WHERE username=?', [forest_progress, req.user.username]);
+  }
+  res.json({ ok: true, forest_progress: Math.max(forest_progress, user.forest_progress ?? 0) });
+});
+
 // Grant XP after combat win
 app.post('/api/me/xp', requireAuth, (req, res) => {
   const xpGain = parseInt(req.body.xp, 10);
@@ -258,11 +279,14 @@ app.post('/api/me/xp', requireAuth, (req, res) => {
   const user     = db.getUserByUsername.get(req.user.username);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const newTotal = user.xp + xpGain;
-  const newLevel = Math.min(99, Math.floor(newTotal / 100) + 1);
+  const newLevel = Math.min(30, Math.floor(Math.sqrt(newTotal / 100)) + 1);
   const levelGain = Math.max(0, newLevel - user.level);
   db.updateUserXP.run(xpGain, newLevel, req.user.username);
-  if (levelGain > 0) db.adjustSkillPoints.run(levelGain, req.user.username);
-  res.json({ ok: true, xp: newTotal, level: newLevel, newSkillPoints: levelGain });
+  if (levelGain > 0) {
+    db.adjustSkillPoints.run(levelGain, req.user.username);
+    adjustAttrPoints.run(levelGain * 5, req.user.username);
+  }
+  res.json({ ok: true, xp: newTotal, level: newLevel, newSkillPoints: levelGain, newAttrPoints: levelGain * 5 });
 });
 
 // Record player death — sets HP to 1
@@ -271,14 +295,29 @@ app.post('/api/me/die', requireAuth, (req, res) => {
   res.json({ ok: true, curHp: 1 });
 });
 
-// Heal at Royal Keep — restores HP to max
+// Heal at Royal Keep — restores HP and MP to max
 app.post('/api/me/heal', requireAuth, (req, res) => {
   const user = db.getUserByUsername.get(req.user.username);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const equipped = parseAffixes(db.getEquipment.all(user.username));
-  const stats = calcStats(user.class, sumGear(equipped));
+  const equipped  = parseAffixes(db.getEquipment.all(user.username));
+  const attrStats = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
+  const stats     = calcStats(user.class, sumGear(equipped), attrStats);
   run('UPDATE users SET hp = ? WHERE username = ?', [stats.hp, req.user.username]);
-  res.json({ ok: true, curHp: stats.hp });
+  res.json({ ok: true, curHp: stats.hp, curMp: stats.mp });
+});
+
+// Distribute one attribute point into str / dex / int / spirit
+app.post('/api/me/attributes/assign', requireAuth, (req, res) => {
+  const { attr } = req.body;
+  const validAttrs = ['str', 'dex', 'int', 'spirit'];
+  if (!validAttrs.includes(attr)) return res.status(400).json({ error: 'Invalid attribute' });
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!user.attr_points || user.attr_points <= 0) return res.status(400).json({ error: 'No attribute points available' });
+  const col = `attr_${attr}`;
+  run(`UPDATE users SET ${col} = ${col} + 1, attr_points = attr_points - 1 WHERE username = ?`, [req.user.username]);
+  const updated = db.getUserByUsername.get(req.user.username);
+  res.json({ ok: true, attr, value: updated[col], attrPoints: updated.attr_points });
 });
 
 // Skill tree: get allocated points and unspent points
@@ -329,7 +368,7 @@ const LOOT_STATS = {
 const LOOT_SLOT_CAT  = { mainhand:'weapon', offhand:'weapon', head:'armor', chest:'armor', pants:'armor', boots:'armor', gloves:'armor' };
 const LOOT_SLOT_ICON = { mainhand:'⚔️', offhand:'🛡️', head:'🪖', chest:'🦺', pants:'👖', boots:'👢', gloves:'🧤' };
 const LOOT_TIER_RARITY = { D:'normal', C:'uncommon', B:'rare', A:'epic', S:'legendary' };
-const ALL_SLOTS = ['mainhand','offhand','head','chest','pants','boots','gloves'];
+// SLOTS is imported from classes.js — no duplicate list needed
 function lootRandInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
 // Grant loot after a combat win
@@ -357,7 +396,7 @@ app.post('/api/me/loot', requireAuth, (req, res) => {
     const chance = { D:0.35, C:0.55, B:0.72, A:0.88, S:0.96 }[tier] || 0.35;
     if (Math.random() >= chance) continue;
 
-    const slot    = ALL_SLOTS[Math.floor(Math.random() * ALL_SLOTS.length)];
+    const slot    = SLOTS[Math.floor(Math.random() * SLOTS.length)];
     const cat     = LOOT_SLOT_CAT[slot];
     const names   = LOOT_NAMES[slot]?.[tier] || [`${tier} ${slot}`];
     const name    = names[Math.floor(Math.random() * names.length)];
@@ -387,6 +426,19 @@ app.post('/api/me/loot', requireAuth, (req, res) => {
 
 app.get('/api/me/inventory', requireAuth, (req, res) => {
   res.json(db.getInventory.all(req.user.username));
+});
+
+// Drop (permanently delete) an inventory item the player owns
+app.delete('/api/me/inventory/:invId', requireAuth, (req, res) => {
+  const username = req.user.username;
+  const invId    = parseInt(req.params.invId);
+  const row = query(
+    'SELECT id FROM player_inventory WHERE id=? AND username=?', [invId, username]
+  )[0];
+  if (!row) return res.status(404).json({ error: 'Item not found' });
+  run('DELETE FROM player_inventory WHERE id=?', [invId]);
+  const remaining = query('SELECT COUNT(*) as n FROM player_inventory WHERE username=?', [username])[0]?.n ?? 0;
+  res.json({ ok: true, remaining });
 });
 
 // Equip an item from inventory — swaps if slot occupied
@@ -424,6 +476,117 @@ app.post('/api/me/inventory/:invId/equip', requireAuth, (req, res) => {
   const user      = db.getUserByUsername.get(username);
   const stats     = calcStats(user.class, sumGear(equipped));
   res.json({ equipped, inventory, stats });
+});
+
+// POST /api/admin/reset-progression  — wipe XP, level, all points for every non-admin user
+app.post('/api/admin/reset-progression', requireAuth, requireAdmin, (_req, res) => {
+  run(`UPDATE users SET
+    xp=0, level=1,
+    skill_points=0,
+    attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0,
+    forest_progress=0
+    WHERE role != 'admin'`);
+  run(`DELETE FROM player_skills`);
+  res.json({ ok: true, message: 'All progression reset to zero.' });
+});
+
+// POST /api/admin/users/:username/reset-progression  — wipe one user's progression
+app.post('/api/admin/users/:username/reset-progression', requireAuth, requireAdmin, (req, res) => {
+  const { username } = req.params;
+  if (username === 'admin') return res.status(400).json({ error: 'Cannot reset admin' });
+  run(`UPDATE users SET
+    xp=0, level=1,
+    skill_points=0,
+    attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0,
+    forest_progress=0
+    WHERE username=?`, [username]);
+  run(`DELETE FROM player_skills WHERE username=?`, [username]);
+  res.json({ ok: true });
+});
+
+// GET /api/season  — public: current season number + topic
+app.get('/api/season', (_req, res) => {
+  const cur = query('SELECT number, topic FROM seasons WHERE ended_at IS NULL ORDER BY number DESC LIMIT 1')[0];
+  res.json({ number: cur?.number ?? 1, topic: cur?.topic ?? '' });
+});
+
+// GET /api/seasons  — public: list all seasons (for Hall of Fame picker)
+app.get('/api/seasons', (_req, res) => {
+  const seasons = query('SELECT number, topic, started_at, ended_at FROM seasons ORDER BY number DESC');
+  res.json(seasons);
+});
+
+// GET /api/seasons/:n/rankings  — public: rankings for season N
+// Current open season: live from users table. Past seasons: from season_rankings.
+app.get('/api/seasons/:n/rankings', (_req, res) => {
+  const n = parseInt(_req.params.n, 10);
+  if (!n) return res.status(400).json({ error: 'Invalid season' });
+  const season = query('SELECT * FROM seasons WHERE number=?', [n])[0];
+  if (!season) return res.status(404).json({ error: 'Season not found' });
+
+  let rankings;
+  if (!season.ended_at) {
+    // Live: pull from users, sorted by level DESC then xp DESC
+    rankings = query(
+      `SELECT username, class, avatar, level, xp,
+              ROW_NUMBER() OVER (ORDER BY xp DESC) AS rank
+       FROM users WHERE role != 'admin' ORDER BY xp DESC`
+    );
+  } else {
+    rankings = query(
+      'SELECT rank, username, class, avatar, level, xp FROM season_rankings WHERE season_number=? ORDER BY rank',
+      [n]
+    );
+  }
+  res.json({ season, rankings });
+});
+
+// POST /api/admin/season  { topic }  — update current season topic only
+app.post('/api/admin/season', requireAuth, requireAdmin, (req, res) => {
+  const topic = (req.body.topic ?? '').trim().slice(0, 80);
+  run('UPDATE seasons SET topic=? WHERE ended_at IS NULL', [topic]);
+  run('UPDATE settings SET value=? WHERE key=?', [topic, 'season_topic']);
+  res.json({ ok: true, topic });
+});
+
+// POST /api/admin/new-season  { topic }  — snapshot rankings, close season, open next
+app.post('/api/admin/new-season', requireAuth, requireAdmin, (req, res) => {
+  const topic = (req.body.topic ?? '').trim().slice(0, 80);
+  const now   = new Date().toISOString();
+
+  // 1. Find current open season
+  const cur = query('SELECT number FROM seasons WHERE ended_at IS NULL ORDER BY number DESC LIMIT 1')[0];
+  const curNum = cur?.number ?? 1;
+
+  // 2. Snapshot current live rankings into season_rankings
+  const players = query(
+    `SELECT username, class, avatar, level, xp,
+            ROW_NUMBER() OVER (ORDER BY level DESC, xp DESC) AS rank
+     FROM users WHERE role != 'admin' ORDER BY level DESC, xp DESC`
+  );
+  for (const p of players) {
+    run(
+      `INSERT OR REPLACE INTO season_rankings (season_number, rank, username, class, avatar, level, xp)
+       VALUES (?,?,?,?,?,?,?)`,
+      [curNum, p.rank, p.username, p.class, p.avatar || '', p.level, p.xp]
+    );
+  }
+
+  // 3. Close current season
+  run('UPDATE seasons SET ended_at=? WHERE number=?', [now, curNum]);
+
+  // 4. Open next season
+  const nextNum = curNum + 1;
+  run('INSERT INTO seasons (number, topic, started_at) VALUES (?,?,?)', [nextNum, topic, now]);
+  run('UPDATE settings SET value=? WHERE key=?', [topic, 'season_topic']);
+
+  // 5. Reset all player progression
+  run(`UPDATE users SET xp=0, level=1, skill_points=0,
+    attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0
+    WHERE role != 'admin'`);
+  run('DELETE FROM player_skills');
+
+  res.json({ ok: true, topic, number: nextNum });
 });
 
 // ── REST API: Admin item generation ──────────────────────────────────────────
