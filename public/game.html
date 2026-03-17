@@ -31,6 +31,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .badge-role.admin{border-color:#c05050;color:#e08080}
 .badge-role.gamemaster{border-color:var(--gold);color:var(--gold)}
 .badge-role.player{border-color:var(--border2);color:var(--muted)}
+.gold-badge{font-size:11px;color:var(--gold);background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:2px 8px;letter-spacing:.04em}
 #btn-logout{background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s}
 #btn-logout:hover{border-color:var(--red);color:var(--red)}
 
@@ -118,7 +119,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   position:absolute;z-index:10;
   display:flex;flex-direction:column;align-items:center;
   cursor:pointer;
-  /* individual left/top set inline */
+  transform:translateX(-50%); /* anchor = horizontal center of label */
 }
 .ts-hotspot:hover .hs-label{
   transform:translateY(-3px) scale(1.04);
@@ -217,6 +218,9 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .bld-popup-sub{font-size:14px;color:var(--text);font-style:italic;margin-bottom:22px;line-height:1.6;opacity:.85}
 .bld-popup-close{background:none;border:1px solid var(--border2);color:var(--muted);font-size:12px;padding:7px 22px;cursor:pointer;border-radius:2px;font-family:'Cinzel',serif;transition:all .2s;letter-spacing:.08em}
 .bld-popup-close:hover{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.06)}
+#bld-popup-actions{margin-bottom:14px}
+.bld-action-btn{background:linear-gradient(180deg,rgba(201,168,76,.18),rgba(201,168,76,.08));border:1px solid var(--gold-d);color:var(--gold);font-size:13px;padding:8px 20px;cursor:pointer;border-radius:2px;font-family:'Cinzel',serif;transition:all .2s;letter-spacing:.06em;width:100%}
+.bld-action-btn:hover{background:linear-gradient(180deg,rgba(201,168,76,.32),rgba(201,168,76,.16));border-color:var(--gold)}
 
 /* ── Scrollbars ──────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
@@ -267,6 +271,506 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .admin-user-info .umeta{font-size:11px;color:var(--muted)}
 #admin-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
 
+/* ── Character Bar ───────────────────────────────────────────────────────── */
+#char-bar{
+  position:absolute;bottom:0;left:0;right:0;z-index:30;
+  display:flex;justify-content:center;gap:10px;
+  padding:12px 16px 16px;
+  background:linear-gradient(0deg,rgba(5,3,1,.9) 0%,transparent 100%);
+  pointer-events:none;
+}
+.char-btn{
+  pointer-events:all;
+  background:linear-gradient(180deg,rgba(28,20,8,.94) 0%,rgba(14,10,4,.96) 100%);
+  border:1px solid var(--gold-d);color:var(--gold);
+  font-family:'Cinzel',serif;font-size:11px;letter-spacing:.12em;
+  padding:8px 22px;cursor:pointer;border-radius:2px;
+  transition:all .18s;text-transform:uppercase;
+}
+.char-btn:hover,.char-btn.active{
+  background:rgba(201,168,76,.14);border-color:var(--gold);
+  box-shadow:0 0 14px rgba(201,168,76,.22),inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* ── Character Panel ─────────────────────────────────────────────────────── */
+#char-panel{
+  position:fixed;inset:0;z-index:220;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;
+  padding:20px;
+}
+#char-panel.show{display:flex}
+#char-panel-inner{
+  width:min(860px,100%);height:90vh;
+  background:linear-gradient(180deg,#1c1509 0%,#120d05 100%);
+  border:1px solid var(--border2);
+  border-radius:6px;
+  display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 0 60px rgba(0,0,0,.95),0 0 0 1px rgba(201,168,76,.07);
+}
+#char-panel-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#char-panel-head .cp-left{display:flex;align-items:center;gap:10px}
+#char-panel-head .cp-avatar{font-size:26px;line-height:1}
+#char-panel-head .cp-name{font-family:'Cinzel',serif;font-size:15px;color:var(--gold)}
+.cp-class-badge{
+  font-family:'Cinzel',serif;font-size:10px;letter-spacing:.1em;
+  padding:2px 9px;border-radius:10px;border:1px solid var(--gold-d);color:var(--gold-d);
+}
+#char-panel-head .cp-close{
+  background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;
+  padding:4px 8px;border-radius:2px;transition:color .15s;
+}
+#char-panel-head .cp-close:hover{color:var(--text)}
+#char-tabs{
+  display:flex;flex-shrink:0;border-bottom:1px solid var(--border);
+}
+.char-tab{
+  flex:1;background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--muted);font-family:'Cinzel',serif;font-size:11px;letter-spacing:.1em;
+  padding:10px 8px;cursor:pointer;transition:all .15s;text-transform:uppercase;
+}
+.char-tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.char-tab:hover:not(.active){color:var(--text)}
+#char-content{flex:1;overflow-y:auto;padding:18px 20px}
+
+/* Stats */
+.stat-section-title{
+  font-family:'Cinzel',serif;font-size:10px;letter-spacing:.18em;
+  color:var(--muted);margin-bottom:12px;
+}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+.stat-card{
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:3px;padding:10px 8px;text-align:center;
+}
+.stat-card.primary{border-color:rgba(201,168,76,.25)}
+.sc-icon{font-size:18px;margin-bottom:4px}
+.sc-label{font-family:'Cinzel',serif;font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:3px}
+.sc-value{font-family:'Cinzel',serif;font-size:22px;color:var(--gold);line-height:1}
+
+/* Equipment — D2-style body mannequin */
+.equip-body-wrap{position:relative;height:340px;max-width:520px;margin:0 auto}
+.body-svg{position:absolute;width:110px;left:calc(50% - 55px);top:26px;opacity:.85}
+.eq-slot{
+  position:absolute;width:72px;height:72px;
+  background:rgba(12,8,4,.88);border:1px solid var(--border2);
+  border-radius:3px;padding:5px 6px;text-align:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:border-color .18s,box-shadow .18s;
+}
+.eq-slot:hover{border-color:var(--gold-d);box-shadow:0 0 10px rgba(201,168,76,.18)}
+.eq-slot .eq-slot-icon{font-size:22px;line-height:1}
+.eq-slot .eq-slot-name{
+  font-family:'Cinzel',serif;font-size:8px;letter-spacing:.12em;
+  color:var(--muted);text-transform:uppercase;margin-top:3px;
+}
+.eq-slot .eq-item-name{
+  font-family:'Crimson Pro',serif;font-size:11px;color:var(--text);
+  margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.eq-slot .eq-item-name.empty{color:var(--muted);font-style:italic}
+/* Slot positions around the mannequin */
+.eq-slot[data-slot="head"]     {top:4px;   left:50%;transform:translateX(-50%)}
+.eq-slot[data-slot="chest"]    {top:82px;  right:8%}
+.eq-slot[data-slot="gloves"]   {top:105px; left:8%}
+.eq-slot[data-slot="pants"]    {top:165px; right:8%}
+.eq-slot[data-slot="mainhand"] {top:225px; left:8%}
+.eq-slot[data-slot="offhand"]  {top:225px; right:8%}
+.eq-slot[data-slot="boots"]    {bottom:0;  left:50%;transform:translateX(-50%)}
+@media(max-width:480px){
+  .equip-body-wrap{height:320px}
+  .eq-slot{width:58px;height:58px}
+  .eq-slot[data-slot="chest"],.eq-slot[data-slot="pants"],.eq-slot[data-slot="offhand"]{right:1%}
+  .eq-slot[data-slot="gloves"],.eq-slot[data-slot="mainhand"]{left:1%}
+}
+
+/* Inventory */
+.inv-empty{
+  text-align:center;color:var(--muted);font-style:italic;
+  font-family:'Crimson Pro',serif;font-size:14px;padding:48px 20px;
+}
+
+/* ── Rarity colours ──────────────────────────────────────────────────────── */
+.rarity-normal    { color: #d0c4a0 }
+.rarity-magic     { color: #5888d8 }
+.rarity-rare      { color: #e8c44a }
+.rarity-legendary { color: #b060e8 }
+.rarity-godly     { color: #cc2020; text-shadow: 0 0 8px rgba(204,32,32,.5) }
+
+/* ── Item detail popup ───────────────────────────────────────────────────── */
+#item-detail {
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:400;width:min(340px,88vw);
+  background:linear-gradient(180deg,#1e180e,#120d06);
+  border:1px solid var(--gold-d);border-radius:4px;
+  padding:22px 24px;
+  box-shadow:0 0 60px rgba(0,0,0,.95),0 0 0 1px rgba(201,168,76,.1);
+}
+.itd-name{font-family:'Cinzel Decorative',serif;font-size:15px;margin-bottom:2px}
+.itd-type{font-family:'Cinzel',serif;font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:12px}
+.itd-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);margin:10px 0}
+.itd-desc{font-family:'Crimson Pro',serif;font-size:13px;color:var(--muted);font-style:italic;margin-bottom:12px;line-height:1.5}
+.itd-affixes{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.itd-affix{font-family:'Crimson Pro',serif;font-size:14px;color:#88b0e0}
+.itd-affix.prefix::before{content:'[P] ';font-size:9px;letter-spacing:.1em;color:var(--muted);font-family:'Cinzel',serif}
+.itd-affix.suffix::before{content:'[S] ';font-size:9px;letter-spacing:.1em;color:var(--muted);font-family:'Cinzel',serif}
+.itd-stats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.itd-stat{font-family:'Cinzel',serif;font-size:11px;color:var(--gold-d);background:rgba(201,168,76,.08);border:1px solid var(--border2);border-radius:2px;padding:3px 8px}
+.itd-actions{display:flex;gap:8px;margin-top:4px}
+.itd-btn{flex:1;background:none;border:1px solid var(--border2);color:var(--text);font-family:'Cinzel',serif;font-size:11px;letter-spacing:.08em;padding:8px;cursor:pointer;border-radius:2px;transition:all .18s}
+.itd-btn.unequip{border-color:rgba(185,64,64,.4);color:#e08080}
+.itd-btn.unequip:hover{background:rgba(185,64,64,.1)}
+.itd-btn.close-btn{border-color:var(--border2);color:var(--muted)}
+.itd-btn.close-btn:hover{border-color:var(--gold-d);color:var(--gold)}
+
+/* ── Left-side stats panel (inside Equipment tab) ────────────────────────── */
+.equip-stats-left{
+  margin-top:10px;padding:8px 10px;
+  background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:3px;
+}
+.esl-title{
+  font-family:'Cinzel',serif;font-size:9px;letter-spacing:.18em;
+  color:var(--muted);text-transform:uppercase;margin-bottom:6px;text-align:center;
+}
+.esl-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:3px 0;border-bottom:1px solid rgba(201,168,76,.08);
+  font-family:'Cinzel',serif;font-size:11px;
+}
+.esl-row:last-child{border-bottom:none}
+.esl-key{color:var(--muted);font-size:9px;letter-spacing:.1em;display:flex;align-items:center;gap:4px}
+.esl-val{color:var(--gold)}
+
+/* ── Combined D2 Equipment + Inventory ───────────────────────────────────── */
+.equip-combined{display:flex;gap:18px;min-height:360px}
+.equip-mannequin-col{flex-shrink:0;width:280px}
+.equip-inventory-col{flex:1;display:flex;flex-direction:column;gap:8px}
+.inv-grid-title{
+  font-family:'Cinzel',serif;font-size:10px;letter-spacing:.18em;
+  color:var(--muted);text-transform:uppercase;
+}
+.inv-grid-scroll{max-height:420px;overflow-y:auto;overflow-x:hidden}
+.inv-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.inv-cell{
+  aspect-ratio:1;background:rgba(12,8,4,.7);
+  border:1px dashed var(--border);border-radius:2px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:4px;position:relative;overflow:hidden;
+}
+.inv-cell.has-item{
+  border-style:solid;border-color:var(--border2);
+  cursor:grab;transition:border-color .15s,box-shadow .15s;
+}
+.inv-cell.has-item:hover{border-color:var(--gold-d);box-shadow:0 0 8px rgba(201,168,76,.18)}
+.inv-cell.has-item.dragging{opacity:.4}
+.inv-cell .inv-icon{font-size:22px;line-height:1}
+.inv-cell .inv-name{
+  font-family:'Cinzel',serif;font-size:7px;color:var(--muted);
+  text-align:center;margin-top:2px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;width:100%;
+}
+.eq-slot.drag-over{
+  border-color:var(--gold)!important;
+  box-shadow:0 0 16px rgba(201,168,76,.45)!important;
+  background:rgba(201,168,76,.12)!important;
+}
+
+/* ── Quest entries (character panel Quests tab) ──────────────────────────── */
+.quest-entry{
+  background:var(--panel2);border:1px solid var(--border);
+  border-radius:3px;padding:12px 16px;margin-bottom:10px;
+}
+.quest-entry-title{font-family:'Cinzel',serif;font-size:13px;color:var(--gold);margin-bottom:4px}
+.quest-entry-desc{font-size:13px;color:var(--text);opacity:.85;line-height:1.5}
+.quest-entry-status{
+  font-family:'Cinzel',serif;font-size:9px;letter-spacing:.1em;
+  color:var(--online);margin-top:6px;
+}
+
+/* ── Sidebar quest log ───────────────────────────────────────────────────── */
+.ql-card{
+  padding:8px 10px;border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;gap:8px;
+}
+.ql-card:last-child{border-bottom:none}
+.ql-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.ql-title{font-family:'Cinzel',serif;font-size:11px;color:var(--gold)}
+.ql-status{font-size:10px;color:var(--online);margin-top:2px}
+
+/* ── NPC Dialogue ────────────────────────────────────────────────────────── */
+#npc-dialogue{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+  z-index:350;width:min(540px,90vw);
+  background:linear-gradient(180deg,#1e180e,#150f06);
+  border:1px solid var(--gold-d);border-radius:4px;
+  padding:20px 24px;
+  box-shadow:0 0 40px rgba(0,0,0,.9),0 0 0 1px rgba(201,168,76,.1);
+}
+.dlg-npc-name{
+  font-family:'Cinzel',serif;font-size:12px;color:var(--gold);
+  letter-spacing:.12em;margin-bottom:10px;padding-bottom:8px;
+  border-bottom:1px solid var(--border2);
+}
+.dlg-line{
+  font-family:'Crimson Pro',serif;font-size:15px;color:var(--text);
+  line-height:1.65;margin-bottom:4px;
+  opacity:0;transition:opacity .45s;
+}
+.dlg-line.visible{opacity:1}
+.dlg-choices{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.dlg-btn{
+  background:none;border:1px solid var(--border2);
+  color:var(--text);font-family:'Cinzel',serif;
+  font-size:11px;letter-spacing:.08em;
+  padding:9px 14px;cursor:pointer;border-radius:2px;
+  text-align:left;transition:all .18s;
+}
+.dlg-btn.yes{border-color:rgba(74,222,128,.35);color:#4ade80}
+.dlg-btn.yes:hover{background:rgba(74,222,128,.1)}
+.dlg-btn.no{border-color:rgba(185,64,64,.35);color:#e08080}
+.dlg-btn.no:hover{background:rgba(185,64,64,.1)}
+
+/* ── Dark Forest hotspot (quest-gated) ───────────────────────────────────── */
+#dark-forest-hs{display:none}
+#dark-forest-hs .hs-label{
+  background:linear-gradient(180deg,#1c0a0a,#0f0404);
+  border-color:#7a1a1a;
+  box-shadow:0 3px 12px rgba(120,20,20,.5),inset 0 1px 0 rgba(255,80,80,.08);
+}
+#dark-forest-hs .hs-name{color:#cc4040}
+#dark-forest-hs .hs-sub{color:#7a3a3a}
+#dark-forest-hs .hs-connector{background:#7a1a1a}
+#dark-forest-hs:hover .hs-label{
+  box-shadow:0 6px 20px rgba(140,20,20,.7),0 0 0 1px rgba(200,50,50,.4),inset 0 1px 0 rgba(255,80,80,.15);
+}
+
+/* ── Forest overlay ──────────────────────────────────────────────────────── */
+#forest-overlay{
+  display:none;position:fixed;inset:0;z-index:300;
+  background:#060d04;
+}
+/* Loading screen */
+#forest-loading{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:40px;
+}
+.fld-icon{font-size:48px;margin-bottom:20px;opacity:.7}
+.fld-title{
+  font-family:'Cinzel',serif;font-size:26px;color:#4a8a30;
+  letter-spacing:.18em;margin-bottom:20px;text-align:center;
+}
+.fld-desc{
+  font-family:'Crimson Pro',serif;font-size:17px;color:#7aaa5a;
+  text-align:center;max-width:560px;line-height:1.8;margin-bottom:32px;
+  font-style:italic;
+}
+.fld-bar-wrap{width:320px;height:3px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden}
+.fld-bar{height:100%;width:0;background:#4a8a30;border-radius:2px;transition:width linear}
+.fld-hint{
+  margin-top:18px;font-family:'Cinzel',serif;font-size:10px;color:#3a6a28;
+  letter-spacing:.22em;text-transform:uppercase;
+}
+/* Forest map */
+#forest-map{
+  display:none;position:absolute;inset:0;overflow:hidden;
+  background:url('/dark-forest.jpg') center center / cover no-repeat;
+}
+#forest-map::before{
+  content:'';position:absolute;inset:0;
+  background:rgba(0,0,0,.42);pointer-events:none;z-index:0;
+}
+#btn-forest-back{
+  position:absolute;top:18px;left:20px;z-index:2;
+  background:rgba(0,0,0,.65);border:1px solid #3a5030;color:#8ab870;
+  font-family:'Cinzel',serif;font-size:11px;letter-spacing:.1em;
+  padding:6px 14px;border-radius:2px;cursor:pointer;
+  transition:border-color .15s,color .15s;backdrop-filter:blur(2px);
+}
+#btn-forest-back:hover{border-color:#5a9040;color:#b0e080}
+/* Forest zone hotspots */
+.fm-zone{
+  position:absolute;z-index:1;
+  display:flex;flex-direction:column;align-items:center;
+  cursor:pointer;transform:translateX(-50%);
+}
+.fm-zone-label{
+  background:rgba(5,14,3,.82);backdrop-filter:blur(3px);
+  border:1px solid #3a5a28;border-radius:3px;
+  padding:9px 16px;text-align:center;
+  box-shadow:0 3px 16px rgba(0,0,0,.75),inset 0 1px 0 rgba(90,150,50,.1);
+  transition:transform .18s,box-shadow .18s,border-color .18s;
+}
+.fm-zone:not(.locked):hover .fm-zone-label{
+  transform:translateY(-3px) scale(1.04);
+  border-color:#6aaa40;
+  box-shadow:0 6px 22px rgba(40,110,20,.45),0 0 0 1px rgba(100,170,60,.35),inset 0 1px 0 rgba(100,160,60,.18);
+}
+.fm-zone-name{font-family:'Cinzel',serif;font-size:12px;color:#8ad060;letter-spacing:.07em}
+.fm-zone-sub{font-family:'Crimson Pro',serif;font-size:10px;color:#507040;font-style:italic;margin-top:2px}
+.fm-connector{width:1px;height:16px;background:#2a4a1a;margin-top:2px}
+/* Locked state */
+.fm-zone.locked{cursor:not-allowed}
+.fm-zone.locked .fm-zone-label{border-color:#252525;background:rgba(5,5,5,.85)}
+.fm-zone.locked .fm-zone-name{color:#444}
+.fm-zone.locked .fm-zone-sub{color:#333}
+.fm-zone.locked .fm-connector{background:#252525}
+.fm-lock{font-size:13px;margin-bottom:3px;opacity:.6}
+/* Completed state */
+.fm-zone.done .fm-zone-label{border-color:#2a4a1a;background:rgba(5,20,5,.82);opacity:.75}
+.fm-zone.done .fm-zone-name{color:#5a8a40}
+.fm-done{font-size:11px;color:#4ade80;margin-bottom:2px}
+/* Danger zone */
+.fm-zone.danger:not(.locked) .fm-zone-label{border-color:#6b1a1a;background:rgba(15,3,3,.85)}
+.fm-zone.danger:not(.locked) .fm-zone-name{color:#d44040}
+.fm-zone.danger:not(.locked) .fm-zone-sub{color:#7a3030}
+.fm-zone.danger:not(.locked) .fm-connector{background:#6b1a1a}
+.fm-zone.danger:not(.locked):hover .fm-zone-label{
+  border-color:#cc3030;
+  box-shadow:0 6px 22px rgba(140,20,20,.5),0 0 0 1px rgba(200,50,50,.38),inset 0 1px 0 rgba(200,80,80,.14);
+}
+
+/* ── Combat Overlay ──────────────────────────────────────────────────────── */
+#combat-overlay{
+  display:none;position:fixed;inset:0;z-index:310;
+  background:rgba(0,0,0,.9);backdrop-filter:blur(8px);
+  align-items:center;justify-content:center;
+}
+#combat-panel{
+  width:min(760px,96vw);max-height:92vh;
+  background:linear-gradient(180deg,#100d08,#0c0a06);
+  border:1px solid var(--border2);border-radius:4px;
+  display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 0 60px rgba(0,0,0,.9);
+}
+/* Header */
+#combat-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  background:rgba(0,0,0,.35);flex-shrink:0;
+}
+#cb-flee{
+  background:none;border:1px solid #5a3535;color:#9a6060;
+  font-family:'Cinzel',serif;font-size:10px;letter-spacing:.1em;
+  padding:5px 12px;border-radius:2px;cursor:pointer;transition:all .15s;
+}
+#cb-flee:hover{border-color:#cc4040;color:#e07070}
+#cb-zone-label{font-family:'Cinzel',serif;font-size:13px;letter-spacing:.15em;color:var(--text)}
+.cb-tier{font-family:'Cinzel',serif;font-size:11px;font-weight:700;padding:3px 10px;border-radius:2px}
+.cb-tier-D{background:#2a2a2a;color:#aaa}
+.cb-tier-C{background:#1a3a1a;color:#6aaa6a}
+.cb-tier-B{background:#1a2a4a;color:#6a8aff}
+.cb-tier-A{background:#2a1a4a;color:#c060ff}
+.cb-tier-S{background:#3a1a0a;color:#ff8c00}
+/* Arena */
+#combat-arena{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  padding:24px 20px 16px;flex-shrink:0;min-height:220px;position:relative;gap:8px;
+}
+/* Player side */
+#cb-player-side{display:flex;flex-direction:column;align-items:center;gap:8px;width:160px;flex-shrink:0}
+.cb-player-figure{width:72px;height:auto;display:block;transition:filter .15s;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5))}
+/* Monster area — holds 1-3 cards in a row */
+#cb-monsters-area{display:flex;flex-direction:row;align-items:flex-end;gap:10px;flex:1;justify-content:flex-end}
+.cb-monster-card{display:flex;flex-direction:column;align-items:center;gap:5px;transition:opacity .3s}
+.cb-monster-card.dead{opacity:.25;pointer-events:none}
+/* Target selection mode */
+#cb-monsters-area.target-selecting .cb-monster-card:not(.dead){
+  cursor:pointer;border:1px solid #8aaccc;border-radius:6px;
+  box-shadow:0 0 8px rgba(138,172,204,.5);
+  animation:target-pulse 1s ease-in-out infinite;
+}
+#cb-monsters-area.target-selecting .cb-monster-card:not(.dead):hover{
+  border-color:#c8e6ff;box-shadow:0 0 16px rgba(138,172,204,.85);
+}
+@keyframes target-pulse{0%,100%{box-shadow:0 0 6px rgba(138,172,204,.35)}50%{box-shadow:0 0 14px rgba(138,172,204,.75)}}
+/* SVG size scales with count */
+.monsters-1 .cb-monster-figure{width:90px}
+.monsters-2 .cb-monster-figure{width:72px}
+.monsters-3 .cb-monster-figure{width:58px}
+.cb-monster-figure{height:auto;display:block;transition:filter .15s;filter:drop-shadow(0 4px 10px rgba(0,0,0,.6))}
+.cb-name{font-family:'Cinzel',serif;font-size:10px;color:var(--text);letter-spacing:.06em;text-align:center;white-space:nowrap}
+.cb-bars{width:100%;display:flex;flex-direction:column;gap:5px}
+.cb-bar-row{display:flex;align-items:center;gap:6px}
+.cb-bar-lbl{font-family:'Cinzel',serif;font-size:9px;color:var(--muted);width:16px;flex-shrink:0}
+.cb-bar-track{flex:1;height:8px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
+.cb-bar-fill{height:100%;border-radius:4px;transition:width .35s ease}
+.cb-hp-fill{background:linear-gradient(90deg,#2a7a1a,#4ade5a)}
+.cb-mp-fill{background:linear-gradient(90deg,#1a3a8a,#3a6aff)}
+.cb-bar-num{font-family:'Cinzel',serif;font-size:9px;color:var(--muted);min-width:52px;text-align:right;flex-shrink:0}
+/* FX zone */
+#cb-fx{flex:1;position:relative;height:160px;align-self:stretch;overflow:hidden}
+.cb-proj{position:absolute;top:50%;transform:translateY(-50%);font-size:22px;pointer-events:none}
+.cb-dmg-text{
+  position:absolute;left:50%;top:40%;transform:translateX(-50%);
+  font-family:'Cinzel',serif;font-size:24px;font-weight:700;
+  pointer-events:none;white-space:nowrap;
+  animation:dmg-float 0.9s ease-out forwards;
+}
+@keyframes dmg-float{from{opacity:1;transform:translateX(-50%) translateY(0)} to{opacity:0;transform:translateX(-50%) translateY(-48px)}}
+/* Combat log */
+#combat-log{
+  height:78px;overflow-y:auto;padding:8px 16px;flex-shrink:0;
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:rgba(0,0,0,.45);
+}
+.cb-log-line{font-family:'Crimson Pro',serif;font-size:13px;color:#666;line-height:1.55}
+.cb-log-line.new{color:var(--text)}
+/* Skill buttons */
+#combat-skills{
+  display:flex;gap:10px;padding:14px 16px;
+  background:rgba(0,0,0,.25);flex-wrap:wrap;flex-shrink:0;
+}
+.skill-btn{
+  flex:1;min-width:110px;
+  background:rgba(201,168,76,.05);border:1px solid var(--border2);
+  color:var(--text);font-family:'Cinzel',serif;font-size:11px;letter-spacing:.07em;
+  padding:10px 12px;border-radius:3px;cursor:pointer;text-align:center;
+  transition:all .18s;
+}
+.skill-btn:hover:not(:disabled){background:rgba(201,168,76,.14);border-color:var(--gold-d);color:var(--gold)}
+.skill-btn:disabled{opacity:.38;cursor:not-allowed}
+.skill-btn .sk-cost{display:block;font-size:9px;color:var(--muted);margin-top:3px;letter-spacing:.05em}
+.skill-btn .sk-target{display:block;font-size:8px;color:#8aaccc;margin-top:1px;letter-spacing:.04em}
+.skill-btn.no-mp{border-color:#5a3030;color:#8a5a5a}
+.cb-phase-msg{
+  width:100%;text-align:center;font-family:'Cinzel',serif;font-size:13px;
+  letter-spacing:.1em;padding:10px 0;
+}
+/* Loot panel */
+#cb-loot-panel{padding:8px 4px;display:flex;flex-direction:column;gap:6px;width:100%}
+.cb-loot-title{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);letter-spacing:.1em;text-align:center}
+.cb-loot-items{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;justify-content:center}
+.cb-loot-item{display:flex;flex-direction:column;align-items:center;gap:2px;background:rgba(20,16,8,.8);border:1px solid var(--border2);border-radius:4px;padding:6px 8px;min-width:70px}
+.cb-loot-item-icon{font-size:20px}
+.cb-loot-item-name{font-size:8px;font-family:'Cinzel',serif;text-align:center;color:var(--text);max-width:80px;white-space:normal;line-height:1.3}
+.cb-loot-gold{font-size:13px;color:var(--gold);text-align:center;letter-spacing:.05em}
+.cb-loot-empty{font-size:11px;color:var(--muted);font-style:italic;text-align:center}
+.cb-collect-btn{align-self:center;padding:6px 20px;font-size:11px;background:rgba(201,168,76,.18);border:1px solid var(--gold-d);color:var(--gold);border-radius:4px;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:.08em;transition:background .15s}
+.cb-collect-btn:hover{background:rgba(201,168,76,.32)}
+/* Sprite animations */
+.anim-atk-r  {animation:atk-r  .7s ease both}
+.anim-atk-l  {animation:atk-l  .7s ease both}
+.anim-hit    {animation:cb-hit  .4s ease both}
+.anim-shake  {animation:cb-shk  .45s ease both}
+.anim-magic  {animation:cb-mag  .55s ease both}
+.anim-fire   {animation:cb-fir  .55s ease both}
+.anim-holy   {animation:cb-hol  .55s ease both}
+.anim-heal   {animation:cb-hea  .65s ease both}
+.anim-death  {animation:cb-die  .85s ease forwards}
+@keyframes atk-r {0%,100%{transform:translateX(0)}  40%,60%{transform:translateX(68px)}}
+@keyframes atk-l {0%,100%{transform:translateX(0)}  40%,60%{transform:translateX(-68px)}}
+@keyframes cb-hit{0%,100%{filter:brightness(1)} 30%,70%{filter:brightness(3) hue-rotate(330deg) saturate(4)}}
+@keyframes cb-shk{0%,100%{transform:translateX(0)} 20%{transform:translateX(-10px)} 40%{transform:translateX(10px)} 60%{transform:translateX(-7px)} 80%{transform:translateX(7px)}}
+@keyframes cb-mag{0%,100%{filter:brightness(1) drop-shadow(0 0 0 transparent)} 50%{filter:brightness(1.7) drop-shadow(0 0 16px #88f)}}
+@keyframes cb-fir{0%,100%{filter:brightness(1)} 50%{filter:brightness(2.2) drop-shadow(0 0 20px #f84) saturate(2)}}
+@keyframes cb-hol{0%,100%{filter:brightness(1)} 50%{filter:brightness(2) drop-shadow(0 0 18px #ffd588)}}
+@keyframes cb-hea{0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5) drop-shadow(0 0 16px #4ade80) saturate(1.5)}}
+@keyframes cb-die{0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(50px) scale(.35)}}
+
 /* ── Mobile ──────────────────────────────────────────────────────────────── */
 #mobile-nav{display:none;flex-shrink:0;background:var(--panel);border-top:1px solid var(--border);flex-direction:row;height:52px}
 #mobile-nav button{flex:1;background:none;border:none;border-top:2px solid transparent;color:var(--muted);font-family:'Cinzel',serif;font-size:10px;letter-spacing:.08em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:all .2s;padding:0}
@@ -289,6 +793,49 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   .hs-sub{font-size:9px}
   .hs-label{padding:4px 9px 5px}
 }
+
+/* ── Skill Tree ───────────────────────────────────────────────────────────── */
+.st-wrapper{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.st-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.st-class-name{font-family:'Cinzel',serif;font-size:13px;color:var(--gold);letter-spacing:.08em}
+.st-points-badge{font-size:11px;color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);border-radius:10px;padding:2px 10px}
+.st-tree{display:flex;flex-direction:row;gap:20px;justify-content:center;padding:14px 10px;flex:1;overflow-y:auto}
+.st-col{display:flex;flex-direction:column;align-items:center;gap:0}
+/* Connector line between tiers */
+.st-connector{width:2px;height:28px;background:linear-gradient(to bottom,rgba(139,115,85,.3),rgba(139,115,85,.3));position:relative}
+.st-connector.active{background:linear-gradient(to bottom,var(--gold-d),var(--gold-d))}
+.st-connector::after{content:'▼';position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);font-size:9px;color:rgba(139,115,85,.4);line-height:1}
+.st-connector.active::after{color:var(--gold-d)}
+/* Node card */
+.st-node{width:112px;padding:8px 6px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(20,16,12,.6);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:default;transition:border-color .15s,box-shadow .15s;position:relative}
+.st-node.skill-active{border-color:rgba(201,168,76,.35)}
+.st-node.skill-passive{border-color:rgba(100,150,210,.3)}
+.st-node.has-points{background:rgba(30,24,16,.8)}
+.st-node.has-points.skill-active{border-color:var(--gold-d);box-shadow:0 0 8px rgba(201,168,76,.25)}
+.st-node.has-points.skill-passive{border-color:#6496d2;box-shadow:0 0 8px rgba(100,150,210,.2)}
+.st-node.maxed.skill-active{border-color:var(--gold);box-shadow:0 0 12px rgba(201,168,76,.45)}
+.st-node.maxed.skill-passive{border-color:#8ab4e8;box-shadow:0 0 12px rgba(138,180,232,.4)}
+.st-node.locked{opacity:.35;filter:grayscale(.7)}
+.st-node.can-assign{cursor:pointer}
+.st-node.can-assign:hover{border-color:var(--gold)!important;box-shadow:0 0 14px rgba(201,168,76,.5)!important}
+.st-node.selected-node{outline:2px solid var(--gold);outline-offset:2px}
+.st-node-icon{font-size:22px;line-height:1}
+.st-node-name{font-size:9px;font-family:'Cinzel',serif;color:var(--text);text-align:center;letter-spacing:.04em;line-height:1.2}
+.st-node-type{font-size:8px;color:var(--muted);margin-top:1px}
+.st-dots{display:flex;gap:3px;margin-top:4px}
+.st-dot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05)}
+.st-dot.filled.active-type{background:var(--gold-d);border-color:var(--gold)}
+.st-dot.filled.passive-type{background:#6496d2;border-color:#8ab4e8}
+/* Detail panel */
+.st-detail{flex-shrink:0;border-top:1px solid var(--border);padding:10px 14px;background:rgba(10,8,5,.5);min-height:90px}
+.st-detail-name{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);margin-bottom:4px}
+.st-detail-meta{font-size:10px;color:var(--muted);margin-bottom:4px}
+.st-detail-desc{font-size:11px;color:var(--text);line-height:1.5;margin-bottom:8px}
+.st-detail-pts{font-size:11px;color:#6496d2;margin-bottom:6px}
+.st-assign-btn{padding:5px 14px;font-size:11px;background:rgba(201,168,76,.15);border:1px solid var(--gold-d);color:var(--gold);border-radius:4px;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:.06em;transition:background .15s}
+.st-assign-btn:hover:not(:disabled){background:rgba(201,168,76,.28)}
+.st-assign-btn:disabled{opacity:.35;cursor:not-allowed}
+.st-detail-empty{color:var(--muted);font-size:11px;font-style:italic}
 </style>
 </head>
 <body>
@@ -303,6 +850,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       <div class="meta" id="my-meta">...</div>
     </div>
     <span class="badge-role player" id="my-role-badge">Player</span>
+        <span id="my-gold" class="gold-badge">💰 0</span>
   </div>
   <button id="btn-admin" style="display:none" onclick="openAdmin()">👑 Admin</button>
   <button onclick="openPwModal()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔑 Password</button>
@@ -321,13 +869,19 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
     </div>
     <ul id="player-list"></ul>
     <div class="sidebar-section" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px">
-      <div class="sidebar-section-title" style="padding:0;border:none">⚔ Quests</div>
+      <div class="sidebar-section-title" style="padding:0;border:none">⚔ Adventures</div>
       <button class="btn-sm gold" id="btn-open-event-modal" style="display:none" onclick="openEventModal()">+ New</button>
     </div>
     <div id="events-panel"><div class="no-events" id="no-events">No quests yet</div></div>
     <div id="invites-section" style="display:none">
       <div class="sidebar-section-title" style="border-bottom:none;padding-top:10px">📨 Invitations</div>
       <div id="invites-list"></div>
+    </div>
+    <div id="quest-log-section" style="display:none">
+      <div class="sidebar-section" style="display:flex;align-items:center;padding:10px 12px">
+        <div class="sidebar-section-title" style="padding:0;border:none">📜 My Quests</div>
+      </div>
+      <div id="quest-log-list"></div>
     </div>
   </div>
 
@@ -352,8 +906,8 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
            Image compass roses are top-left and bottom-right — clock goes top-right. -->
 
       <!-- The Royal Keep — central gothic cathedral, dominant building -->
-      <div class="ts-hotspot" style="left:38%;top:2%"
-           onclick="onBuildingClick('The Royal Keep','🏰','Seat of power for the realm. Speak with the Governor, receive royal decrees, and settle matters of law.','Town Hall · Level 3')">
+      <div class="ts-hotspot" style="left:50%;top:15%"
+           onclick="openRoyalKeep()">
         <div class="hs-label">
           <div class="hs-name">The Royal Keep</div>
           <div class="hs-sub">Town Hall · Level 3</div>
@@ -362,7 +916,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       </div>
 
       <!-- The Lion's Head Inn — large half-timbered building, far left -->
-      <div class="ts-hotspot" style="left:1%;top:14%"
+      <div class="ts-hotspot" style="left:10%;top:40%"
            onclick="onBuildingClick('The Lion\'s Head Inn','🍺','A warm hearth and honest ale. The first choice of weary travellers — and those who wish to overhear useful things.','Inn &amp; Lodgings')">
         <div class="hs-label">
           <div class="hs-name">The Lion's Head Inn</div>
@@ -372,7 +926,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       </div>
 
       <!-- Town Blacksmith — left-centre forge, smoke & fire visible -->
-      <div class="ts-hotspot" style="left:22%;top:23%"
+      <div class="ts-hotspot" style="left:29%;top:40%"
            onclick="onBuildingClick('Town Blacksmith','⚒️','Master Aldric\'s forge burns from first light to last. Fine weapons, sturdy armour, and reliable repairs.','Forging &amp; Repairs')">
         <div class="hs-label">
           <div class="hs-name">Town Blacksmith</div>
@@ -382,7 +936,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       </div>
 
       <!-- Market Square — lower centre-left, tent canopies and campfire -->
-      <div class="ts-hotspot" style="left:11%;top:50%"
+      <div class="ts-hotspot" style="left:40%;top:65%"
            onclick="onBuildingClick('Market Square','🛒','The beating heart of the town\'s commerce. Merchants, herbalists, and traders gather here daily around the central fire.','Trading &amp; Supplies')">
         <div class="hs-label">
           <div class="hs-name">Market Square</div>
@@ -392,7 +946,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       </div>
 
       <!-- The Boar's Tusk Tavern — right side, tudor building with hanging sign -->
-      <div class="ts-hotspot" style="left:57%;top:31%"
+      <div class="ts-hotspot" style="left:75%;top:50%"
            onclick="onBuildingClick('The Boar\'s Tusk Tavern','🍻','Louder and livelier than the Inn. A favourite of off-duty guards and gamblers. Ask the barkeep about the back room.','Tavern &amp; Gaming')">
         <div class="hs-label">
           <div class="hs-name">The Boar's Tusk Tavern</div>
@@ -402,11 +956,21 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       </div>
 
       <!-- Gatehouse Defenses — right-mid, stone fortress towers -->
-      <div class="ts-hotspot" style="left:65%;top:17%"
-           onclick="onBuildingClick('Gatehouse Defenses','🛡️','The town\'s fortified entrance. Speak to the Captain of the Guard about threats, bounties, and passage permits.','Town Gate &amp; Garrison')">
+      <div class="ts-hotspot" style="left:83%;top:33%"
+           onclick="openGatehouseDialogue()">
         <div class="hs-label">
           <div class="hs-name">Gatehouse Defenses</div>
           <div class="hs-sub">Town Gate &amp; Garrison</div>
+        </div>
+        <div class="hs-connector"></div>
+      </div>
+
+      <!-- Dark Forest — quest-gated, upper-right beyond the gate -->
+      <div class="ts-hotspot" id="dark-forest-hs" style="left:88%;top:20%"
+           onclick="openDarkForest()">
+        <div class="hs-label">
+          <div class="hs-name">Dark Forest</div>
+          <div class="hs-sub">Dangerous · Quest Area</div>
         </div>
         <div class="hs-connector"></div>
       </div>
@@ -417,7 +981,15 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
         <div id="game-clock-time">12:00</div>
       </div>
 
+      <!-- Character action bar -->
+      <div id="char-bar">
+        <button class="char-btn" onclick="openCharPanel('equipment')">🛡️ Equipment</button>
+        <button class="char-btn" onclick="openCharPanel('skills')">⭐ Skills</button>
+        <button class="char-btn" onclick="openCharPanel('quests')">📜 Quests</button>
+      </div>
+
     </div><!-- /ts-scene -->
+
   </div><!-- /town-square-area -->
 
   <!-- RIGHT: Public Chat -->
@@ -450,6 +1022,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   <div class="bld-popup-name" id="bld-popup-name">Building</div>
   <div class="bld-popup-divider"></div>
   <div class="bld-popup-sub" id="bld-popup-sub"></div>
+  <div id="bld-popup-actions"></div>
   <button class="bld-popup-close" onclick="closeBldPopup()">Close</button>
 </div>
 
@@ -488,6 +1061,90 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   </div>
 </div>
 
+<!-- Character Panel (fixed, full-viewport overlay) -->
+<div id="char-panel">
+  <div id="char-panel-inner">
+    <div id="char-panel-head">
+      <div class="cp-left">
+        <span class="cp-avatar" id="cp-avatar">⚔️</span>
+        <span class="cp-name" id="cp-name">—</span>
+        <span class="cp-class-badge" id="cp-class-badge">—</span>
+      </div>
+      <button class="cp-close" onclick="closeCharPanel()">✕</button>
+    </div>
+    <div id="char-tabs">
+      <button class="char-tab" id="tab-equipment" onclick="switchCharTab('equipment')">🛡️ Equipment</button>
+      <button class="char-tab" id="tab-skills"    onclick="switchCharTab('skills')">⭐ Skills</button>
+      <button class="char-tab" id="tab-quests"    onclick="switchCharTab('quests')">📜 Quests</button>
+    </div>
+    <div id="char-content"></div>
+  </div>
+</div>
+
+<!-- NPC Dialogue box -->
+<div id="npc-dialogue" style="display:none"></div>
+
+<!-- Item detail popup -->
+<div id="item-detail" style="display:none"></div>
+
+<!-- Combat Overlay -->
+<div id="combat-overlay">
+  <div id="combat-panel">
+    <div id="combat-header">
+      <button id="cb-flee" onclick="fleeCombat()">← Flee</button>
+      <div id="cb-zone-label"></div>
+      <div id="cb-tier-badge" class="cb-tier"></div>
+    </div>
+    <div id="combat-arena">
+      <div id="cb-player-side">
+        <div id="cb-player-figure" class="cb-player-figure"></div>
+        <div id="cb-player-name" class="cb-name"></div>
+        <div class="cb-bars">
+          <div class="cb-bar-row">
+            <span class="cb-bar-lbl">HP</span>
+            <div class="cb-bar-track"><div id="cb-player-hp-fill" class="cb-bar-fill cb-hp-fill"></div></div>
+            <span id="cb-player-hp-num" class="cb-bar-num"></span>
+          </div>
+          <div class="cb-bar-row">
+            <span class="cb-bar-lbl">MP</span>
+            <div class="cb-bar-track"><div id="cb-player-mp-fill" class="cb-bar-fill cb-mp-fill"></div></div>
+            <span id="cb-player-mp-num" class="cb-bar-num"></span>
+          </div>
+        </div>
+      </div>
+      <div id="cb-fx"></div>
+      <div id="cb-monsters-area"><!-- monster cards injected by JS --></div>
+    </div>
+    <div id="combat-log"><div id="cb-log-inner"></div></div>
+    <div id="combat-skills"></div>
+  </div>
+</div>
+
+<!-- Dark Forest overlay (loading screen + forest map) -->
+<div id="forest-overlay">
+
+  <!-- Loading screen -->
+  <div id="forest-loading">
+    <div class="fld-icon">🌲</div>
+    <div class="fld-title">ENTERING THE DARK FOREST</div>
+    <div class="fld-desc">
+      The trees press close here, ancient and twisted, their gnarled boughs blotting out the sky.
+      A cold wind carries the smell of damp earth and something older — something wrong.
+      Villagers call it the Whispering Dark. Those who venture in say the forest watches.
+      Those who return say little. Many do not return at all.
+    </div>
+    <div class="fld-bar-wrap"><div class="fld-bar" id="fld-bar"></div></div>
+    <div class="fld-hint">Treading carefully...</div>
+  </div>
+
+  <!-- Forest map -->
+  <div id="forest-map">
+    <button id="btn-forest-back" onclick="closeDarkForest()">← Return to Town</button>
+    <div id="fm-zones"></div>
+  </div>
+
+</div>
+
 <!-- Mobile nav -->
 <div id="mobile-nav">
   <button id="nav-town" class="active" onclick="mobileTab('town')"><span class="nav-icon">🏰</span>Town</button>
@@ -497,6 +1154,8 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 <div id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/monsters.js"></script>
+<script src="/skilltree.js"></script>
 <script src="/game.js"></script>
 <script>
 // ── Building popup ────────────────────────────────────────────────────────────
@@ -504,6 +1163,15 @@ function onBuildingClick(name, icon, desc) {
   document.getElementById('bld-popup-icon').textContent = icon;
   document.getElementById('bld-popup-name').textContent = name;
   document.getElementById('bld-popup-sub').textContent  = desc;
+  document.getElementById('bld-popup-actions').innerHTML = '';
+  document.getElementById('bld-popup').classList.add('show');
+}
+function openRoyalKeep() {
+  document.getElementById('bld-popup-icon').textContent = '🏰';
+  document.getElementById('bld-popup-name').textContent = 'The Royal Keep';
+  document.getElementById('bld-popup-sub').textContent  = 'Seat of power for the realm. Speak with the Governor, receive royal decrees, and settle matters of law.';
+  document.getElementById('bld-popup-actions').innerHTML =
+    '<button class="bld-action-btn" onclick="healAtRoyalKeep()">🩹 Restore HP to Full</button>';
   document.getElementById('bld-popup').classList.add('show');
 }
 function closeBldPopup() { document.getElementById('bld-popup').classList.remove('show'); }
@@ -535,36 +1203,48 @@ document.addEventListener('click', e => {
   ];
   const PERIODS = ['Night','Night','Night','Night','Pre-Dawn','Dawn','Sunrise','Morning','Morning','Day','Day','Day','Noon','Afternoon','Afternoon','Afternoon','Golden Hour','Evening','Evening','Dusk','Twilight','Night','Night','Night'];
 
-  // Parse rgba string to [r,g,b,a]
+  // Pre-parse TINTS once to avoid repeated regex on every tick
   function parseRGBA(s){ const m=s.match(/[\d.]+/g); return m.map(Number); }
+  const TINTS_P = TINTS.map(([h,s])=>[h, parseRGBA(s)]);
   function lerpRGBA(a,b,t){ return a.map((v,i)=>i<3?Math.round(v+(b[i]-v)*t):+(v+(b[i]-v)*t).toFixed(3)); }
   function toRGBA(c){ return `rgba(${c[0]},${c[1]},${c[2]},${c[3]})`; }
 
   function getTint(h, m){
     const t = h + m/60;
     let i=0;
-    for(let k=0;k<TINTS.length-1;k++){ if(t>=TINTS[k][0]&&t<TINTS[k+1][0]){i=k;break;} }
-    const frac=(t-TINTS[i][0])/(TINTS[i+1][0]-TINTS[i][0]);
-    return toRGBA(lerpRGBA(parseRGBA(TINTS[i][1]),parseRGBA(TINTS[i+1][1]),frac));
+    for(let k=0;k<TINTS_P.length-1;k++){ if(t>=TINTS_P[k][0]&&t<TINTS_P[k+1][0]){i=k;break;} }
+    const frac=(t-TINTS_P[i][0])/(TINTS_P[i+1][0]-TINTS_P[i][0]);
+    return toRGBA(lerpRGBA(TINTS_P[i][1],TINTS_P[i+1][1],frac));
   }
 
-  // Generate stars
-  const starsEl = document.getElementById('ts-stars');
+  // Cache DOM refs — avoid getElementById on every tick
+  const tintEl      = document.getElementById('ts-tint');
+  const starsEl     = document.getElementById('ts-stars');
+  const clockTime   = document.getElementById('game-clock-time');
+  const clockPeriod = document.getElementById('game-clock-period');
+
+  // Generate stars via DocumentFragment — single DOM insertion
+  const frag = document.createDocumentFragment();
   for(let i=0;i<60;i++){
     const s=document.createElement('div');
     s.className='star';
     const sz=(Math.random()*1.8+0.8).toFixed(1);
     s.style.cssText=`width:${sz}px;height:${sz}px;top:${(Math.random()*55).toFixed(1)}%;left:${(Math.random()*100).toFixed(1)}%;--d:${(Math.random()*3+2).toFixed(1)}s;--del:${(Math.random()*5).toFixed(1)}s`;
-    starsEl.appendChild(s);
+    frag.appendChild(s);
   }
+  starsEl.appendChild(frag);
 
+  let lastMin = -1;
   function update(){
-    const now=new Date(), h=now.getHours(), m=now.getMinutes(), t=h+m/60;
-    document.getElementById('ts-tint').style.background = getTint(h,m);
+    const now=new Date(), h=now.getHours(), m=now.getMinutes();
+    if (m === lastMin) return;
+    lastMin = m;
+    const t=h+m/60;
+    tintEl.style.background = getTint(h,m);
     const isNight = t<6.5||t>19;
-    document.getElementById('ts-stars').classList.toggle('visible', isNight);
-    document.getElementById('game-clock-time').textContent   = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-    document.getElementById('game-clock-period').textContent = PERIODS[h]||'Night';
+    starsEl.classList.toggle('visible', isNight);
+    clockTime.textContent   = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+    clockPeriod.textContent = PERIODS[h]||'Night';
   }
 
   update();

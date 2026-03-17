@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/workspace/family-rpg -maxdepth 2 -name *.html -o -name *.js)",
+      "Bash(grep -n \"startServer\\\\|^app\\\\.\\\\|^}$\\\\|^server\\\\.\" c:/workspace/family-rpg/server.js)"
+    ]
+  }
+}
