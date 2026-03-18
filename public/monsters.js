@@ -39,11 +39,13 @@ const TIER_BASE_XP = { D: 5, C: 10, B: 15, A: 30, S: 100 };
 // level  — affects HP (+15%/lv), ATK/DEF (+10%/lv), and XP (+20%/lv)
 // No static xp field — computed from tier + level at spawn time
 const MONSTER_DEFS = {
-  green_slime:   { name:'Green Slime',   tier:'D', level:1, hp:30, atk:6,  def:2, skills:['m_slam'] },
-  blue_slime:    { name:'Blue Slime',    tier:'D', level:2, hp:25, atk:5,  def:1, skills:['m_splash'] },
-  goblin:        { name:'Goblin Scout',  tier:'C', level:3, hp:55, atk:12, def:5, skills:['m_strike','m_stab'] },
-  forest_archer: { name:'Forest Archer', tier:'C', level:4, hp:45, atk:14, def:3, skills:['m_shot','m_pierce'] },
-  forest_shaman: { name:'Forest Shaman', tier:'B', level:8, hp:90, atk:18, def:8, skills:['m_hex','m_curse'] },
+  green_slime:   { name:'Green Slime',   tier:'D', level:1, hp:60,  atk:22, def:4,  skills:['m_slam'] },
+  blue_slime:    { name:'Blue Slime',    tier:'D', level:2, hp:50,  atk:20, def:3,  skills:['m_splash'] },
+  goblin:        { name:'Goblin Scout',  tier:'C', level:3, hp:110, atk:30, def:10, skills:['m_strike','m_stab'] },
+  forest_archer: { name:'Forest Archer', tier:'C', level:4, hp:90,  atk:33, def:7,  skills:['m_shot','m_pierce'] },
+  forest_shaman: { name:'Forest Shaman', tier:'B', level:8, hp:140, atk:42, def:15, skills:['m_hex','m_curse'] },
+  demon_lord:    { name:'Demon Lord',    tier:'S', level:12, hp:900, atk:90, def:38, skills:['m_inferno','m_hellfire','m_cleave'], isBoss:true },
+  demon_imp:     { name:'Demon Imp',     tier:'B', level:10, hp:140, atk:40, def:12, skills:['m_imp_scratch','m_imp_bite'], isMinion:true },
 };
 
 // ── Monster skills ────────────────────────────────────────────────────────────
@@ -54,8 +56,13 @@ const MONSTER_SKILLS = {
   m_stab:   { name:'Backstab',        dmgMult:1.4, type:'stab'   },
   m_shot:   { name:'Arrow Shot',      dmgMult:1.0, type:'arrow'  },
   m_pierce: { name:'Piercing Shot',   dmgMult:1.3, type:'pierce' },
-  m_hex:    { name:'Hex Bolt',        dmgMult:1.2, type:'magic'  },
-  m_curse:  { name:"Nature's Curse",  dmgMult:1.5, type:'curse'  },
+  m_hex:         { name:'Hex Bolt',       dmgMult:1.2, type:'magic'  },
+  m_curse:       { name:"Nature's Curse", dmgMult:1.5, type:'curse'  },
+  m_inferno:     { name:'Inferno',        dmgMult:1.8, type:'fire'   },
+  m_hellfire:    { name:'Hellfire',       dmgMult:1.4, type:'fire'   },
+  m_cleave:      { name:'Cleave',         dmgMult:1.5, type:'melee'  },
+  m_imp_scratch: { name:'Scratch',        dmgMult:0.9, type:'melee'  },
+  m_imp_bite:    { name:'Bite',           dmgMult:1.2, type:'melee'  },
 };
 
 // ── Zone → monster pool (up to 3 will spawn) ─────────────────────────────────
@@ -63,7 +70,7 @@ const ZONE_MONSTER_POOL = {
   entry: ['green_slime', 'blue_slime'],
   mid:   ['goblin', 'forest_archer'],
   deep:  ['forest_shaman'],
-  demon: [],
+  demon: ['demon_lord'],
 };
 
 const TIER_COLORS = {

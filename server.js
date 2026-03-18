@@ -6,12 +6,201 @@ const path = require('path');
 const dbModule = require('./database');
 const { hashPassword, checkPassword, signToken, verifyToken, requireAuth, requireGM, requireAdmin } = require('./auth');
 const { calcStats, sumGear, CLASSES, SLOTS, CLASS_AVATARS, generateItemAffixes } = require('./classes');
-const { query, run, adjustAttrPoints } = dbModule;
+const { query, run, adjustAttrPoints, getStash, addStashItem, removeStashItem } = dbModule;
 
 // Parse affixes JSON for items returned from DB
 function parseAffixes(items) {
   return items.map(i => ({ ...i, affixes: i.affixes ? JSON.parse(i.affixes) : [] }));
 }
+
+// ── Blacksmith shop — dynamic generation ──────────────────────────────────────
+
+// Minimum player level required to equip each rarity (module scope — used by shop + loot)
+const RARITY_LEVEL_REQ = { normal:1, uncommon:3, magic:5, rare:8, epic:12, legendary:12, godly:15 };
+
+// Sell value base by rarity — factors in level_req with ±15% random fluctuation at sell time
+const SELL_BASE_BY_RARITY = { normal:15, uncommon:28, magic:45, rare:90, epic:140, legendary:300, godly:600 };
+function calcSellValue(rarity, level_req) {
+  const base = SELL_BASE_BY_RARITY[rarity] ?? 15;
+  const lvMult = 1 + ((level_req || 1) - 1) * 0.3;
+  const fluctuation = 0.85 + Math.random() * 0.3; // ±15% randomness
+  return Math.max(1, Math.round(base * lvMult * fluctuation));
+}
+
+// Base item names per slot (picked randomly)
+const SHOP_BASE_NAMES = {
+  mainhand: ['Sword', 'Axe', 'Blade', 'Staff', 'Bow', 'Dagger', 'Wand'],
+  offhand:  ['Shield', 'Buckler', 'Tome', 'Orb'],
+  head:     ['Helm', 'Cap', 'Hood', 'Crown'],
+  chest:    ['Chestplate', 'Vest', 'Robe', 'Mail'],
+  gloves:   ['Gauntlets', 'Gloves', 'Wraps', 'Grips'],
+  pants:    ['Leggings', 'Trousers', 'Greaves', 'Breeches'],
+  boots:    ['Boots', 'Sabatons', 'Treads', 'Stompers'],
+};
+
+const SHOP_ICONS = {
+  mainhand: ['⚔️','🪓','🗡️','🪄','🏹','🔪','🪄'],
+  offhand:  ['🛡️','🛡️','📖','🔮'],
+  head:     ['🪖','🪖','🧢','👑'],
+  chest:    ['🦺','🦺','👘','🧥'],
+  gloves:   ['🧤','🧤','🧤','🧤'],
+  pants:    ['👖','👖','👖','👖'],
+  boots:    ['👢','👢','👟','👢'],
+};
+
+// Cost ranges [min, max] by rarity — intentionally steep to keep loot as the main upgrade path
+const RARITY_COST_RANGE = {
+  normal:    [450,   840],
+  magic:     [1650,  2850],
+  rare:      [5400,  9600],
+  legendary: [18000, 30000],
+  godly:     [60000, 105000],
+};
+
+// Rarity weights by player level: { rarity: weight }
+function _shopRarityWeights(level) {
+  if (level <= 4)  return { normal: 75, magic: 22, rare: 3 };
+  if (level <= 9)  return { normal: 45, magic: 45, rare: 9,  legendary: 1 };
+  if (level <= 15) return { normal: 15, magic: 55, rare: 26, legendary: 4 };
+  if (level <= 22) return { normal: 5,  magic: 40, rare: 45, legendary: 9,  godly: 1 };
+  return                   { normal: 0,  magic: 20, rare: 50, legendary: 26, godly: 4 };
+}
+
+function _pickWeighted(weights) {
+  const total = Object.values(weights).reduce((s, w) => s + w, 0);
+  let r = Math.random() * total;
+  for (const [key, w] of Object.entries(weights)) {
+    r -= w;
+    if (r <= 0) return key;
+  }
+  return Object.keys(weights)[0];
+}
+
+function _randInt(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+
+// Shield detection & icons
+const SHIELD_RE = /shield|buckler|aegis|bulwark|targe/i;
+function _offhandIcon(name) { return SHIELD_RE.test(name) ? '🛡️' : '🔮'; }
+function _isShield(name)    { return SHIELD_RE.test(name); }
+
+// Weapons always carry at least one ATK affix based on tier × level
+const WEAPON_ATK_TABLE = {
+  normal:    { base: 4,  per: 0.5 },
+  magic:     { base: 8,  per: 1.0 },
+  rare:      { base: 14, per: 1.7 },
+  legendary: { base: 22, per: 2.7 },
+  godly:     { base: 32, per: 4.0 },
+};
+function guaranteeWeaponAtk(affixes, bonuses, rarity, level) {
+  const t = WEAPON_ATK_TABLE[rarity] || WEAPON_ATK_TABLE.normal;
+  const guaranteed = Math.floor(t.base + (level - 1) * t.per);
+  const currentAtk = bonuses.atk_bonus || 0;
+  if (currentAtk >= guaranteed) return { affixes, bonuses };
+  // Add a Keen affix for the shortfall, preserving all original affixes
+  const needed     = guaranteed - currentAtk;
+  const keenAffix  = { name: 'Keen', type: 'prefix', stat: 'atk_bonus', value: needed };
+  const newBonuses = { ...bonuses, atk_bonus: guaranteed };
+  return { affixes: [keenAffix, ...affixes], bonuses: newBonuses };
+}
+
+// All non-weapon gear carries at least one DEF affix — guaranteed values by rarity tier
+const ARMOR_DEF_BY_RARITY = { normal:1, magic:2, rare:4, legendary:9, godly:14 };
+function guaranteeArmorDef(affixes, bonuses, rarity) {
+  if (affixes.some(a => a.stat === 'def_bonus')) return { affixes, bonuses };
+  const value    = ARMOR_DEF_BY_RARITY[rarity] || 1;
+  const defAffix = { name: 'Sturdy', type: 'prefix', stat: 'def_bonus', value };
+  const newBonuses = { ...bonuses };
+  let newAffixes;
+  if (affixes.length > 0) {
+    const replaced = affixes[affixes.length - 1];
+    newBonuses[replaced.stat] = (newBonuses[replaced.stat] || 0) - replaced.value;
+    if (newBonuses[replaced.stat] <= 0) delete newBonuses[replaced.stat];
+    newAffixes = [...affixes.slice(0, -1), defAffix];
+  } else {
+    newAffixes = [defAffix];
+  }
+  newBonuses.def_bonus = (newBonuses.def_bonus || 0) + value;
+  return { affixes: newAffixes, bonuses: newBonuses };
+}
+
+// Base block rate ranges [min, max] by rarity — only applies to offhand items
+const OFFHAND_BLOCK_RATE = { normal:[5,8], magic:[8,12], rare:[12,15], legendary:[15,18], godly:[18,20] };
+function _rollBlockRate(rarity, randFn) {
+  const [mn, mx] = OFFHAND_BLOCK_RATE[rarity] || [5, 8];
+  return randFn(mn, mx);
+}
+
+// Special affixes — slim chance on rare+ gear only
+// Weapons: crit_bonus (% crit rate), Armor: dmg_reduction (% damage taken reduction)
+const SPECIAL_AFFIX_CHANCE   = { rare: 0.10, legendary: 0.18, godly: 0.28 };
+const SPECIAL_CRIT_BY_RARITY = {
+  rare:      { base: 1, perLevel: 0.15, max: 4  },
+  legendary: { base: 3, perLevel: 0.20, max: 7  },
+  godly:     { base: 6, perLevel: 0.20, max: 10 },
+};
+const SPECIAL_DR_BY_RARITY   = {
+  rare:      { base: 5, perLevel: 0.05, max: 6  },
+  legendary: { base: 6, perLevel: 0.10, max: 8  },
+  godly:     { base: 8, perLevel: 0.10, max: 10 },
+};
+function rollSpecialAffix(slot, rarity, level, randFn) {
+  const chance = SPECIAL_AFFIX_CHANCE[rarity];
+  if (!chance || randFn(1, 100) > Math.round(chance * 100)) return null;
+  if (slot === 'mainhand') {
+    const t = SPECIAL_CRIT_BY_RARITY[rarity];
+    if (!t) return null;
+    const value = Math.min(t.max, Math.floor(t.base + level * t.perLevel));
+    return { name: 'Keen Eye', type: 'prefix', stat: 'crit_bonus', value };
+  } else {
+    const t = SPECIAL_DR_BY_RARITY[rarity];
+    if (!t) return null;
+    const value = Math.min(t.max, Math.floor(t.base + level * t.perLevel));
+    return { name: 'Resilient', type: 'prefix', stat: 'dmg_reduction', value };
+  }
+}
+
+function generateShopForPlayer(level) {
+  const weights = _shopRarityWeights(level);
+  const items = [];
+  let seq = 0;
+
+  for (const slot of SLOTS) {
+    // 2 items per slot
+    for (let k = 0; k < 2; k++) {
+      const rarity   = _pickWeighted(weights);
+      let { affixes, bonuses } = generateItemAffixes(slot, rarity);
+      const baseIdx  = _randInt(0, SHOP_BASE_NAMES[slot].length - 1);
+      const baseName = SHOP_BASE_NAMES[slot][baseIdx];
+      const icon     = SHOP_ICONS[slot][baseIdx] || '🎒';
+      if (slot !== 'mainhand')
+        ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity));
+
+      // Build name from affixes
+      const prefix = affixes.find(a => a.type === 'prefix');
+      const suffix = affixes.find(a => a.type === 'suffix');
+      const parts  = [prefix?.name, baseName, suffix ? `of ${suffix.name.replace(/^of\s+/i,'')}` : ''];
+      const name   = parts.filter(Boolean).join(' ');
+
+      const [cMin, cMax] = RARITY_COST_RANGE[rarity] || [60, 100];
+      const cost = _randInt(cMin, cMax);
+      const sell = Math.round(cost * 0.4);
+
+      const level_req  = RARITY_LEVEL_REQ[rarity] ?? 1;
+      if (slot === 'mainhand')
+        ({ affixes, bonuses } = guaranteeWeaponAtk(affixes, bonuses, rarity, level_req));
+      const block_rate = slot === 'offhand' && _isShield(baseName) ? _rollBlockRate(rarity, _randInt) : 0;
+      const special = rollSpecialAffix(slot, rarity, level_req, _randInt);
+      if (special) affixes = [...affixes, special];
+      items.push({ id: `sh_${slot}_${seq++}`, slot, name, icon, rarity, affixes, bonuses, cost, sell, level_req, block_rate });
+    }
+  }
+
+  return items;
+}
+
+// Per-user shop cache: username → { items, generatedAt }
+const shopCache = new Map();
+const SHOP_TTL  = 2 * 60 * 60 * 1000; // 2 hours
 
 const app = express();
 const server = http.createServer(app);
@@ -182,7 +371,9 @@ app.get('/api/me/stats', requireAuth, (req, res) => {
   const attrStats  = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
   const classBase  = CLASSES[user.class] || CLASSES.Warrior;
   const stats      = calcStats(user.class, sumGear(equipped), attrStats);
-  res.json({ class: user.class, level: user.level, xp: user.xp, stats, classBase, attrStats, attrPoints: user.attr_points||0, equipped, slots: SLOTS, inventory, quests, gold: user.gold||0, curHp: user.hp !== undefined ? user.hp : stats.hp });
+  const rawHp = user.hp !== undefined ? user.hp : stats.hp;
+  const curHp = Math.min(rawHp, stats.hp); // never exceed current max HP
+  res.json({ class: user.class, level: user.level, xp: user.xp, stats, classBase, attrStats, attrPoints: user.attr_points||0, equipped, slots: SLOTS, inventory, quests, gold: user.gold||0, curHp });
 });
 
 // Available items (optionally ?slot=head etc.)
@@ -214,7 +405,8 @@ app.delete('/api/me/equipment/:slot', requireAuth, (req, res) => {
   const equipped  = parseAffixes(db.getEquipment.all(username));
   const inventory = parseAffixes(db.getInventory.all(username));
   const user      = db.getUserByUsername.get(username);
-  const stats     = calcStats(user.class, sumGear(equipped));
+  const attrStats = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
+  const stats     = calcStats(user.class, sumGear(equipped), attrStats);
   res.json({ ok: true, equipped, inventory, stats });
 });
 
@@ -322,9 +514,19 @@ app.post('/api/me/attributes/assign', requireAuth, (req, res) => {
 
 // Skill tree: get allocated points and unspent points
 app.get('/api/me/skills', requireAuth, (req, res) => {
-  const user = db.getUserByUsername.get(req.user.username);
+  let user = db.getUserByUsername.get(req.user.username);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const rows = db.getPlayerSkills.all(req.user.username);
+
+  // Self-heal: total points (unspent + allocated) must be >= level - 1
+  const totalAllocated = rows.reduce((s, r) => s + (r.points || 0), 0);
+  const totalPoints    = (user.skill_points || 0) + totalAllocated;
+  const expected       = Math.max(0, (user.level || 1) - 1);
+  if (totalPoints < expected) {
+    db.adjustSkillPoints.run(expected - totalPoints, req.user.username);
+    user = db.getUserByUsername.get(req.user.username);
+  }
+
   const allocated = {};
   rows.forEach(r => { allocated[r.node_id] = r.points; });
   res.json({ unspentPoints: user.skill_points || 0, allocated });
@@ -358,16 +560,8 @@ const LOOT_NAMES = {
   boots:    { D:['Worn Boots','Cracked Sandals','Tattered Shoes'], C:['Iron Boots','Leather Boots','Hunter\'s Treads'], B:['Shadow Treads','Knight\'s Sabatons','Mage Slippers'] },
   gloves:   { D:['Tattered Gloves','Worn Mitts','Cracked Gauntlets'], C:['Iron Gauntlets','Leather Gloves','Chain Mitts'], B:['Shadow Wraps','Knight\'s Gauntlets','Mage Gloves'] },
 };
-const LOOT_STATS = {
-  D: { weapon:{atk_bonus:[2,6]},   armor:{def_bonus:[1,4],hp_bonus:[5,15]}  },
-  C: { weapon:{atk_bonus:[6,14]},  armor:{def_bonus:[4,9],hp_bonus:[15,30]} },
-  B: { weapon:{atk_bonus:[14,25]}, armor:{def_bonus:[9,18],hp_bonus:[30,60]}},
-  A: { weapon:{atk_bonus:[25,40]}, armor:{def_bonus:[18,30],hp_bonus:[60,100]}},
-  S: { weapon:{atk_bonus:[40,65]}, armor:{def_bonus:[30,50],hp_bonus:[100,160]}},
-};
-const LOOT_SLOT_CAT  = { mainhand:'weapon', offhand:'weapon', head:'armor', chest:'armor', pants:'armor', boots:'armor', gloves:'armor' };
-const LOOT_SLOT_ICON = { mainhand:'⚔️', offhand:'🛡️', head:'🪖', chest:'🦺', pants:'👖', boots:'👢', gloves:'🧤' };
-const LOOT_TIER_RARITY = { D:'normal', C:'uncommon', B:'rare', A:'epic', S:'legendary' };
+const LOOT_SLOT_ICON = { mainhand:'⚔️', offhand:'🔮', head:'🪖', chest:'🦺', pants:'👖', boots:'👢', gloves:'🧤' };
+const LOOT_TIER_RARITY = { D:'normal', C:'magic', B:'rare', A:'legendary', S:'godly' };
 // SLOTS is imported from classes.js — no duplicate list needed
 function lootRandInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
@@ -397,25 +591,35 @@ app.post('/api/me/loot', requireAuth, (req, res) => {
     if (Math.random() >= chance) continue;
 
     const slot    = SLOTS[Math.floor(Math.random() * SLOTS.length)];
-    const cat     = LOOT_SLOT_CAT[slot];
     const names   = LOOT_NAMES[slot]?.[tier] || [`${tier} ${slot}`];
     const name    = names[Math.floor(Math.random() * names.length)];
-    const icon    = LOOT_SLOT_ICON[slot] || '🎒';
+    const icon    = slot === 'offhand' ? _offhandIcon(name) : (LOOT_SLOT_ICON[slot] || '🎒');
     const rarity  = LOOT_TIER_RARITY[tier] || 'normal';
-    const statRanges = LOOT_STATS[tier]?.[cat] || LOOT_STATS.D.armor;
 
-    const vals = {};
-    for (const [col, [mn, mx]] of Object.entries(statRanges)) {
-      vals[col] = lootRandInt(mn, mx);
-    }
+    let { affixes, bonuses } = generateItemAffixes(slot, rarity);
+    if (slot !== 'mainhand')
+      ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity));
+    if (slot === 'mainhand')
+      ({ affixes, bonuses } = guaranteeWeaponAtk(affixes, bonuses, rarity, mon.level || 1));
+    const b = bonuses;
+
+    const rarityReq  = RARITY_LEVEL_REQ[rarity] ?? 1;
+    const level_req  = Math.min(rarityReq, mon.level || 1);
+    const block_rate = slot === 'offhand' && _isShield(name) ? _rollBlockRate(rarity, lootRandInt) : 0;
+    const special = rollSpecialAffix(slot, rarity, level_req, lootRandInt);
+    if (special) affixes = [...affixes, special];
 
     const { lastInsertRowid } = db.run(
-      `INSERT INTO items (name, slot, atk_bonus, def_bonus, hp_bonus, mp_bonus, spirit_bonus, icon, rarity)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [name, slot, vals.atk_bonus||0, vals.def_bonus||0, vals.hp_bonus||0, vals.mp_bonus||0, vals.spirit_bonus||0, icon, rarity]
+      `INSERT INTO items (name, slot, rarity, icon, affixes,
+         str_bonus, dex_bonus, int_bonus, spirit_bonus,
+         hp_bonus, mp_bonus, atk_bonus, def_bonus, level_req, block_rate)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [name, slot, rarity, icon, JSON.stringify(affixes),
+       b.str_bonus||0, b.dex_bonus||0, b.int_bonus||0, b.spirit_bonus||0,
+       b.hp_bonus||0, b.mp_bonus||0, b.atk_bonus||0, b.def_bonus||0, level_req, block_rate]
     );
     db.addInventoryItem.run(username, lastInsertRowid);
-    droppedItems.push({ id: lastInsertRowid, name, slot, icon, rarity, ...vals });
+    droppedItems.push({ id: lastInsertRowid, name, slot, icon, rarity, level_req, block_rate, affixes, ...b });
   }
 
   if (gold > 0) db.addGold.run(gold, username);
@@ -451,7 +655,7 @@ app.post('/api/me/inventory/:invId/equip', requireAuth, (req, res) => {
 
   // Verify ownership + get item details via join
   const [invRow] = query(
-    `SELECT pi.id as inv_id, pi.item_id, i.slot as item_slot
+    `SELECT pi.id as inv_id, pi.item_id, i.slot as item_slot, i.level_req
      FROM player_inventory pi JOIN items i ON i.id = pi.item_id
      WHERE pi.id = ? AND pi.username = ?`,
     [invId, username]
@@ -459,6 +663,12 @@ app.post('/api/me/inventory/:invId/equip', requireAuth, (req, res) => {
   if (!invRow) return res.status(404).json({ error: 'Item not in your inventory' });
   if (invRow.item_slot !== slot) {
     return res.status(400).json({ error: `This item belongs in the ${invRow.item_slot} slot` });
+  }
+
+  // Level requirement check
+  const equipUser = db.getUserByUsername.get(username);
+  if (equipUser && (equipUser.level || 1) < (invRow.level_req || 1)) {
+    return res.status(400).json({ error: `Requires level ${invRow.level_req}` });
   }
 
   // If slot occupied, move current item back to inventory
@@ -474,8 +684,140 @@ app.post('/api/me/inventory/:invId/equip', requireAuth, (req, res) => {
   const equipped  = parseAffixes(db.getEquipment.all(username));
   const inventory = parseAffixes(db.getInventory.all(username));
   const user      = db.getUserByUsername.get(username);
-  const stats     = calcStats(user.class, sumGear(equipped));
+  const attrStats = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
+  const stats     = calcStats(user.class, sumGear(equipped), attrStats);
   res.json({ equipped, inventory, stats });
+});
+
+// ── REST API: Blacksmith Shop ─────────────────────────────────────────────────
+
+// Get the shop catalog — generated fresh per player level, cached 30 min
+app.get('/api/shop', requireAuth, (req, res) => {
+  try {
+    const username = req.user.username;
+    const now = Date.now();
+    const cached = shopCache.get(username);
+    if (!cached || now - cached.generatedAt > SHOP_TTL) {
+      const user = db.getUserByUsername.get(username);
+      const items = generateShopForPlayer(user?.level || 1);
+      shopCache.set(username, { items, generatedAt: now });
+    }
+    const entry = shopCache.get(username);
+    res.json({ items: entry.items, expiresAt: entry.generatedAt + SHOP_TTL });
+  } catch (err) {
+    console.error('Shop generation error:', err);
+    res.status(500).json({ error: 'Shop unavailable' });
+  }
+});
+
+// Buy an item from the shop — validates against the server-side cache
+app.post('/api/shop/buy', requireAuth, (req, res) => {
+  const username = req.user.username;
+  const { catalogId } = req.body;
+  const cached = shopCache.get(username);
+  const entry  = cached?.items?.find(c => c.id === catalogId);
+  if (!entry) return res.status(400).json({ error: 'Shop has refreshed — please reopen the blacksmith' });
+
+  const user = db.getUserByUsername.get(username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if ((user.gold || 0) < entry.cost) return res.status(400).json({ error: 'Not enough gold' });
+
+  const invCount = query('SELECT COUNT(*) as n FROM player_inventory WHERE username=?', [username])[0]?.n ?? 0;
+  if (invCount >= 100) return res.status(400).json({ error: 'Inventory full (100 items max)' });
+
+  const b = entry.bonuses || {};
+  const { lastInsertRowid } = db.run(
+    `INSERT INTO items (name, slot, rarity, icon, affixes,
+       str_bonus, dex_bonus, int_bonus, spirit_bonus,
+       hp_bonus, mp_bonus, atk_bonus, def_bonus, level_req, block_rate)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [entry.name, entry.slot, entry.rarity, entry.icon, JSON.stringify(entry.affixes || []),
+     b.str_bonus||0, b.dex_bonus||0, b.int_bonus||0, b.spirit_bonus||0,
+     b.hp_bonus||0, b.mp_bonus||0, b.atk_bonus||0, b.def_bonus||0,
+     entry.level_req || 1, entry.block_rate || 0]
+  );
+  db.addInventoryItem.run(username, lastInsertRowid);
+  run('UPDATE users SET gold = gold - ? WHERE username = ?', [entry.cost, username]);
+
+  const updatedUser = db.getUserByUsername.get(username);
+  res.json({ ok: true, gold: updatedUser.gold });
+});
+
+// Sell a player's inventory item to the shop
+app.post('/api/shop/sell', requireAuth, (req, res) => {
+  const username = req.user.username;
+  const invId = parseInt(req.body.invId);
+  if (!invId) return res.status(400).json({ error: 'invId required' });
+
+  const [row] = query(
+    `SELECT pi.id as inv_id, i.rarity, i.level_req FROM player_inventory pi
+     JOIN items i ON i.id = pi.item_id
+     WHERE pi.id = ? AND pi.username = ?`,
+    [invId, username]
+  );
+  if (!row) return res.status(404).json({ error: 'Item not in your inventory' });
+
+  const price = calcSellValue(row.rarity, row.level_req);
+  run('DELETE FROM player_inventory WHERE id = ?', [invId]);
+  run('UPDATE users SET gold = gold + ? WHERE username = ?', [price, username]);
+
+  const updatedUser = db.getUserByUsername.get(username);
+  res.json({ ok: true, gold: updatedUser.gold, price });
+});
+
+// ── REST API: Inn Stash ───────────────────────────────────────────────────────
+
+// Get stash contents
+app.get('/api/stash', requireAuth, (req, res) => {
+  const username = req.user.username;
+  const items = parseAffixes(getStash.all(username));
+  const count = query('SELECT COUNT(*) as n FROM player_stash WHERE username=?', [username])[0]?.n ?? 0;
+  res.json({ items, count, max: 100 });
+});
+
+// Store item from inventory into stash
+app.post('/api/stash/store', requireAuth, (req, res) => {
+  const username = req.user.username;
+  const { invId, stashSlot } = req.body;
+  if (stashSlot < 0 || stashSlot > 99) return res.status(400).json({ error: 'Invalid stash slot' });
+
+  // Verify ownership
+  const [invRow] = query(
+    'SELECT pi.id as inv_id, pi.item_id FROM player_inventory pi WHERE pi.id = ? AND pi.username = ?',
+    [invId, username]
+  );
+  if (!invRow) return res.status(404).json({ error: 'Item not in your inventory' });
+
+  // Check slot is free
+  const [existing] = query('SELECT id FROM player_stash WHERE username=? AND stash_slot=?', [username, stashSlot]);
+  if (existing) return res.status(400).json({ error: 'Stash slot occupied' });
+
+  // Check stash not full
+  const count = query('SELECT COUNT(*) as n FROM player_stash WHERE username=?', [username])[0]?.n ?? 0;
+  if (count >= 100) return res.status(400).json({ error: 'Stash is full' });
+
+  db.removeInventoryItem.run(invId, username);
+  addStashItem.run(username, invRow.item_id, stashSlot);
+  res.json({ ok: true });
+});
+
+// Withdraw item from stash into inventory
+app.post('/api/stash/withdraw', requireAuth, (req, res) => {
+  const username = req.user.username;
+  const { stashId } = req.body;
+
+  const [stashRow] = query(
+    'SELECT ps.id, ps.item_id FROM player_stash ps WHERE ps.id = ? AND ps.username = ?',
+    [stashId, username]
+  );
+  if (!stashRow) return res.status(404).json({ error: 'Item not in stash' });
+
+  const invCount = query('SELECT COUNT(*) as n FROM player_inventory WHERE username=?', [username])[0]?.n ?? 0;
+  if (invCount >= 100) return res.status(400).json({ error: 'Inventory full (100 items max)' });
+
+  removeStashItem.run(stashId, username);
+  db.addInventoryItem.run(username, stashRow.item_id);
+  res.json({ ok: true });
 });
 
 // POST /api/admin/reset-progression  — wipe XP, level, all points for every non-admin user
@@ -582,9 +924,18 @@ app.post('/api/admin/new-season', requireAuth, requireAdmin, (req, res) => {
 
   // 5. Reset all player progression
   run(`UPDATE users SET xp=0, level=1, skill_points=0,
-    attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0
+    attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0, gold=100,
+    forest_progress=0
     WHERE role != 'admin'`);
   run('DELETE FROM player_skills');
+  run('DELETE FROM player_quests');
+
+  // 6. Wipe all inventories and equipment
+  run('DELETE FROM user_equipment');
+  run('DELETE FROM player_inventory');
+  run(`DELETE FROM items WHERE id NOT IN (
+    SELECT item_id FROM user_equipment UNION SELECT item_id FROM player_inventory
+  )`);
 
   res.json({ ok: true, topic, number: nextNum });
 });
@@ -712,6 +1063,25 @@ app.get('/api/events/invites', requireAuth, (req, res) => {
 // Map username → socket id for targeted delivery
 const onlineUsers = new Map();
 
+// ── PvP state ────────────────────────────────────────────────────────────────
+const pvpSessions   = new Map(); // sessionId → session
+const pvpChallenges = new Map(); // targetUsername → { from, timer }
+
+function _pvpEnd(sessionId, winnerUsername) {
+  const session = pvpSessions.get(sessionId);
+  if (!session) return;
+  const payload = {
+    winner: winnerUsername,
+    p1: { username: session.p1.username, curHp: session.p1.curHp },
+    p2: { username: session.p2.username, curHp: session.p2.curHp },
+  };
+  const s1 = onlineUsers.get(session.p1.username);
+  const s2 = onlineUsers.get(session.p2.username);
+  if (s1) io.to(s1).emit('pvp:end', payload);
+  if (s2) io.to(s2).emit('pvp:end', payload);
+  pvpSessions.delete(sessionId);
+}
+
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
   try {
@@ -767,8 +1137,180 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('typing:public', { username });
   });
 
+  // ── PvP ────────────────────────────────────────────────────────────────────
+
+  socket.on('pvp:challenge', ({ to }) => {
+    if (to === username) return;
+    const targetSid = onlineUsers.get(to);
+    if (!targetSid) return socket.emit('pvp:error', { msg: 'Player is offline.' });
+    if (pvpChallenges.has(to)) return socket.emit('pvp:error', { msg: 'That player is already being challenged.' });
+    const inSession = [...pvpSessions.values()].some(s => s.p1.username === username || s.p2.username === username);
+    if (inSession) return socket.emit('pvp:error', { msg: 'You are already in a PvP battle.' });
+
+    const challenger = db.getUserByUsername.get(username);
+    const timer = setTimeout(() => {
+      if (pvpChallenges.get(to)?.from === username) {
+        pvpChallenges.delete(to);
+        socket.emit('pvp:declined', { reason: 'timeout' });
+        io.to(targetSid).emit('pvp:challenge_expired');
+      }
+    }, 12000);
+
+    pvpChallenges.set(to, { from: username, timer });
+    io.to(targetSid).emit('pvp:challenge', {
+      from: username,
+      fromData: { avatar: challenger.avatar, class: challenger.class, level: challenger.level },
+    });
+    socket.emit('pvp:challenge_sent', { to });
+  });
+
+  socket.on('pvp:accept', ({ from }) => {
+    const ch = pvpChallenges.get(username);
+    if (!ch || ch.from !== from) return socket.emit('pvp:error', { msg: 'No pending challenge.' });
+    clearTimeout(ch.timer);
+    pvpChallenges.delete(username);
+
+    const challengerSid = onlineUsers.get(from);
+    if (!challengerSid) return socket.emit('pvp:error', { msg: 'Challenger went offline.' });
+
+    const sessionId = `pvp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const p1u = db.getUserByUsername.get(from);
+    const p2u = db.getUserByUsername.get(username);
+
+    pvpSessions.set(sessionId, {
+      id: sessionId,
+      p1: { username: from,     curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, dex: 0, def: 0, spirit: 0 },
+      p2: { username, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, dex: 0, def: 0, spirit: 0 },
+      turn: null, ready: new Set(),
+    });
+
+    io.to(challengerSid).emit('pvp:start', {
+      sessionId,
+      opponent: { username, avatar: p2u.avatar, class: p2u.class, level: p2u.level },
+    });
+    socket.emit('pvp:start', {
+      sessionId,
+      opponent: { username: from, avatar: p1u.avatar, class: p1u.class, level: p1u.level },
+    });
+  });
+
+  socket.on('pvp:decline', ({ from }) => {
+    const ch = pvpChallenges.get(username);
+    if (!ch || ch.from !== from) return;
+    clearTimeout(ch.timer);
+    pvpChallenges.delete(username);
+    const sid = onlineUsers.get(from);
+    if (sid) io.to(sid).emit('pvp:declined', { reason: 'declined' });
+  });
+
+  // Client reports its effective stats so server can track HP/MP authoritatively
+  socket.on('pvp:ready', ({ sessionId, stats }) => {
+    const session = pvpSessions.get(sessionId);
+    if (!session) return;
+    const isP1 = session.p1.username === username;
+    const isP2 = session.p2.username === username;
+    if (!isP1 && !isP2) return;
+
+    const p   = isP1 ? session.p1 : session.p2;
+    p.curHp   = stats.hp;
+    p.maxHp   = stats.hp;
+    p.curMp   = stats.mp;
+    p.maxMp   = stats.mp;
+    p.dex     = stats.dex   || 0;
+    p.def     = stats.def   || 0;
+    p.spirit  = stats.spirit || 0;
+    session.ready.add(username);
+
+    if (session.ready.size === 2) {
+      session.turn = session.p1.dex >= session.p2.dex ? session.p1.username : session.p2.username;
+      const mkPayload = (pu) => ({
+        sessionId,
+        yourTurn: session.turn === pu,
+        turnUsername: session.turn,
+        p1: { username: session.p1.username, curHp: session.p1.curHp, maxHp: session.p1.maxHp, curMp: session.p1.curMp, maxMp: session.p1.maxMp, dex: session.p1.dex, def: session.p1.def },
+        p2: { username: session.p2.username, curHp: session.p2.curHp, maxHp: session.p2.maxHp, curMp: session.p2.curMp, maxMp: session.p2.maxMp, dex: session.p2.dex, def: session.p2.def },
+      });
+      const s1 = onlineUsers.get(session.p1.username);
+      const s2 = onlineUsers.get(session.p2.username);
+      if (s1) io.to(s1).emit('pvp:begin', mkPayload(session.p1.username));
+      if (s2) io.to(s2).emit('pvp:begin', mkPayload(session.p2.username));
+    }
+  });
+
+  socket.on('pvp:action', ({ sessionId, skillName, dmg, healAmt, mpCost, targetSelf }) => {
+    const session = pvpSessions.get(sessionId);
+    if (!session || session.turn !== username) return;
+
+    const isP1   = session.p1.username === username;
+    const self   = isP1 ? session.p1 : session.p2;
+    const opp    = isP1 ? session.p2 : session.p1;
+
+    const actualDmg  = Math.max(0, Math.min(9999, Math.floor(dmg     || 0)));
+    const actualHeal = Math.max(0, Math.min(9999, Math.floor(healAmt  || 0)));
+    const actualMp   = Math.max(0, Math.min(999,  Math.floor(mpCost   || 0)));
+
+    self.curMp = Math.max(0, self.curMp - actualMp);
+
+    let log;
+    if (targetSelf) {
+      self.curHp = Math.min(self.maxHp, self.curHp + actualHeal);
+      log = `${username} used ${skillName} → healed ${actualHeal} HP.`;
+    } else {
+      opp.curHp = Math.max(0, opp.curHp - actualDmg);
+      log = `${username} used ${skillName} → ${actualDmg} damage to ${opp.username}.`;
+    }
+
+    if (opp.curHp <= 0) {
+      _pvpEnd(sessionId, username);
+    } else {
+      session.turn = opp.username;
+      const base = {
+        sessionId, turnUsername: session.turn, log,
+        p1: { username: session.p1.username, curHp: session.p1.curHp, maxHp: session.p1.maxHp, curMp: session.p1.curMp, maxMp: session.p1.maxMp },
+        p2: { username: session.p2.username, curHp: session.p2.curHp, maxHp: session.p2.maxHp, curMp: session.p2.curMp, maxMp: session.p2.maxMp },
+      };
+      const s1 = onlineUsers.get(session.p1.username);
+      const s2 = onlineUsers.get(session.p2.username);
+      if (s1) io.to(s1).emit('pvp:update', { ...base, yourTurn: session.turn === session.p1.username });
+      if (s2) io.to(s2).emit('pvp:update', { ...base, yourTurn: session.turn === session.p2.username });
+    }
+  });
+
+  socket.on('pvp:forfeit', ({ sessionId }) => {
+    const session = pvpSessions.get(sessionId);
+    if (!session) return;
+    const opp = session.p1.username === username ? session.p2.username : session.p1.username;
+    _pvpEnd(sessionId, opp);
+  });
+
   // ── Disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
+    // Clean up PvP session if player was in one
+    for (const [sid, session] of pvpSessions) {
+      if (session.p1.username === username || session.p2.username === username) {
+        const opp = session.p1.username === username ? session.p2.username : session.p1.username;
+        _pvpEnd(sid, opp);
+        break;
+      }
+    }
+    // Clean up pending challenges sent by this user
+    for (const [target, ch] of pvpChallenges) {
+      if (ch.from === username) {
+        clearTimeout(ch.timer);
+        pvpChallenges.delete(target);
+        const tSid = onlineUsers.get(target);
+        if (tSid) io.to(tSid).emit('pvp:challenge_expired');
+      }
+    }
+    // Clean up if this user had a pending challenge incoming
+    if (pvpChallenges.has(username)) {
+      const ch = pvpChallenges.get(username);
+      clearTimeout(ch.timer);
+      pvpChallenges.delete(username);
+      const cSid = onlineUsers.get(ch.from);
+      if (cSid) io.to(cSid).emit('pvp:declined', { reason: 'offline' });
+    }
+
     // Only mark offline if this socket is still the active one
     if (onlineUsers.get(username) === socket.id) {
       onlineUsers.delete(username);

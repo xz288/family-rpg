@@ -264,4 +264,114 @@ const MONSTER_SVGS = {
     <circle cx="39" cy="17" r="1.5" fill="#FFCDD2"/>
     <path d="M28,23 L32,26 L36,23" stroke="#1B5E20" stroke-width="1" fill="none"/>
   </svg>`,
+
+  demon_lord: `<svg viewBox="0 0 140 175" xmlns="http://www.w3.org/2000/svg">
+    <!-- Wings (behind everything) -->
+    <path d="M62,72 Q22,38 0,95 Q22,72 48,82 Q56,86 62,90" fill="#3d0000"/>
+    <path d="M62,72 Q28,18 8,52 Q28,48 48,82" fill="#5a0000"/>
+    <line x1="62" y1="72" x2="8" y2="78" stroke="#8b0000" stroke-width="1" opacity="0.5"/>
+    <line x1="62" y1="72" x2="18" y2="55" stroke="#8b0000" stroke-width="1" opacity="0.5"/>
+    <line x1="62" y1="72" x2="6" y2="62" stroke="#8b0000" stroke-width="1" opacity="0.5"/>
+    <path d="M78,72 Q118,38 140,95 Q118,72 92,82 Q84,86 78,90" fill="#3d0000"/>
+    <path d="M78,72 Q112,18 132,52 Q112,48 92,82" fill="#5a0000"/>
+    <line x1="78" y1="72" x2="132" y2="78" stroke="#8b0000" stroke-width="1" opacity="0.5"/>
+    <line x1="78" y1="72" x2="122" y2="55" stroke="#8b0000" stroke-width="1" opacity="0.5"/>
+    <line x1="78" y1="72" x2="134" y2="62" stroke="#8b0000" stroke-width="1" opacity="0.5"/>
+    <!-- Legs -->
+    <rect x="52" y="140" width="16" height="28" rx="4" fill="#1a0505"/>
+    <rect x="72" y="140" width="16" height="28" rx="4" fill="#1a0505"/>
+    <!-- Hooves -->
+    <path d="M48,164 L68,164 L71,175 L46,175 Z" fill="#0d0000"/>
+    <path d="M72,164 L92,164 L94,175 L70,175 Z" fill="#0d0000"/>
+    <!-- Torso -->
+    <path d="M48,88 L92,88 L96,148 L44,148 Z" fill="#1a0505"/>
+    <!-- Chest plate -->
+    <path d="M55,92 L85,92 L82,128 L58,128 Z" fill="#2d0808"/>
+    <!-- Glowing chest rune -->
+    <path d="M70,100 L74,110 L70,108 L66,110 Z" fill="#cc0000" opacity="0.9"/>
+    <ellipse cx="70" cy="116" rx="5" ry="5" fill="#cc0000" opacity="0.5"/>
+    <ellipse cx="70" cy="116" rx="3" ry="3" fill="#ff4444" opacity="0.7"/>
+    <!-- Left arm -->
+    <path d="M48,92 L26,98 L16,128 L34,136 L50,112 Z" fill="#1a0505"/>
+    <path d="M16,126 L8,136 M19,130 L12,141 M23,133 L17,143" stroke="#cc2222" stroke-width="2" stroke-linecap="round"/>
+    <!-- Right arm -->
+    <path d="M92,92 L114,98 L124,128 L106,136 L90,112 Z" fill="#1a0505"/>
+    <path d="M124,126 L132,136 M121,130 L128,141 M117,133 L123,143" stroke="#cc2222" stroke-width="2" stroke-linecap="round"/>
+    <!-- Neck -->
+    <rect x="62" y="78" width="16" height="14" rx="4" fill="#1a0505"/>
+    <!-- Head -->
+    <ellipse cx="70" cy="60" rx="24" ry="22" fill="#1a0505"/>
+    <!-- Left horn -->
+    <path d="M52,48 Q36,18 44,36" fill="#6b0000"/>
+    <path d="M52,48 Q34,12 40,30 Q42,24 44,36 Z" fill="#8b2222"/>
+    <!-- Right horn -->
+    <path d="M88,48 Q104,18 96,36" fill="#6b0000"/>
+    <path d="M88,48 Q106,12 100,30 Q98,24 96,36 Z" fill="#8b2222"/>
+    <!-- Eye glow halos -->
+    <ellipse cx="60" cy="58" rx="10" ry="8" fill="#ff0000" opacity="0.2"/>
+    <ellipse cx="80" cy="58" rx="10" ry="8" fill="#ff0000" opacity="0.2"/>
+    <!-- Eyes -->
+    <ellipse cx="60" cy="58" rx="7" ry="6" fill="#990000"/>
+    <ellipse cx="80" cy="58" rx="7" ry="6" fill="#990000"/>
+    <ellipse cx="60" cy="58" rx="4" ry="4" fill="#ff2222"/>
+    <ellipse cx="80" cy="58" rx="4" ry="4" fill="#ff2222"/>
+    <ellipse cx="60" cy="58" rx="2" ry="2.5" fill="#000"/>
+    <ellipse cx="80" cy="58" rx="2" ry="2.5" fill="#000"/>
+    <!-- Brow -->
+    <path d="M53,52 Q60,48 67,52" stroke="#0d0000" stroke-width="2" fill="none"/>
+    <path d="M73,52 Q80,48 87,52" stroke="#0d0000" stroke-width="2" fill="none"/>
+    <!-- Nose -->
+    <path d="M67,66 Q70,69 73,66" stroke="#330000" stroke-width="1.5" fill="none"/>
+    <!-- Mouth + fangs -->
+    <path d="M58,73 Q70,82 82,73" stroke="#8b0000" stroke-width="2" fill="none"/>
+    <path d="M62,73 L60,80 M67,75 L66,82 M73,75 L74,82 M78,73 L80,80" stroke="#e0e0e0" stroke-width="2" stroke-linecap="round"/>
+    <!-- Tail -->
+    <path d="M68,146 Q50,158 46,170 Q48,178 58,173 Q56,165 64,158 Q76,147 76,146" fill="#250808"/>
+    <!-- Spade tip -->
+    <path d="M49,171 Q42,178 49,182 L59,174 Z" fill="#8b0000"/>
+    <!-- Ground flames -->
+    <ellipse cx="60" cy="172" rx="12" ry="4" fill="#ff4400" opacity="0.35"/>
+    <ellipse cx="84" cy="172" rx="12" ry="4" fill="#ff4400" opacity="0.35"/>
+    <path d="M54,170 Q57,160 55,168 Q59,158 58,167 Q62,157 61,166" stroke="#ff6600" stroke-width="1.5" fill="none" opacity="0.75"/>
+    <path d="M80,170 Q83,160 81,168 Q85,158 84,167 Q88,157 87,166" stroke="#ff6600" stroke-width="1.5" fill="none" opacity="0.75"/>
+  </svg>`,
+
+  demon_imp: `<svg viewBox="0 0 65 90" xmlns="http://www.w3.org/2000/svg">
+    <!-- Tiny wings -->
+    <path d="M22,36 Q8,28 10,44 Q16,38 22,42" fill="#3a0808"/>
+    <path d="M43,36 Q57,28 55,44 Q49,38 43,42" fill="#3a0808"/>
+    <!-- Legs -->
+    <rect x="22" y="65" width="10" height="18" rx="3" fill="#3a0d0d"/>
+    <rect x="33" y="65" width="10" height="18" rx="3" fill="#3a0d0d"/>
+    <!-- Feet -->
+    <path d="M19,80 L33,80 L35,88 L17,88 Z" fill="#250808"/>
+    <path d="M32,80 L46,80 L48,88 L30,88 Z" fill="#250808"/>
+    <!-- Body -->
+    <ellipse cx="32" cy="52" rx="18" ry="16" fill="#4a1010"/>
+    <!-- Head -->
+    <ellipse cx="32" cy="28" rx="16" ry="14" fill="#5a1515"/>
+    <!-- Small horns -->
+    <path d="M22,20 Q16,8 19,16" stroke="#8b0000" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M42,20 Q48,8 45,16" stroke="#8b0000" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- Eyes -->
+    <ellipse cx="25" cy="27" rx="5" ry="4" fill="#cc0000"/>
+    <ellipse cx="39" cy="27" rx="5" ry="4" fill="#cc0000"/>
+    <ellipse cx="25" cy="27" rx="2.5" ry="2" fill="#ff4444"/>
+    <ellipse cx="39" cy="27" rx="2.5" ry="2" fill="#ff4444"/>
+    <ellipse cx="25" cy="27" rx="1.2" ry="1.5" fill="#000"/>
+    <ellipse cx="39" cy="27" rx="1.2" ry="1.5" fill="#000"/>
+    <!-- Mouth -->
+    <path d="M25,35 Q32,40 39,35" stroke="#8b0000" stroke-width="1.5" fill="none"/>
+    <path d="M27,35 L26,40 M31,36 L31,41 M37,35 L38,40" stroke="#ddd" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Arms -->
+    <path d="M14,48 Q6,54 8,64" stroke="#4a1010" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M50,48 Q58,54 56,64" stroke="#4a1010" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <!-- Claws -->
+    <path d="M8,62 L4,68 M10,65 L7,71" stroke="#cc2222" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M56,62 L60,68 M54,65 L57,71" stroke="#cc2222" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Tail -->
+    <path d="M38,64 Q50,70 48,80 Q50,84 46,82" stroke="#6b1010" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- Tail tip -->
+    <path d="M44,81 Q48,86 52,82 L46,78 Z" fill="#8b0000"/>
+  </svg>`,
 };

@@ -40,7 +40,7 @@ function calcStats(cls, gear = {}, attrs = {}) {
     spirit,
     hp:  4 * str    + (gear.hp  || 0),       // gear can add flat HP on top
     mp:  4 * spirit + (gear.mp  || 0),       // gear can add flat MP on top
-    atk: Math.floor(2 * str  + 0.5 * dex) + (gear.atk || 0),
+    atk: (cls === 'Rogue' ? Math.floor(0.5 * str + 2 * dex) : Math.floor(2 * str + 0.5 * dex)) + (gear.atk || 0),
     def: Math.floor(2 * dex  + 0.5 * str) + (gear.def || 0),
   };
 }

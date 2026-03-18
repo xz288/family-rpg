@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(node --check server.js)",
+      "Bash(node --check public/game.js)",
+      "Bash(timeout 8 node -e \":*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(findstr \"LISTENING.*3000\")",
+      "Bash(tasklist)",
+      "Bash(findstr node:*)",
+      "Bash(lsof -ti:3000)",
+      "Bash(taskkill //PID 11384 //F)",
+      "Bash(kill -9 11384)",
+      "Bash(node -e \"require\\(''''./database''''\\)\")"
     ]
   }
 }

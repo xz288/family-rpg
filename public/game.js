@@ -9,6 +9,12 @@ const me = JSON.parse(meRaw);
 let dmTarget  = null;   // { username, avatar }
 let allUsers  = [];
 let onlineSet = new Set();
+
+// ── PvP state ─────────────────────────────────────────────────────────────────
+let pvpState          = null;   // active pvp session
+let _pvpPendingFrom   = null;   // username who challenged us
+let _pvpChallengeCountdown = null;
+let _pvpWaitingFor    = null;   // username we challenged
 let typingTimer = null;
 
 const isGM = me.role === 'admin' || me.role === 'gamemaster';
@@ -90,10 +96,11 @@ function renderPlayerList() {
     li.innerHTML = `
       <span class="p-avatar">${u.avatar}</span>
       <div class="p-info">
-        <div class="p-name">${u.username}</div>
+        <div class="p-name">${escHtml(u.username)}</div>
         <div class="p-class">Lv.${u.level} ${u.class}</div>
       </div>
       <span class="p-online ${isOnline ? 'on' : ''}"></span>
+      ${isOnline ? `<button class="p-pvp-btn" title="Challenge to PvP" onclick="event.stopPropagation();sendPvpChallenge('${escHtml(u.username)}')">⚔</button>` : ''}
     `;
     li.addEventListener('click', () => startDM(u));
     ul.appendChild(li);
@@ -431,7 +438,13 @@ const STAT_NAMES = {
   atk_bonus: 'ATK', def_bonus: 'DEF', str_bonus: 'STR',
   dex_bonus: 'DEX', int_bonus: 'INT', spirit_bonus: 'SPIRIT',
   hp_bonus:  'HP',  mp_bonus:  'MP',
+  crit_bonus: 'Crit Rate', dmg_reduction: 'Dmg Reduction',
 };
+// Stats whose values are percentages — displayed as "+N%" not "+N"
+const PCT_STATS = new Set(['crit_bonus', 'dmg_reduction']);
+function _affixValStr(stat, value) {
+  return PCT_STATS.has(stat) ? `+${value}%` : `+${value}`;
+}
 
 const SLOT_LABELS = {
   head: 'Head Armour', chest: 'Chest Armour', gloves: 'Gloves',
@@ -462,6 +475,20 @@ const STAT_META = {
 let charCache   = null;   // cached /api/me/stats response
 let charTab     = null;   // currently shown tab
 let dragItem    = null;   // { invId, itemSlot } — active drag from inventory
+let _invSort    = 'default'; // 'default' | 'type' | 'rarity' | 'obtained'
+
+function setInvSort(mode) {
+  _invSort = mode;
+  if (charCache) switchCharTab('equipment');
+}
+
+async function fetchAndCacheStats() {
+  const [stats, skillData] = await Promise.all([
+    api('GET', '/api/me/stats'),
+    api('GET', '/api/me/skills'),
+  ]);
+  charCache = { ...stats, skillData };
+}
 
 document.getElementById('char-panel').addEventListener('click', e => {
   if (e.target === document.getElementById('char-panel')) closeCharPanel();
@@ -475,16 +502,23 @@ async function openCharPanel(tab) {
   document.getElementById('cp-avatar').textContent      = me.avatar || '⚔️';
   document.getElementById('cp-name').textContent        = me.username;
   document.getElementById('cp-class-badge').textContent = me.class || '—';
-  document.getElementById('cp-level').textContent       = `Lv.${charCache?.level ?? me.level ?? 1}`;
+  const cpLv = charCache?.level ?? me.level ?? 1;
+  document.getElementById('cp-level').textContent = `Lv.${cpLv}`;
+
+  // XP bar — formula mirrors server: level = floor(sqrt(xp/100)) + 1
+  const cpXp       = charCache?.xp ?? 0;
+  const xpThisLv   = (cpLv - 1) ** 2 * 100;
+  const xpNextLv   = cpLv ** 2 * 100;
+  const xpProgress = cpLv >= 30 ? 1 : (cpXp - xpThisLv) / (xpNextLv - xpThisLv);
+  document.getElementById('cp-xp-bar-fill').style.width = `${Math.max(0, Math.min(100, xpProgress * 100))}%`;
+  document.getElementById('cp-xp-label').textContent = cpLv >= 30
+    ? 'MAX LEVEL'
+    : `${cpXp - xpThisLv} / ${xpNextLv - xpThisLv} XP`;
 
   if (!charCache) {
     document.getElementById('char-content').innerHTML =
       '<div class="inv-empty">Loading…</div>';
-    const [stats, skillData] = await Promise.all([
-      api('GET', '/api/me/stats'),
-      api('GET', '/api/me/skills'),
-    ]);
-    charCache = { ...stats, skillData };
+    await fetchAndCacheStats();
   }
 
   // Update gold display
@@ -509,7 +543,13 @@ function switchCharTab(tab) {
 
   const content = document.getElementById('char-content');
   if (tab === 'equipment') { content.innerHTML = renderCharEquipment(charCache); bindDragDrop(); }
-  if (tab === 'skills')    content.innerHTML = renderSkillTree(charCache);
+  if (tab === 'skills') {
+    content.innerHTML = '<div class="inv-empty">Loading…</div>';
+    api('GET', '/api/me/skills').then(skillData => {
+      if (charCache) charCache.skillData = skillData;
+      content.innerHTML = renderSkillTree(charCache);
+    });
+  }
   if (tab === 'quests')    content.innerHTML = renderCharQuests(charCache);
 }
 
@@ -548,21 +588,41 @@ function renderCharEquipment(data) {
   </svg>`;
 
   // ── Inventory grid (5 × 20 = 100 cells, scrollable) ─────────────────────
-  const inventory = data.inventory || [];
+  const SLOT_ORDER  = { head:0, chest:1, gloves:2, pants:3, boots:4, mainhand:5, offhand:6 };
+  const RARITY_ORDER = { godly:0, legendary:1, rare:2, magic:3, normal:4 };
+
+  const rawInv = data.inventory || [];
+  const inventory = [...rawInv].sort((a, b) => {
+    if (_invSort === 'type')     return (SLOT_ORDER[a.slot] ?? 9) - (SLOT_ORDER[b.slot] ?? 9);
+    if (_invSort === 'rarity')   return (RARITY_ORDER[a.rarity] ?? 9) - (RARITY_ORDER[b.rarity] ?? 9);
+    if (_invSort === 'obtained') return b.inv_id - a.inv_id; // newest first
+    return 0; // default: acquisition order (oldest first)
+  });
+
+  const sortBtns = ['default','type','rarity','obtained'].map(m => {
+    const labels = { default:'Default', type:'By Type', rarity:'By Rarity', obtained:'Newest' };
+    const active = _invSort === m;
+    return `<button class="inv-sort-btn${active ? ' active' : ''}" onclick="setInvSort('${m}')">${labels[m]}</button>`;
+  }).join('');
+
   const cells = [];
   for (let i = 0; i < 100; i++) {
     const inv = inventory[i];
     if (inv) {
-      const slotMeta = SLOT_META[inv.slot] || {};
-      const rCls = RARITY_COLORS[inv.rarity] || 'rarity-normal';
-      cells.push(`<div class="inv-cell has-item"
-        draggable="true"
+      const slotMeta  = SLOT_META[inv.slot] || {};
+      const rCls      = RARITY_COLORS[inv.rarity] || 'rarity-normal';
+      const playerLv  = data.level || 1;
+      const req       = inv.level_req || 1;
+      const locked    = playerLv < req;
+      cells.push(`<div class="inv-cell has-item${locked ? ' inv-locked' : ''}"
+        draggable="${!locked}"
         data-inv-id="${inv.inv_id}"
         data-item-slot="${inv.slot}"
         onclick="onInvCellClick(${inv.inv_id})"
-        title="${escHtml(inv.name)}">
+        title="${escHtml(inv.name)}${locked ? ` (Requires Lv.${req})` : ''}">
         <span class="inv-icon">${escHtml(inv.icon || slotMeta.icon || '🎒')}</span>
         <span class="inv-name ${rCls}">${escHtml(inv.name)}</span>
+        ${locked ? `<span class="inv-lock">🔒 Lv.${req}</span>` : ''}
       </div>`);
     } else {
       cells.push('<div class="inv-cell"></div>');
@@ -593,15 +653,39 @@ function renderCharEquipment(data) {
     </div>`;
   }).join('');
 
-  const derivedRows = [
-    ['⚔️','ATK','atk'], ['🛡️','DEF','def'], ['❤️','HP','hp'], ['💧','MP','mp'],
-  ].map(([ic, lb, key]) =>
-    `<div class="esl-row"><span class="esl-key">${ic} ${lb}</span><span class="esl-val">${s[key]??'—'}</span></div>`
+  const eff = getEffectiveStats(data);
+  const derivedEntries = [
+    ['⚔️', 'ATK',   s.atk ?? '—'],
+    ['🛡️', 'DEF',   s.def ?? '—'],
+    ['❤️', 'HP',    s.hp  ?? '—'],
+    ['💧', 'MP',    s.mp  ?? '—'],
+    ['💨', 'Dodge', `${(eff.dodgeRate||0).toFixed(1)}%`],
+    ['🎯', 'Crit',  `${(eff.critRate||0).toFixed(1)}%`],
+    ...(eff.blockRate > 0    ? [['🛡', 'Block', `${(eff.blockRate||0).toFixed(1)}%`]]    : []),
+    ...(eff.dmgReduction > 0 ? [['🔰', 'DR',    `${eff.dmgReduction}%`]] : []),
+  ];
+  const derivedRows = derivedEntries.map(([ic, lb, val]) =>
+    `<div class="esl-row"><span class="esl-key">${ic} ${lb}</span><span class="esl-val">${val}</span></div>`
   ).join('');
 
   const attrBanner = ap > 0
     ? `<div class="esl-attr-banner">✨ ${ap} attribute point${ap > 1 ? 's' : ''} to spend</div>`
     : '';
+
+  const cls     = data?.class || 'Warrior';
+  const isAgile = cls === 'Rogue' || cls === 'Ranger';
+  const ratesInfo = `
+    <div class="esl-section-label" style="margin-top:6px">Combat Rates</div>
+    <div class="esl-rate-row"><span class="esl-rate-icon">💨</span><span class="esl-rate-body"><b>${(eff.dodgeRate||0).toFixed(1)}% Dodge</b> — Fully avoid an attack. ${isAgile ? 'Rogue/Ranger base 10%' : 'Base 5%'}, +1${isAgile ? '.5' : ''}% per 5 DEX.</span></div>
+    <div class="esl-rate-row"><span class="esl-rate-icon">🎯</span><span class="esl-rate-body"><b>${(eff.critRate||0).toFixed(1)}% Crit</b> — Deal 2× damage. Base 5%, +1${isAgile ? '.5' : ''}% per 5 DEX.</span></div>
+    ${eff.blockRate > 0
+      ? `<div class="esl-rate-row"><span class="esl-rate-icon">🛡</span><span class="esl-rate-body"><b>${(eff.blockRate||0).toFixed(1)}% Block</b> — Negate an attack. From equipped shield + 1% per 5 DEX.</span></div>`
+      : `<div class="esl-rate-row" style="opacity:.45"><span class="esl-rate-icon">🛡</span><span class="esl-rate-body">Block — Equip a shield to gain block chance.</span></div>`
+    }
+    ${eff.dmgReduction > 0
+      ? `<div class="esl-rate-row"><span class="esl-rate-icon">🔰</span><span class="esl-rate-body"><b>${eff.dmgReduction}% Damage Reduction</b> — Reduce all incoming damage. From Resilient affix on armour.</span></div>`
+      : ''
+    }`;
 
   const statsPanel = `<div class="equip-stats-left">
     ${attrBanner}
@@ -609,6 +693,7 @@ function renderCharEquipment(data) {
     ${basicRows}
     <div class="esl-section-label" style="margin-top:6px">Derived</div>
     ${derivedRows}
+    ${ratesInfo}
   </div>`;
 
   return `<div class="equip-combined">
@@ -619,7 +704,11 @@ function renderCharEquipment(data) {
       ${statsPanel}
     </div>
     <div class="equip-inventory-col">
-      <div class="inv-grid-title">Inventory (${inventory.length}/100) <span style="float:right;color:#f0c040;font-family:'Cinzel',serif">💰 ${data.gold ?? 0}</span></div>
+      <div class="inv-grid-title">
+        <span>Inventory (${rawInv.length}/100)</span>
+        <span style="color:#f0c040;font-family:'Cinzel',serif">💰 ${data.gold ?? 0}</span>
+      </div>
+      <div class="inv-sort-bar">${sortBtns}</div>
       <div class="inv-grid-scroll"><div class="inv-grid">${cells.join('')}</div></div>
     </div>
   </div>`;
@@ -629,11 +718,7 @@ async function assignAttrPoint(attr) {
   const res = await api('POST', '/api/me/attributes/assign', { attr });
   if (res.error) { showToast(`❌ ${res.error}`); return; }
   // Re-fetch so derived stats (HP, MP, ATK, DEF) update correctly
-  const [stats, skillData] = await Promise.all([
-    api('GET', '/api/me/stats'),
-    api('GET', '/api/me/skills'),
-  ]);
-  charCache = { ...stats, skillData };
+  await fetchAndCacheStats();
   switchCharTab('equipment');
 }
 
@@ -656,7 +741,8 @@ function onSlotClick(slot) {
 function onInvCellClick(invId) {
   const item = (charCache?.inventory || []).find(i => i.inv_id === invId);
   if (!item) return;
-  showItemDetail(item, 'inventory', invId);
+  const equipped = (charCache?.equipped || []).find(e => e.slot === item.slot) ?? null;
+  _showCompareDetail(item, invId, equipped);
 }
 
 function showItemDetail(item, context, key) {
@@ -673,7 +759,7 @@ function showItemDetail(item, context, key) {
   // Individual affixes
   const affixRows = (item.affixes || []).map(a =>
     `<div class="itd-affix ${a.type}">
-       ${escHtml(a.name)}: <b>+${a.value}</b> ${STAT_NAMES[a.stat] || a.stat}
+       ${escHtml(a.name)}: <b>${_affixValStr(a.stat, a.value)}</b> ${STAT_NAMES[a.stat] || a.stat}
      </div>`
   ).join('');
 
@@ -683,7 +769,7 @@ function showItemDetail(item, context, key) {
 
   document.getElementById('item-detail').innerHTML = `
     <div class="itd-name ${rCls}">${escHtml(item.name)}</div>
-    <div class="itd-type">${rLabel} · ${escHtml(slotLabel)}</div>
+    <div class="itd-type">${rLabel} · ${escHtml(slotLabel)}${item.level_req > 1 ? ` · <span style="color:#c09050">Req. Lv.${item.level_req}</span>` : ''}</div>
     ${item.description ? `<div class="itd-desc">${escHtml(item.description)}</div>` : ''}
     ${statRows ? `<div class="itd-stats">${statRows}</div>` : ''}
     ${affixRows ? `<div class="itd-divider"></div><div class="itd-affixes">${affixRows}</div>` : ''}
@@ -695,7 +781,110 @@ function showItemDetail(item, context, key) {
 }
 
 function closeItemDetail() {
-  document.getElementById('item-detail').style.display = 'none';
+  const el = document.getElementById('item-detail');
+  el.style.display = 'none';
+  el.classList.remove('comparing');
+}
+
+function _showCompareDetail(invItem, invId, equippedItem) {
+  // Build a single item card (left = equipped, right = inventory)
+  function card(item, label, isNew) {
+    if (!item) {
+      return `<div class="itd-card itd-card-empty">
+        <div class="itd-card-label">${label}</div>
+        <span>— Nothing equipped —</span>
+      </div>`;
+    }
+    const rCls      = RARITY_COLORS[item.rarity] || 'rarity-normal';
+    const rLabel    = RARITY_LABELS[item.rarity] || 'Normal';
+    const slotLabel = SLOT_LABELS[item.slot] || item.slot;
+    const reqLv     = item.level_req || 1;
+    const reqHtml   = reqLv > 1 ? `<div class="itd-req">Req. Lv.${reqLv}</div>` : '';
+
+    // Prominent first-row stat: ATK for weapons, DEF for armor
+    const isWeaponSlot = item.slot === 'mainhand';
+    const prominentHtml = isWeaponSlot
+      ? (item.atk_bonus ? `<div class="bsm-weapon-atk">⚔ +${item.atk_bonus} ATK</div>` : '')
+      : (item.def_bonus ? `<div class="bsm-weapon-atk">🛡 +${item.def_bonus} DEF</div>` : '');
+
+    // Block rate row for shields
+    const blockRate = item.block_rate || 0;
+    const blockHtml = blockRate > 0
+      ? `<div class="itd-stat-row">
+          <span class="itd-stat-lbl">🛡 Block</span>
+          <span class="itd-stat-val">${blockRate}%</span>
+          ${isNew ? (() => { const d = (invItem.block_rate||0)-(equippedItem?.block_rate||0); return d>0?`<span class="itd-diff up">▲${d}%</span>`:d<0?`<span class="itd-diff down">▼${Math.abs(d)}%</span>`:''; })() : ''}
+        </div>`
+      : '';
+
+    // Collect all stat keys present in either item, excluding the prominent one
+    const skipKey = isWeaponSlot ? 'atk_bonus' : 'def_bonus';
+    const keys = Object.keys(STAT_NAMES).filter(k =>
+      k !== skipKey && ((invItem[k] || 0) !== 0 || (equippedItem?.[k] || 0) !== 0)
+    );
+
+    const statRows = keys.map(k => {
+      const val  = item[k] || 0;
+      let diffHtml = '';
+      if (isNew) {
+        const diff = (invItem[k] || 0) - (equippedItem?.[k] || 0);
+        if      (diff > 0) diffHtml = `<span class="itd-diff up">▲${diff}</span>`;
+        else if (diff < 0) diffHtml = `<span class="itd-diff down">▼${Math.abs(diff)}</span>`;
+      }
+      return `<div class="itd-stat-row">
+        <span class="itd-stat-lbl">${STAT_NAMES[k]}</span>
+        <span class="itd-stat-val">${val ? '+' + val : '—'}</span>
+        ${diffHtml}
+      </div>`;
+    }).join('');
+
+    const affixRows = (item.affixes || []).map(a =>
+      `<div class="itd-affix ${a.type}">${escHtml(a.name)}: <b>${_affixValStr(a.stat, a.value)}</b> ${STAT_NAMES[a.stat] || a.stat}</div>`
+    ).join('');
+
+    return `<div class="itd-card ${isNew ? 'itd-card-new' : 'itd-card-cur'}">
+      <div class="itd-card-label">${label}</div>
+      <div class="itd-name ${rCls}">${escHtml(item.name)}</div>
+      <div class="itd-type">${rLabel} · ${escHtml(slotLabel)}</div>
+      ${reqHtml}
+      ${prominentHtml}
+      ${item.description ? `<div class="itd-desc">${escHtml(item.description)}</div>` : ''}
+      ${blockHtml || statRows ? `<div class="itd-stat-list">${blockHtml}${statRows}</div>` : ''}
+      ${affixRows ? `<div class="itd-divider"></div><div class="itd-affixes">${affixRows}</div>` : ''}
+    </div>`;
+  }
+
+  const playerLv   = charCache?.level || 1;
+  const itemReqLv  = invItem.level_req || 1;
+  const canEquip   = playerLv >= itemReqLv;
+  const equipBtn   = canEquip
+    ? `<button class="itd-btn" style="border-color:rgba(74,222,128,.35);color:#4ade80"
+         onclick="equipFromDetail(${invId},'${invItem.slot}')">⚔ Equip</button>`
+    : `<button class="itd-btn" disabled style="opacity:.4;cursor:not-allowed">🔒 Req. Lv.${itemReqLv}</button>`;
+
+  const el = document.getElementById('item-detail');
+  el.classList.add('comparing');
+  el.innerHTML = `
+    <div class="itd-compare">
+      ${card(equippedItem, 'Equipped', false)}
+      ${card(invItem, 'In Inventory', true)}
+    </div>
+    <div class="itd-actions" style="padding:0 16px 14px;justify-content:flex-end">
+      <div style="display:flex;gap:8px">
+        ${equipBtn}
+        <button class="itd-btn close-btn" onclick="closeItemDetail()">Close</button>
+      </div>
+    </div>`;
+  el.style.display = 'block';
+}
+
+async function equipFromDetail(invId, slot) {
+  closeItemDetail();
+  const res = await api('POST', `/api/me/inventory/${invId}/equip`, { slot });
+  if (res.error) { showToast(`❌ ${res.error}`); return; }
+  charCache = { ...charCache, equipped: res.equipped, inventory: res.inventory, stats: res.stats };
+  switchCharTab('equipment');
+  showToast(`Equipped!`);
 }
 
 async function unequipSlot(slot) {
@@ -974,7 +1163,7 @@ function selectSkillNode(nodeId) {
   if (!panel) return;
   panel.innerHTML = `
     <div class="st-detail-name">${node.icon} ${escHtml(node.name)}</div>
-    <div class="st-detail-meta">${node.type === 'active' ? '⚡ Active Skill' : '🔷 Passive Bonus'} · Rank ${pts}/${node.maxPoints}${reqText ? ` · Requires: ${escHtml(reqText)}` : ''}</div>
+    <div class="st-detail-meta">${node.type === 'active' ? '⚡ Active Skill' : '🔷 Passive Bonus'} · Rank ${pts}/${node.maxPoints}${node.type === 'active' && node.skill ? ` · ${node.skill.mpCost > 0 ? `${node.skill.mpCost} MP` : 'Free'}` : ''}${reqText ? ` · Requires: ${escHtml(reqText)}` : ''}</div>
     <div class="st-detail-desc">${escHtml(node.desc)}</div>
     ${benefitText ? `<div class="st-detail-pts">${escHtml(benefitText)}</div>` : ''}
     <button class="st-assign-btn" onclick="assignSkillPoint('${node.id}')"
@@ -999,6 +1188,14 @@ async function assignSkillPoint(nodeId) {
 
 // ── Combat: effective stats with passive bonuses ────────────────────────────
 
+function calcDexBonus(dex) {
+  const d = Math.max(0, dex);
+  let pts = Math.floor(Math.min(d, 50) / 5);
+  if (d > 50)  pts += Math.floor(Math.min(d - 50, 50) / 8);
+  if (d > 100) pts += Math.floor((d - 100) / 12);
+  return pts; // percentage points before agility multiplier
+}
+
 function getEffectiveStats(data) {
   const base = { ...(data?.stats || { hp:50, mp:20, atk:10, def:5, spirit:5 }) };
   const tree  = SKILL_TREES[data?.class] || [];
@@ -1016,6 +1213,27 @@ function getEffectiveStats(data) {
     if (p.maxMp)  base.mp    += p.maxMp  * pts;
     if (p.defPct) base.defPct = (base.defPct || 0) + p.defPct * pts;
   });
+
+  // ── Dodge / Crit from DEX ──────────────────────────────────────────────────
+  const cls     = data?.class || 'Warrior';
+  const isAgile = cls === 'Rogue' || cls === 'Ranger';
+  const dexPts  = calcDexBonus(base.dex || 0);
+  const dexBonus = isAgile ? dexPts * 1.5 : dexPts;
+  base.dodgeRate = Math.min(75, (isAgile ? 10 : 5) + dexBonus);
+
+  // ── Special affixes from all equipped gear ─────────────────────────────────
+  const equippedArr    = Array.isArray(data?.equipped) ? data.equipped : [];
+  const equippedAffixes = equippedArr.flatMap(item => item.affixes || []);
+  const critBonus  = equippedAffixes.filter(a => a.stat === 'crit_bonus').reduce((s, a) => s + a.value, 0);
+  const dmgReducPct = equippedAffixes.filter(a => a.stat === 'dmg_reduction').reduce((s, a) => s + a.value, 0);
+  base.critRate     = Math.min(75, 5 + dexBonus + critBonus);
+  base.dmgReduction = Math.min(50, dmgReducPct);
+
+  // ── Block from equipped offhand ────────────────────────────────────────────
+  const offhand   = equippedArr.find(i => i.slot === 'offhand');
+  const baseBlock = offhand?.block_rate || 0;
+  base.blockRate  = baseBlock > 0 ? Math.min(75, baseBlock + Math.floor((base.dex || 0) / 5)) : 0;
+
   return base;
 }
 
@@ -1063,10 +1281,10 @@ function updateDarkForestHotspot() {
 // Deep:  upper-left shadow pocket under the ancient trees
 // Demon: upper-center, deepest dark at the heart of the forest
 const FOREST_ZONES = [
-  { id: 'entry', name: 'Forest Entry',          sub: 'Where the path meets the trees',   pos: { left:'68%', top:'70%' } },
-  { id: 'mid',   name: 'Mid-Forest',             sub: 'Twisted canopy · Paths diverge',   pos: { left:'38%', top:'52%' } },
-  { id: 'deep',  name: 'Deep Forest',            sub: 'Ancient dark · Few return',        pos: { left:'22%', top:'33%' }, danger: true },
-  { id: 'demon', name: '☠ Demon in the Forest',  sub: '??? · Do not face it alone',      pos: { left:'50%', top:'12%' }, danger: true },
+  { id: 'entry', name: 'Forest Entry',          sub: 'Where the path meets the trees',   pos: { left:'68%', top:'70%' }, levelRange: [1,  4]  },
+  { id: 'mid',   name: 'Mid-Forest',             sub: 'Twisted canopy · Paths diverge',   pos: { left:'38%', top:'52%' }, levelRange: [3,  8]  },
+  { id: 'deep',  name: 'Deep Forest',            sub: 'Ancient dark · Few return',        pos: { left:'22%', top:'33%' }, levelRange: [7,  10], danger: true },
+  { id: 'demon', name: '☠ Demon in the Forest',  sub: '??? · Do not face it alone',      pos: { left:'50%', top:'12%' }, levelRange: [10, 12], danger: true },
 ];
 
 // Forest progress is stored server-side; cached locally for sync reads during a session
@@ -1093,6 +1311,7 @@ function renderForestMap() {
         ${completed ? '<div class="fm-done">✓</div>'  : ''}
         <div class="fm-zone-name">${z.name}</div>
         <div class="fm-zone-sub">${locked ? 'Complete previous area first' : z.sub}</div>
+        ${!locked && z.levelRange ? `<div class="fm-zone-lvrange">Lv.${z.levelRange[0]}–${z.levelRange[1]}</div>` : ''}
       </div>
       <div class="fm-connector"></div>
     </div>`;
@@ -1102,12 +1321,10 @@ function renderForestMap() {
 let _forestTimer = null;
 
 function openDarkForest() {
-  // Ensure charCache has current HP before any fight starts (5s loading window is enough)
-  if (!charCache) {
-    Promise.all([api('GET', '/api/me/stats'), api('GET', '/api/me/skills')])
-      .then(([stats, skillData]) => { charCache = { ...stats, skillData }; })
-      .catch(() => {});
-  }
+  // Always refresh stats + skills before combat starts — 5s loading window gives ample time.
+  // Fixes stale charCache (newly allocated skills not picked up) and the race condition
+  // where charCache is null and the old conditional fetch could lose the race.
+  fetchAndCacheStats().catch(() => {});
 
   const overlay = document.getElementById('forest-overlay');
   const loading = document.getElementById('forest-loading');
@@ -1120,7 +1337,7 @@ function openDarkForest() {
   bar.style.transition = 'none';
   bar.style.width = '0%';
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    bar.style.transition = 'width 5s linear';
+    bar.style.transition = 'width 1s linear';
     bar.style.width = '100%';
   }));
 
@@ -1129,7 +1346,7 @@ function openDarkForest() {
     loading.style.display = 'none';
     map.style.display = 'block';
     renderForestMap();
-  }, 5000);
+  }, 1000);
 }
 
 function closeDarkForest() {
@@ -1162,17 +1379,20 @@ function startCombat(zoneId) {
   const stats = getEffectiveStats(charCache);
   const cls   = charCache?.class || 'Warrior';
 
-  // Spawn 1-3 monsters (single-monster zones like B-tier still cap at 1)
-  const maxCount = pool.length === 1 ? 1 : randInt(1, 3);
+  // Spawn monsters; boss zones always spawn exactly 1 boss
+  const zone = FOREST_ZONES.find(z => z.id === zoneId);
+  const [lvMin, lvMax] = zone?.levelRange || [1, 4];
+  const hasBoss = pool.some(id => MONSTER_DEFS[id]?.isBoss);
+  const maxCount = hasBoss ? 1 : randInt(1, 3);
   const monsters = Array.from({ length: maxCount }, () => {
     const id   = pool[randInt(0, pool.length - 1)];
     const base = MONSTER_DEFS[id];
-    const lv   = base.level || 1;
+    const lv   = base.isBoss ? base.level : randInt(lvMin, lvMax);
     const hp   = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
     const atk  = Math.round(base.atk * (1 + (lv - 1) * 0.10));
     const def  = Math.round(base.def * (1 + (lv - 1) * 0.10));
     const xp   = Math.round((TIER_BASE_XP[base.tier] || 5) * (1 + (lv - 1) * 0.2));
-    return { ...base, monsterId: id, hp, atk, def, xp, curHp: hp };
+    return { ...base, monsterId: id, level: lv, hp, atk, def, xp, curHp: hp };
   });
 
   const firstTier = monsters[0].tier;
@@ -1182,20 +1402,21 @@ function startCombat(zoneId) {
     zoneId,
     zoneIdx:  FOREST_ZONES.findIndex(z => z.id === zoneId),
     monsters,
-    player:   { curHp: charCache?.curHp ?? stats.hp, maxHp: stats.hp, curMp: stats.mp, maxMp: stats.mp, class: cls, stats },
+    player:   { curHp: Math.min(charCache?.curHp ?? stats.hp, stats.hp), maxHp: stats.hp, curMp: stats.mp, maxMp: stats.mp, class: cls, stats },
     phase:    'player',
     log:      [],
     busy:     false,
+    bossRound: 0,
   };
 
   // Header
-  const zone  = FOREST_ZONES.find(z => z.id === zoneId);
+  const zoneInfo = FOREST_ZONES.find(z => z.id === zoneId);
   const badge = document.getElementById('cb-tier-badge');
   badge.textContent      = `Tier ${firstTier}`;
   badge.className        = `cb-tier cb-tier-${firstTier}`;
   badge.style.background = tc.bg;
   badge.style.color      = tc.text;
-  document.getElementById('cb-zone-label').textContent = zone?.name || zoneId;
+  document.getElementById('cb-zone-label').textContent = zoneInfo?.name || zoneId;
 
   // Player figure — clear death animation from previous fight before injecting SVG
   const pfig = document.getElementById('cb-player-figure');
@@ -1205,16 +1426,44 @@ function startCombat(zoneId) {
   pfig.innerHTML = PLAYER_SVGS[cls] || PLAYER_SVGS.Warrior;
 
   document.getElementById('cb-player-name').textContent = `${me.username} · ${cls}`;
+  document.getElementById('cb-player-level').textContent = `Lv.${charCache?.level || me.level || 1}`;
 
   // Monster cards
   renderMonsterCards();
+
+  // Enrage animation for monsters significantly stronger than the player
+  const playerLevel = charCache?.level || me.level || 1;
+  const enragedNames = [];
+  monsters.forEach((mon, i) => {
+    if (mon.level > playerLevel + 3) {
+      mon.enraged = true;
+      mon.atk = Math.round(mon.atk * 2.0);
+      enragedNames.push(mon.name);
+      setTimeout(() => {
+        const fig = document.getElementById(`cb-mon-fig-${i}`);
+        if (fig) fig.classList.add('anim-enraged');
+      }, i * 120);
+    }
+  });
+  if (enragedNames.length) {
+    setTimeout(() => {
+      const names = [...new Set(enragedNames)].join(', ');
+      addCombatLog(`🔴 ${names} ${enragedNames.length > 1 ? 'are' : 'is'} enraged by your weakness (3+ levels below)! ATK +100% — be careful!`);
+      showToast(`⚠️ ${names} senses you are far weaker and goes berserk! ATK +100%!`);
+    }, 400);
+  }
 
   const names = monsters.map(m => m.name).join(', ');
   addCombatLog(`⚔ ${maxCount > 1 ? `${maxCount} enemies appear` : `A ${names} appears`}!`);
   renderCombatBars();
   renderSkillButtons();
 
-  document.getElementById('combat-overlay').style.display = 'flex';
+  const showCombat = () => { document.getElementById('combat-overlay').style.display = 'flex'; };
+  if (zoneId === 'demon') {
+    showBossIntro(showCombat);
+  } else {
+    showCombat();
+  }
 }
 
 function renderMonsterCards() {
@@ -1223,7 +1472,8 @@ function renderMonsterCards() {
   area.className = `monsters-${count}`;
   area.innerHTML = combatState.monsters.map((mon, i) => {
     const tc = TIER_COLORS[mon.tier] || TIER_COLORS.D;
-    return `<div class="cb-monster-card" id="cb-mon-card-${i}" onclick="onMonsterClick(${i})">
+    const bossClass = mon.isBoss ? ' boss-card' + (mon.bossEnraged ? ' boss-enraged' : '') : '';
+    return `<div class="cb-monster-card${bossClass}" id="cb-mon-card-${i}" onclick="onMonsterClick(${i})">
       <div id="cb-mon-fig-${i}" class="cb-monster-figure">${MONSTER_SVGS[mon.monsterId] || ''}</div>
       <div class="cb-name">${escHtml(mon.name)}</div>
       <span class="cb-tier" style="background:${tc.bg};color:${tc.text};font-size:9px;padding:1px 6px">${mon.tier} · Lv.${mon.level}</span>
@@ -1256,6 +1506,13 @@ function renderCombatBars() {
   document.getElementById('cb-player-mp-fill').style.width = pct(p.curMp, p.maxMp);
   document.getElementById('cb-player-hp-num').textContent  = `${Math.max(0,p.curHp)}/${p.maxHp}`;
   document.getElementById('cb-player-mp-num').textContent  = `${p.curMp}/${p.maxMp}`;
+
+  const lv      = charCache?.level || 1;
+  const curXp   = charCache?.xp    || 0;
+  const xpThis  = (lv - 1) * (lv - 1) * 100;
+  const xpNext  = lv * lv * 100;
+  document.getElementById('cb-player-xp-fill').style.width = lv >= 30 ? '100%' : pct(curXp - xpThis, xpNext - xpThis);
+  document.getElementById('cb-player-xp-num').textContent = lv >= 30 ? 'MAX' : `${curXp - xpThis}/${xpNext - xpThis}`;
 
   combatState.monsters.forEach((mon, i) => {
     const fill = document.getElementById(`cb-mon-hp-${i}`);
@@ -1295,12 +1552,15 @@ function renderSkillButtons() {
 
 // ── Animations ────────────────────────────────────────────────────────────────
 
-function spawnFxText(text, color) {
-  const fx = document.getElementById('cb-fx');
-  if (!fx) return;
-  const el = Object.assign(document.createElement('div'), { className:'cb-dmg-text', textContent:text });
+function spawnFxText(text, color, anchorEl, crit = false) {
+  const el = Object.assign(document.createElement('div'), { className:'cb-dmg-text' + (crit ? ' cb-dmg-crit' : ''), textContent:text });
   el.style.color = color || '#fff';
-  fx.appendChild(el);
+  if (anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    el.style.left = `${r.left + r.width / 2}px`;
+    el.style.top  = `${r.top}px`;
+  }
+  document.body.appendChild(el);
   setTimeout(() => el.remove(), 1000);
 }
 
@@ -1438,7 +1698,7 @@ async function executeSkill(skillId, targetIdx = null) {
     const amt = Math.floor(combatState.player.stats.spirit * mult);
     combatState.player.curHp = Math.min(combatState.player.maxHp, combatState.player.curHp + amt);
     addCombatLog(`💚 ${skill.name}: +${amt} HP`);
-    spawnFxText(`+${amt}`, '#4ade80');
+    spawnFxText(`+${amt}`, '#4ade80', document.getElementById('cb-player-figure'));
 
   // ── AoE attack ────────────────────────────────────────────────────────────
   } else if (skill.target === 'all') {
@@ -1447,15 +1707,18 @@ async function executeSkill(skillId, targetIdx = null) {
 
     await doAnimation(skill.type, true, 'all');
 
+    const critRate = combatState.player.stats.critRate || 0;
     const label = alive.length > 1 ? 'all enemies' : alive[0].m.name;
     addCombatLog(`⚔ ${skill.name} hits ${label}!`);
-    for (const { m: target, i: ti } of alive) {
+    for (const [idx, { m: target, i: ti }] of alive.entries()) {
+      const isCrit = Math.random() * 100 < critRate;
       const raw = Math.floor(combatState.player.stats.atk * skill.dmgMult)
                   - Math.floor(target.def * 0.5) + randInt(-3, 3);
-      const dmg = Math.max(1, raw);
+      const dmg = Math.max(1, isCrit ? raw * 2 : raw);
       target.curHp -= dmg;
-      addCombatLog(`  ${target.name}: −${dmg}`);
-      spawnFxText(`-${dmg}`, '#ff6060');
+      addCombatLog(`  ${target.name}: ${isCrit ? '💥 CRIT ' : ''}−${dmg}`);
+      const fig = monsterEl(ti);
+      setTimeout(() => spawnFxText(`-${dmg}`, isCrit ? '#ff2020' : '#ff6060', fig, isCrit), idx * 80);
       if (target.curHp <= 0) {
         target.curHp = 0;
         const fig = monsterEl(ti);
@@ -1473,12 +1736,14 @@ async function executeSkill(skillId, targetIdx = null) {
 
     await doAnimation(skill.type, true, targetIdx);
 
+    const critRate = combatState.player.stats.critRate || 0;
+    const isCrit   = Math.random() * 100 < critRate;
     const raw = Math.floor(combatState.player.stats.atk * skill.dmgMult)
                 - Math.floor(target.def * 0.5) + randInt(-3, 3);
-    const dmg = Math.max(1, raw);
+    const dmg = Math.max(1, isCrit ? raw * 2 : raw);
     target.curHp -= dmg;
-    addCombatLog(`⚔ ${skill.name} hits ${target.name}: −${dmg}`);
-    spawnFxText(`-${dmg}`, '#ff6060');
+    addCombatLog(`⚔ ${skill.name} hits ${target.name}: ${isCrit ? '💥 CRIT ' : ''}−${dmg}`);
+    spawnFxText(`-${dmg}`, isCrit ? '#ff2020' : '#ff6060', monsterEl(targetIdx), isCrit);
     if (target.curHp <= 0) {
       target.curHp = 0;
       const fig = monsterEl(targetIdx);
@@ -1497,7 +1762,130 @@ async function executeSkill(skillId, targetIdx = null) {
   await monsterTurn();
 }
 
+// ── Boss intro cutscene ────────────────────────────────────────────────────────
+
+const BOSS_INTRO_LINES = [
+  "A lone {cls}… how disappointing.",
+  "Did none of your kind warn you? Even armies have fallen before me.",
+  "Run along and bring more of your pathetic kin. I'll be waiting.",
+];
+
+function showBossIntro(onDone) {
+  if (localStorage.getItem('rpg_boss_intro_seen')) { onDone(); return; }
+
+  const overlay  = document.getElementById('boss-intro-overlay');
+  const textEl   = document.getElementById('boss-intro-text');
+  const promptEl = document.getElementById('boss-intro-prompt');
+  const fightBtn = document.getElementById('boss-intro-fight-btn');
+  const demonEl  = document.getElementById('boss-intro-demon');
+
+  const cls   = charCache?.class || 'warrior';
+  const lines = BOSS_INTRO_LINES.map(l => l.replace('{cls}', cls));
+
+  demonEl.innerHTML = MONSTER_SVGS['demon_lord'] || '';
+  overlay.style.display = 'flex';
+  // animate demon appearing
+  demonEl.style.animation = 'boss-intro-appear .8s ease-out forwards, boss-intro-float 3s ease-in-out 0.8s infinite';
+
+  let lineIdx = 0;
+  let typing  = false;
+  let ticker  = null;
+
+  function showFull() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    typing = false;
+    textEl.textContent = lines[lineIdx];
+    const isLast = lineIdx >= lines.length - 1;
+    promptEl.style.display = isLast ? 'none' : 'block';
+    fightBtn.style.display  = isLast ? 'block' : 'none';
+  }
+
+  function typeLine(idx) {
+    promptEl.style.display = 'none';
+    fightBtn.style.display = 'none';
+    textEl.textContent = '';
+    typing = true;
+    let i = 0;
+    ticker = setInterval(() => {
+      textEl.textContent += lines[idx][i++];
+      if (i >= lines[idx].length) { clearInterval(ticker); ticker = null; showFull(); }
+    }, 38);
+  }
+
+  function advance() {
+    if (typing) { showFull(); return; }
+    if (lineIdx < lines.length - 1) { lineIdx++; typeLine(lineIdx); }
+  }
+
+  function closeBossIntro() {
+    overlay.style.display = 'none';
+    overlay.removeEventListener('click', advance);
+    fightBtn.onclick = null;
+    localStorage.setItem('rpg_boss_intro_seen', '1');
+    onDone();
+  }
+
+  overlay.addEventListener('click', advance);
+  fightBtn.onclick = (e) => { e.stopPropagation(); closeBossIntro(); };
+
+  typeLine(0);
+}
+
+async function bossSummonMinion() {
+  const base = MONSTER_DEFS['demon_imp'];
+  const lv   = base.level;
+  const hp   = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
+  const atk  = Math.round(base.atk * (1 + (lv - 1) * 0.10));
+  const def  = Math.round(base.def * (1 + (lv - 1) * 0.10));
+  const imp  = { ...base, monsterId: 'demon_imp', level: lv, hp, atk, def, xp: 0, curHp: hp };
+  combatState.monsters.push(imp);
+
+  // Flash the arena and re-render cards
+  const area = document.getElementById('cb-monsters-area');
+  area.classList.add('summon-flashing');
+  setTimeout(() => area.classList.remove('summon-flashing'), 600);
+
+  renderMonsterCards();
+  renderCombatBars();
+
+  // Animate the new imp spawning in
+  const newIdx = combatState.monsters.length - 1;
+  const newCard = document.getElementById(`cb-mon-card-${newIdx}`);
+  if (newCard) newCard.classList.add('imp-spawning');
+
+  addCombatLog(`🔴 Demon Lord tears open a portal — a Demon Imp emerges!`);
+  await new Promise(r => setTimeout(r, 700));
+}
+
+async function bossEnrage(bossIdx) {
+  const boss = combatState.monsters[bossIdx];
+  if (boss.bossEnraged) return; // already enraged, normal attack instead
+  boss.bossEnraged = true;
+  boss.atk = Math.round(boss.atk * 1.6);
+
+  const card = document.getElementById(`cb-mon-card-${bossIdx}`);
+  if (card) { card.classList.remove('boss-card'); card.classList.add('boss-card', 'boss-enraged'); }
+
+  addCombatLog(`🔥 ENRAGED! Demon Lord's minions are at full strength — it roars with fury! ATK +60%!`);
+  showToast('🔥 Demon Lord is ENRAGED! Three minions stand — its power surges!');
+  await new Promise(r => setTimeout(r, 800));
+}
+
 async function monsterTurn() {
+  // Check for boss summon/enrage every 8 rounds
+  combatState.bossRound = (combatState.bossRound || 0) + 1;
+  const bossIdx = combatState.monsters.findIndex(m => m.isBoss && m.curHp > 0);
+  const isSummonRound = bossIdx !== -1 && combatState.bossRound % 8 === 0;
+
+  if (isSummonRound) {
+    const aliveMinions = combatState.monsters.filter(m => m.isMinion && m.curHp > 0).length;
+    if (aliveMinions < 3) {
+      await bossSummonMinion();
+    } else {
+      await bossEnrage(bossIdx);
+    }
+  }
+
   // Each alive monster attacks in sequence
   for (let i = 0; i < combatState.monsters.length; i++) {
     const mon = combatState.monsters[i];
@@ -1508,13 +1896,32 @@ async function monsterTurn() {
 
     await doAnimation(skill.type, false, i);
 
+    const pfig = document.getElementById('cb-player-figure');
+
+    // Dodge check
+    if (Math.random() * 100 < (combatState.player.stats.dodgeRate || 0)) {
+      addCombatLog(`💨 ${mon.name} uses ${skill.name} — you dodge!`);
+      spawnFxText('DODGE!', '#88ccff', pfig);
+      await new Promise(r => setTimeout(r, 280));
+      continue;
+    }
+
+    // Block check (only if shield equipped)
+    if (combatState.player.stats.blockRate > 0 && Math.random() * 100 < combatState.player.stats.blockRate) {
+      addCombatLog(`🛡 ${mon.name} uses ${skill.name} — blocked!`);
+      spawnFxText('BLOCK!', '#aaaaee', pfig);
+      await new Promise(r => setTimeout(r, 280));
+      continue;
+    }
+
     const raw    = Math.floor(mon.atk * skill.dmgMult)
                    - Math.floor(combatState.player.stats.def * 0.5) + randInt(-2, 2);
     const defPct = (combatState.player.stats.defPct || 0) / 100;
-    const dmg    = Math.max(1, Math.floor(Math.max(1, raw) * (1 - defPct)));
+    const dr     = (combatState.player.stats.dmgReduction || 0) / 100;
+    const dmg    = Math.max(1, Math.floor(Math.max(1, raw) * (1 - defPct) * (1 - dr)));
     combatState.player.curHp -= dmg;
     addCombatLog(`${mon.name} uses ${skill.name}: −${dmg}`);
-    spawnFxText(`-${dmg}`, '#ff4444');
+    spawnFxText(`-${dmg}`, '#ff4444', pfig);
     renderCombatBars();
 
     if (combatState.player.curHp <= 0) { await handleCombatLose(); return; }
@@ -1530,14 +1937,22 @@ async function handleCombatWin() {
   combatState.phase = 'win';
   combatState.busy  = false;
   renderSkillButtons();
-  const totalXp = combatState.monsters.reduce((s, m) => s + m.xp, 0);
+  const playerLv = charCache?.level || 1;
+  let tooWeakCount = 0;
+  const totalXp = combatState.monsters.reduce((s, m) => {
+    if (m.level <= playerLv - 3) { tooWeakCount++; return s; }
+    const cappedLv = Math.min(m.level, playerLv + 3);
+    const xp = Math.round((TIER_BASE_XP[m.tier] || 5) * (1 + (cappedLv - 1) * 0.2));
+    return s + xp;
+  }, 0);
+  if (tooWeakCount > 0) showToast(`⚠ ${tooWeakCount} monster${tooWeakCount > 1 ? 's were' : ' was'} too weak — no XP rewarded. Fight stronger enemies!`);
   addCombatLog(`🏆 All enemies defeated! +${totalXp} XP`);
 
   // Save XP, then save loot — both must complete before we fetch fresh stats
   const xpRes = await api('POST', '/api/me/xp', { xp: totalXp }).catch(() => null);
   const leveledUp   = xpRes?.newSkillPoints > 0;
 
-  const monsterList = combatState.monsters.map(m => ({ monsterId: m.monsterId, tier: m.tier }));
+  const monsterList = combatState.monsters.map(m => ({ monsterId: m.monsterId, tier: m.tier, level: m.level }));
   const lootRes     = await api('POST', '/api/me/loot', { monsters: monsterList }).catch(() => null);
 
   // Fetch fresh stats NOW — items are already in the DB, this is guaranteed correct
@@ -1618,15 +2033,63 @@ function showLootPanel(lootRes) {
   const skillsEl = document.getElementById('combat-skills');
   if (!skillsEl) return;
 
+  const invCount = (charCache?.inventory || []).length;
+  if (invCount >= 100) {
+    showToast(`⚠ Inventory is full (${invCount}/100)! Visit your bag to drop items.`);
+  }
+
   const items  = lootRes?.items || [];
   const gold   = lootRes?.gold  || 0;
-  const rarity = { normal:'', uncommon:'color:#1eff00', rare:'color:#0070dd', epic:'color:#a335ee', legendary:'color:#ff8000' };
+
+  function _lootCard(it) {
+    const rCls      = RARITY_COLORS[it.rarity] || 'rarity-normal';
+    const rLabel    = RARITY_LABELS[it.rarity]  || 'Normal';
+    const slotLabel = SLOT_LABELS[it.slot]       || it.slot;
+    const reqLv     = it.level_req || 1;
+    const typeStr   = `${rLabel} · ${slotLabel}${reqLv > 1 ? ` · Req.Lv.${reqLv}` : ''}`;
+
+    const isWeapon    = it.slot === 'mainhand';
+    const prominentVal = isWeapon ? (it.atk_bonus || 0) : (it.def_bonus || 0);
+    const prominentIcon = isWeapon ? '⚔' : '🛡';
+    const prominentHtml = prominentVal
+      ? `<div class="cb-loot-item-prominent">${prominentIcon} +${prominentVal} ${isWeapon ? 'ATK' : 'DEF'}</div>`
+      : '';
+
+    const statLabels = { str_bonus:'STR', dex_bonus:'DEX', int_bonus:'INT',
+                         spirit_bonus:'SP', hp_bonus:'HP', mp_bonus:'MP',
+                         atk_bonus:'ATK', def_bonus:'DEF' };
+    const skipKey = isWeapon ? 'atk_bonus' : 'def_bonus';
+    const statsStr = Object.entries(statLabels)
+      .filter(([k]) => k !== skipKey && (it[k] || 0) !== 0)
+      .map(([k, lbl]) => `+${it[k]} ${lbl}`)
+      .join('  ');
+
+    const blockHtml = (it.block_rate > 0)
+      ? `<div class="cb-loot-item-stats">🛡 ${it.block_rate}% Block${statsStr ? '  ' + statsStr : ''}</div>`
+      : (statsStr ? `<div class="cb-loot-item-stats">${statsStr}</div>` : '');
+
+    const affixHtml = (it.affixes || []).length
+      ? `<div class="cb-loot-item-affixes">${
+          it.affixes.map(a =>
+            `<div class="cb-loot-affix ${a.type}">[${a.type === 'prefix' ? 'P' : 'S'}] ${escHtml(a.name)}: ${_affixValStr(a.stat, a.value)} ${STAT_NAMES[a.stat] || a.stat}</div>`
+          ).join('')
+        }</div>`
+      : '';
+
+    return `<div class="cb-loot-item">
+      <div class="cb-loot-item-header">
+        <span class="cb-loot-item-icon">${escHtml(it.icon || '🎒')}</span>
+        <div class="cb-loot-item-meta">
+          <div class="cb-loot-item-name ${rCls}">${escHtml(it.name)}</div>
+          <div class="cb-loot-item-type">${typeStr}</div>
+        </div>
+      </div>
+      ${prominentHtml}${blockHtml}${affixHtml}
+    </div>`;
+  }
 
   const itemsHtml = items.length
-    ? items.map(it => `<div class="cb-loot-item">
-        <span class="cb-loot-item-icon">${escHtml(it.icon || '🎒')}</span>
-        <span class="cb-loot-item-name" style="${rarity[it.rarity]||''}">${escHtml(it.name)}</span>
-      </div>`).join('')
+    ? items.map(_lootCard).join('')
     : '<div class="cb-loot-empty">No items dropped.</div>';
 
   skillsEl.innerHTML = `<div id="cb-loot-panel">
@@ -1692,6 +2155,589 @@ async function healAtRoyalKeep() {
 function closeCombat() {
   combatState = null;
   document.getElementById('combat-overlay').style.display = 'none';
+}
+
+// ── Blacksmith Shop ───────────────────────────────────────────────────────────
+
+// Mirrors server calcSellValue (no fluctuation — shows estimate; actual price returned by server)
+const SELL_BASE_CLIENT = { normal:15, uncommon:28, magic:45, rare:90, epic:140, legendary:300, godly:600 };
+function _calcSellValue(item) {
+  const base = SELL_BASE_CLIENT[item.rarity] ?? 15;
+  const lv   = item.level_req || 1;
+  return Math.round(base * (1 + (lv - 1) * 0.3));
+}
+
+let _bsmCatalog   = null;
+let _bsmExpiresAt = 0;
+let _bsmTimerInterval = null;
+let _bsmPurchased = new Set();
+let _bsmDragSrc = null; // { type: 'shop'|'inv', id: catalogId|invId }
+let _bsmConfirmCallback = null;
+
+async function openBlacksmith() {
+  document.getElementById('bsm-overlay').classList.add('show');
+  document.getElementById('bsm-modal').classList.add('show');
+  document.getElementById('bsm-shop-items').innerHTML =
+    '<div style="color:var(--muted);padding:20px;text-align:center;font-size:13px">Loading…</div>';
+  const res = await api('GET', '/api/shop').catch(() => null);
+  _bsmCatalog   = Array.isArray(res?.items) ? res.items : [];
+  _bsmExpiresAt = res?.expiresAt || 0;
+  _bsmPurchased = new Set();
+  await fetchAndCacheStats();
+  _renderBsmShop();
+  _renderBsmInv();
+  _startBsmTimer();
+}
+
+function closeBlacksmith() {
+  document.getElementById('bsm-overlay').classList.remove('show');
+  document.getElementById('bsm-modal').classList.remove('show');
+  clearInterval(_bsmTimerInterval);
+  _bsmTimerInterval = null;
+}
+
+function _startBsmTimer() {
+  clearInterval(_bsmTimerInterval);
+  const el = document.getElementById('bsm-refresh-timer');
+  function tick() {
+    const ms  = Math.max(0, _bsmExpiresAt - Date.now());
+    const h   = Math.floor(ms / 3600000);
+    const m   = Math.floor((ms % 3600000) / 60000);
+    const s   = Math.floor((ms % 60000) / 1000);
+    const pad = n => String(n).padStart(2, '0');
+    el.textContent = ms > 0
+      ? `Refreshes in ${h}:${pad(m)}:${pad(s)}`
+      : 'Refreshing…';
+  }
+  tick();
+  _bsmTimerInterval = setInterval(tick, 1000);
+}
+
+function _bsmAffixHtml(affixes) {
+  if (!affixes || !affixes.length) return '';
+  return affixes.map(a =>
+    `<div class="bsm-affix-row ${a.type}">${escHtml(a.name)}: <b>${_affixValStr(a.stat, a.value)}</b> ${STAT_NAMES[a.stat] || a.stat}</div>`
+  ).join('');
+}
+
+function bsmToggleAffixes(event) {
+  event.stopPropagation();
+  const btn = event.currentTarget;
+  const detail = btn.closest('.bsm-item').querySelector('.bsm-affix-detail');
+  if (!detail) return;
+  const open = detail.classList.toggle('open');
+  btn.textContent = open ? '▲' : '···';
+}
+
+function _bsmBonusStr(bonuses, excludeAtk = false, excludeDef = false) {
+  if (!bonuses) return '';
+  const labels = { atk_bonus:'ATK', def_bonus:'DEF', str_bonus:'STR', dex_bonus:'DEX',
+                   int_bonus:'INT', spirit_bonus:'SP', hp_bonus:'HP', mp_bonus:'MP' };
+  return Object.entries(bonuses)
+    .filter(([k, v]) => v && !(excludeAtk && k === 'atk_bonus') && !(excludeDef && k === 'def_bonus'))
+    .map(([k, v]) => `+${v} ${labels[k] || k}`)
+    .join('  ');
+}
+function _bsmWeaponAtkHtml(item) {
+  if (item.slot !== 'mainhand' || !item.bonuses?.atk_bonus) return '';
+  return `<div class="bsm-weapon-atk">⚔ +${item.bonuses.atk_bonus} ATK</div>`;
+}
+function _bsmArmorDefHtml(item) {
+  if (item.slot === 'mainhand') return '';
+  const def = item.bonuses?.def_bonus || item.def_bonus || 0;
+  if (!def) return '';
+  return `<div class="bsm-weapon-atk">🛡 +${def} DEF</div>`;
+}
+
+function _slotLabel(slot) {
+  return { head:'Head', chest:'Chest', gloves:'Gloves', pants:'Pants',
+           boots:'Boots', mainhand:'Main Hand', offhand:'Off Hand' }[slot] || slot;
+}
+
+function _renderBsmShop() {
+  const el = document.getElementById('bsm-shop-items');
+  if (!_bsmCatalog || !_bsmCatalog.length) {
+    el.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;font-size:13px">No wares available — try again later.</div>';
+    return;
+  }
+  el.innerHTML = (_bsmCatalog || []).map(item => {
+    const sold  = _bsmPurchased.has(item.id);
+    const rCls  = RARITY_COLORS[item.rarity] || 'rarity-normal';
+    const isWeapon = item.slot === 'mainhand';
+    const stats = _bsmBonusStr(item.bonuses, isWeapon, !isWeapon);
+    return `<div class="bsm-item${sold ? ' bsm-item-sold' : ''}"${!sold ? ` draggable="true"` : ''}
+      data-catalog-id="${item.id}"
+      ${!sold ? `ondragstart="bsmDragStart(event,'shop','${item.id}')"` : ''}
+      ${!sold ? `onclick="bsmConfirmBuy('${item.id}')"` : ''}>
+      <div class="bsm-item-icon">${item.icon}</div>
+      <div class="bsm-item-info">
+        <div class="bsm-item-name ${rCls}">${escHtml(item.name)}</div>
+        <div class="bsm-item-slot">${_slotLabel(item.slot)}${item.level_req > 1 ? ` · <span class="bsm-lvreq">Req. Lv.${item.level_req}</span>` : ''}</div>
+        ${_bsmWeaponAtkHtml(item)}${_bsmArmorDefHtml(item)}
+        ${stats ? `<div class="bsm-item-stats">${stats}</div>` : ''}
+        ${_bsmAffixHtml(item.affixes) ? `<div class="bsm-affix-detail">${_bsmAffixHtml(item.affixes)}</div>` : ''}
+      </div>
+      <div class="bsm-item-price">
+        ${sold ? '<span style="color:var(--muted);font-size:11px">Sold</span>' : `💰 ${item.cost}g<small>sell ${item.sell}g</small>`}
+      </div>
+      ${!sold && item.affixes?.length ? `<button class="bsm-dots-btn" onclick="bsmToggleAffixes(event)">···</button>` : ''}
+      ${!sold ? `<button class="bsm-item-btn" onclick="event.stopPropagation();bsmConfirmBuy('${item.id}')">Buy</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function _renderBsmInv() {
+  let inv = [...(charCache?.inventory || [])];
+  const gold = charCache?.gold ?? 0;
+  document.getElementById('bsm-inv-count').textContent = inv.length;
+  document.getElementById('bsm-gold-display').textContent = `💰 ${gold}`;
+  const el = document.getElementById('bsm-inv-items');
+  el.innerHTML = inv.map(item => {
+    const rCls = RARITY_COLORS[item.rarity] || 'rarity-normal';
+    const sellPrice = _calcSellValue(item);
+    const slotMeta = SLOT_META[item.slot] || {};
+    const isWeapon = item.slot === 'mainhand';
+    const stats = _bsmBonusStr(item.bonuses, isWeapon, !isWeapon);
+    return `<div class="bsm-item" draggable="true"
+      data-inv-id="${item.inv_id}"
+      ondragstart="bsmDragStart(event,'inv',${item.inv_id})"
+      onclick="bsmConfirmSell(${item.inv_id},'${escHtml(item.name)}',${sellPrice})">
+      <div class="bsm-item-icon">${item.icon || slotMeta.icon || '🎒'}</div>
+      <div class="bsm-item-info">
+        <div class="bsm-item-name ${rCls}">${escHtml(item.name)}</div>
+        <div class="bsm-item-slot">${_slotLabel(item.slot)}</div>
+        ${_bsmWeaponAtkHtml(item)}${_bsmArmorDefHtml(item)}
+        ${stats ? `<div class="bsm-item-stats">${stats}</div>` : ''}
+        ${_bsmAffixHtml(item.affixes) ? `<div class="bsm-affix-detail">${_bsmAffixHtml(item.affixes)}</div>` : ''}
+      </div>
+      <div class="bsm-item-price">
+        <small>sell for</small>
+        💰 ${sellPrice}g
+      </div>
+      ${item.affixes?.length ? `<button class="bsm-dots-btn" onclick="bsmToggleAffixes(event)">···</button>` : ''}
+      <button class="bsm-item-btn sell-btn" onclick="event.stopPropagation();bsmConfirmSell(${item.inv_id},'${escHtml(item.name)}',${sellPrice})">Sell</button>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);padding:20px;text-align:center;font-size:13px">Inventory empty</div>';
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+
+function bsmDragStart(e, type, id) {
+  _bsmDragSrc = { type, id };
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function bsmDragOver(e, target) {
+  // Allow drop only when dragging the opposite type
+  if (!_bsmDragSrc) return;
+  if ((target === 'inv' && _bsmDragSrc.type === 'shop') ||
+      (target === 'shop' && _bsmDragSrc.type === 'inv')) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-active');
+  }
+}
+
+function bsmDragLeave(e) {
+  e.currentTarget.classList.remove('drag-active');
+}
+
+function bsmDrop(e, target) {
+  e.currentTarget.classList.remove('drag-active');
+  if (!_bsmDragSrc) return;
+  e.preventDefault();
+  if (target === 'inv' && _bsmDragSrc.type === 'shop') {
+    bsmConfirmBuy(_bsmDragSrc.id);
+  } else if (target === 'shop' && _bsmDragSrc.type === 'inv') {
+    // find item details from charCache
+    const item = (charCache?.inventory || []).find(i => i.inv_id == _bsmDragSrc.id);
+    if (item) {
+      const sellPrice = _calcSellValue(item);
+      bsmConfirmSell(item.inv_id, item.name, sellPrice);
+    }
+  }
+  _bsmDragSrc = null;
+}
+
+// ── Confirm dialogs ───────────────────────────────────────────────────────────
+
+function _bsmShowConfirm(msg, warn, onOk) {
+  document.getElementById('bsm-confirm-msg').textContent = msg;
+  document.getElementById('bsm-confirm-warn').textContent = warn || '';
+  _bsmConfirmCallback = onOk;
+  document.getElementById('bsm-confirm').classList.add('show');
+  document.getElementById('bsm-confirm-ok').onclick = () => { bsmDismissConfirm(); onOk(); };
+}
+
+function bsmDismissConfirm() {
+  document.getElementById('bsm-confirm').classList.remove('show');
+  _bsmConfirmCallback = null;
+}
+
+function bsmConfirmBuy(catalogId) {
+  const entry = (_bsmCatalog || []).find(c => c.id === catalogId);
+  if (!entry) return;
+  const gold = charCache?.gold ?? 0;
+  const invCount = (charCache?.inventory || []).length;
+  let warn = '';
+  if (gold < entry.cost) warn = `⚠ Not enough gold! You have ${gold}g but need ${entry.cost}g.`;
+  else if (invCount >= 100) warn = '⚠ Inventory is full (100/100). Drop something first.';
+  _bsmShowConfirm(
+    `Buy "${entry.name}" for 💰 ${entry.cost}g?`,
+    warn,
+    warn ? null : async () => {
+      const res = await api('POST', '/api/shop/buy', { catalogId }).catch(() => null);
+      if (res?.ok) {
+        if (charCache) charCache.gold = res.gold;
+        _bsmPurchased.add(catalogId);
+        await fetchAndCacheStats();
+        _renderBsmShop();
+        _renderBsmInv();
+        showToast(`🛒 Bought ${entry.name}!`);
+      } else {
+        showToast('❌ Purchase failed.');
+      }
+    }
+  );
+  if (warn) {
+    // still show confirm but disable ok button
+    document.getElementById('bsm-confirm-ok').disabled = true;
+    document.getElementById('bsm-confirm-ok').style.opacity = '0.4';
+  } else {
+    document.getElementById('bsm-confirm-ok').disabled = false;
+    document.getElementById('bsm-confirm-ok').style.opacity = '';
+  }
+}
+
+function bsmConfirmSell(invId, name, price) {
+  _bsmShowConfirm(
+    `Sell "${name}" for 💰 ${price}g?`,
+    '',
+    async () => {
+      const res = await api('POST', '/api/shop/sell', { invId }).catch(() => null);
+      if (res?.ok) {
+        if (charCache) charCache.gold = res.gold;
+        await fetchAndCacheStats();
+        _renderBsmInv();
+        showToast(`💰 Sold for ${res.price}g!`);
+      } else {
+        showToast('❌ Sale failed.');
+      }
+    }
+  );
+}
+
+function bsmSellAll() {
+  const inv = charCache?.inventory || [];
+  if (!inv.length) { showToast('⚠ Inventory is empty.'); return; }
+  const total = inv.reduce((s, item) => s + _calcSellValue(item), 0);
+  _bsmShowConfirm(
+    `Sell all ${inv.length} item${inv.length > 1 ? 's' : ''} for 💰 ~${total}g?`,
+    '(Actual prices may vary slightly)',
+    async () => {
+      let earned = 0;
+      for (const item of [...inv]) {
+        const res = await api('POST', '/api/shop/sell', { invId: item.inv_id }).catch(() => null);
+        if (res?.ok) earned += res.price;
+      }
+      await fetchAndCacheStats();
+      _renderBsmInv();
+      showToast(`💰 Sold everything for ${earned}g!`);
+    }
+  );
+}
+
+// ── PvP ───────────────────────────────────────────────────────────────────────
+
+function sendPvpChallenge(targetUsername) {
+  if (_pvpWaitingFor) { showToast('⚠ Already waiting for a challenge response.'); return; }
+  if (pvpState)       { showToast('⚠ You are already in a PvP battle.'); return; }
+  socket.emit('pvp:challenge', { to: targetUsername });
+}
+
+function acceptPvpChallenge() {
+  if (!_pvpPendingFrom) return;
+  clearInterval(_pvpChallengeCountdown);
+  const from = _pvpPendingFrom;
+  _pvpPendingFrom = null;
+  document.getElementById('pvp-challenge-modal').style.display = 'none';
+  socket.emit('pvp:accept', { from });
+}
+
+function declinePvpChallenge() {
+  if (!_pvpPendingFrom) return;
+  clearInterval(_pvpChallengeCountdown);
+  const from = _pvpPendingFrom;
+  _pvpPendingFrom = null;
+  document.getElementById('pvp-challenge-modal').style.display = 'none';
+  socket.emit('pvp:decline', { from });
+}
+
+function cancelPvpChallenge() {
+  _pvpWaitingFor = null;
+  document.getElementById('pvp-waiting-modal').style.display = 'none';
+}
+
+function forfeitPvp() {
+  if (!pvpState || pvpState.phase === 'ended') { closePvp(); return; }
+  if (!confirm('Forfeit the battle? Your opponent wins.')) return;
+  socket.emit('pvp:forfeit', { sessionId: pvpState.sessionId });
+}
+
+function closePvp() {
+  pvpState = null;
+  document.getElementById('pvp-overlay').style.display = 'none';
+}
+
+// ── PvP socket events ─────────────────────────────────────────────────────────
+
+socket.on('pvp:challenge', ({ from, fromData }) => {
+  _pvpPendingFrom = from;
+  document.getElementById('pvp-ch-avatar').textContent = fromData.avatar || '❓';
+  document.getElementById('pvp-ch-name').textContent   = from;
+  document.getElementById('pvp-ch-info').textContent   = `Lv.${fromData.level} ${fromData.class}`;
+  document.getElementById('pvp-challenge-modal').style.display = 'flex';
+
+  let secs = 10;
+  document.getElementById('pvp-ch-countdown').textContent = secs;
+  clearInterval(_pvpChallengeCountdown);
+  _pvpChallengeCountdown = setInterval(() => {
+    secs--;
+    const el = document.getElementById('pvp-ch-countdown');
+    if (el) el.textContent = secs;
+    if (secs <= 0) {
+      clearInterval(_pvpChallengeCountdown);
+      _pvpPendingFrom = null;
+      document.getElementById('pvp-challenge-modal').style.display = 'none';
+    }
+  }, 1000);
+});
+
+socket.on('pvp:challenge_expired', () => {
+  clearInterval(_pvpChallengeCountdown);
+  _pvpPendingFrom = null;
+  document.getElementById('pvp-challenge-modal').style.display = 'none';
+});
+
+socket.on('pvp:challenge_sent', ({ to }) => {
+  _pvpWaitingFor = to;
+  document.getElementById('pvp-waiting-name').textContent = to;
+  document.getElementById('pvp-waiting-modal').style.display = 'flex';
+});
+
+socket.on('pvp:declined', ({ reason }) => {
+  _pvpWaitingFor = null;
+  document.getElementById('pvp-waiting-modal').style.display = 'none';
+  const msgs = { timeout: 'Challenge expired — no response.', declined: 'Challenge was declined.', offline: 'Player went offline.' };
+  showToast(`❌ ${msgs[reason] || 'Challenge cancelled.'}`);
+});
+
+socket.on('pvp:error', ({ msg }) => showToast(`⚠ PvP: ${msg}`));
+
+socket.on('pvp:start', async ({ sessionId, opponent }) => {
+  _pvpWaitingFor = null;
+  _pvpPendingFrom = null;
+  clearInterval(_pvpChallengeCountdown);
+  document.getElementById('pvp-waiting-modal').style.display = 'none';
+  document.getElementById('pvp-challenge-modal').style.display = 'none';
+
+  pvpState = { sessionId, opponent, phase: 'loading', log: [] };
+
+  // Render overlay immediately
+  document.getElementById('pvp-overlay').style.display = 'flex';
+  document.getElementById('pvp-status').textContent = '⏳ Connecting to arena…';
+  document.getElementById('pvp-skills').innerHTML = '';
+  document.getElementById('pvp-log-inner').innerHTML = '';
+
+  // Render our side
+  const cls = charCache?.class || 'Warrior';
+  document.getElementById('pvp-my-fig').innerHTML    = PLAYER_SVGS[cls] || PLAYER_SVGS.Warrior;
+  document.getElementById('pvp-my-name').textContent = `${me.username} · ${cls}`;
+  document.getElementById('pvp-my-lv').textContent   = `Lv.${charCache?.level || 1}`;
+
+  // Render opponent side
+  document.getElementById('pvp-opp-fig').innerHTML    = PLAYER_SVGS[opponent.class] || PLAYER_SVGS.Warrior;
+  document.getElementById('pvp-opp-name').textContent = `${opponent.username} · ${opponent.class}`;
+  document.getElementById('pvp-opp-lv').textContent   = `Lv.${opponent.level || '?'}`;
+
+  // Fetch fresh stats and report ready to server
+  await fetchAndCacheStats();
+  const stats = getEffectiveStats(charCache);
+  socket.emit('pvp:ready', {
+    sessionId,
+    stats: {
+      hp:     stats.hp,
+      mp:     stats.mp,
+      atk:    stats.atk,
+      def:    stats.def,
+      spirit: stats.spirit,
+      dex:    stats.dex || charCache?.stats?.dex || 10,
+    },
+  });
+});
+
+socket.on('pvp:begin', (data) => {
+  pvpState = { ...pvpState, ...data, phase: data.yourTurn ? 'your-turn' : 'opponent-turn' };
+  _pvpRenderBars(data);
+  const myDex  = (data.p1.username === me.username ? data.p1 : data.p2).dex;
+  const oppDex = (data.p1.username === me.username ? data.p2 : data.p1).dex;
+  document.getElementById('pvp-status').textContent = data.yourTurn
+    ? `⚔ Battle starts! You go first (DEX ${myDex} vs ${oppDex})!`
+    : `⚔ Battle starts! ${data.turnUsername} goes first (DEX ${oppDex} vs ${myDex})!`;
+  _pvpAddLog(data.yourTurn ? 'You have the first move!' : `${data.turnUsername} moves first.`);
+  _pvpRenderSkills();
+});
+
+socket.on('pvp:update', (data) => {
+  pvpState = { ...pvpState, ...data, phase: data.yourTurn ? 'your-turn' : 'opponent-turn' };
+  _pvpRenderBars(data);
+  _pvpAddLog(data.log);
+  document.getElementById('pvp-status').textContent = data.yourTurn
+    ? 'Your turn — choose a skill!'
+    : `Waiting for ${data.turnUsername}…`;
+  if (data.yourTurn) showToast('⚔ Your turn!');
+  _pvpRenderSkills();
+});
+
+socket.on('pvp:end', (data) => {
+  const won = data.winner === me.username;
+  pvpState = { ...pvpState, phase: 'ended' };
+  _pvpRenderBars(data);
+  _pvpAddLog(won ? `🏆 You defeated ${pvpState.opponent.username}!` : `💀 ${data.winner} won the battle.`);
+  document.getElementById('pvp-status').textContent = won ? '🏆 Victory!' : '💀 Defeated!';
+  document.getElementById('pvp-skills').innerHTML = `
+    <div style="color:${won ? '#4eff91' : '#e07070'};font-family:'Cinzel',serif;font-size:15px;margin-bottom:10px">
+      ${won ? '🏆 You Win!' : '💀 You Were Defeated'}
+    </div>
+    <button class="skill-btn" onclick="closePvp()">Leave Arena</button>
+  `;
+  showToast(won ? `🏆 You defeated ${pvpState.opponent.username} in PvP!` : `💀 ${data.winner} defeated you in PvP.`);
+});
+
+// ── PvP rendering helpers ─────────────────────────────────────────────────────
+
+function _pvpRenderBars(data) {
+  const pct = (cur, max) => `${Math.max(0, Math.min(100, max > 0 ? (cur / max) * 100 : 0))}%`;
+  const myD  = data.p1.username === me.username ? data.p1 : data.p2;
+  const oppD = data.p1.username === me.username ? data.p2 : data.p1;
+
+  document.getElementById('pvp-my-hp-fill').style.width  = pct(myD.curHp,  myD.maxHp  || myD.curHp);
+  document.getElementById('pvp-my-mp-fill').style.width  = pct(myD.curMp,  myD.maxMp  || myD.curMp);
+  document.getElementById('pvp-my-hp-num').textContent   = `${Math.max(0, myD.curHp)}/${myD.maxHp || myD.curHp}`;
+  document.getElementById('pvp-my-mp-num').textContent   = `${myD.curMp}/${myD.maxMp || myD.curMp}`;
+
+  document.getElementById('pvp-opp-hp-fill').style.width = pct(oppD.curHp, oppD.maxHp || oppD.curHp);
+  document.getElementById('pvp-opp-mp-fill').style.width = pct(oppD.curMp, oppD.maxMp || oppD.curMp);
+  document.getElementById('pvp-opp-hp-num').textContent  = `${Math.max(0, oppD.curHp)}/${oppD.maxHp || oppD.curHp}`;
+  document.getElementById('pvp-opp-mp-num').textContent  = `${oppD.curMp}/${oppD.maxMp || oppD.curMp}`;
+}
+
+function _pvpAddLog(msg) {
+  if (!msg || !pvpState) return;
+  pvpState.log = [...(pvpState.log || []), msg];
+  const inner = document.getElementById('pvp-log-inner');
+  if (!inner) return;
+  const lines = pvpState.log.slice(-6);
+  inner.innerHTML = lines.map((l, i) =>
+    `<div class="cb-log-line${i === lines.length - 1 ? ' new' : ''}">${escHtml(l)}</div>`
+  ).join('');
+  inner.parentElement.scrollTop = inner.parentElement.scrollHeight;
+}
+
+function _pvpRenderSkills() {
+  const el = document.getElementById('pvp-skills');
+  if (!el || !pvpState) return;
+  if (pvpState.phase === 'loading') { el.innerHTML = '<div class="cb-phase-msg">Connecting…</div>'; return; }
+  if (pvpState.phase === 'ended')   return;
+  if (pvpState.phase !== 'your-turn') {
+    el.innerHTML = `<div class="cb-phase-msg" style="color:#8aaccc">⏳ Waiting for ${escHtml(pvpState.opponent.username)}…</div>`;
+    return;
+  }
+
+  const skills = getPlayerCombatSkills(charCache);
+  const myData = pvpState.p1?.username === me.username ? pvpState.p1 : pvpState.p2;
+  const curMp  = myData?.curMp ?? 999;
+
+  el.innerHTML = skills.map(sk => {
+    const noMp = sk.mpCost > 0 && curMp < sk.mpCost;
+    const tgt  = sk.heal ? '💚 Self' : '⚔ Opponent';
+    return `<button class="skill-btn${noMp ? ' no-mp' : ''}"
+      onclick="pvpUseSkill('${sk.id}')" ${noMp ? 'disabled' : ''}>
+      ${escHtml(sk.name)}
+      <span class="sk-cost">${sk.mpCost ? `${sk.mpCost} MP` : 'Free'}</span>
+      <span class="sk-target">${tgt}</span>
+    </button>`;
+  }).join('');
+}
+
+async function pvpUseSkill(skillId) {
+  if (!pvpState || pvpState.phase !== 'your-turn') return;
+
+  const skills = getPlayerCombatSkills(charCache);
+  const skill  = skills.find(s => s.id === skillId);
+  if (!skill) return;
+
+  const myData  = pvpState.p1?.username === me.username ? pvpState.p1 : pvpState.p2;
+  const oppData = pvpState.p1?.username === me.username ? pvpState.p2 : pvpState.p1;
+  const curMp   = myData?.curMp ?? 0;
+
+  if (skill.mpCost > curMp) { showToast('❌ Not enough MP!'); return; }
+
+  // Disable buttons while animating
+  pvpState.phase = 'busy';
+  _pvpRenderSkills();
+
+  const stats = getEffectiveStats(charCache);
+  let dmg = 0, healAmt = 0;
+  if (skill.heal) {
+    healAmt = Math.floor(stats.spirit * 3);
+  } else {
+    const oppDef = oppData?.def ?? 0;
+    dmg = Math.max(1, Math.floor(stats.atk * skill.dmgMult) - Math.floor(oppDef * 0.5));
+  }
+
+  // Play animation
+  const myFig  = document.getElementById('pvp-my-fig');
+  const oppFig = document.getElementById('pvp-opp-fig');
+  const proj   = ANIM_PROJECTILE[skill.type];
+
+  async function pvpProjectile() {
+    const fx = document.getElementById('pvp-fx');
+    if (!fx || !proj) return new Promise(r => setTimeout(r, 420));
+    return new Promise(resolve => {
+      const p = Object.assign(document.createElement('span'), { className: 'cb-proj', textContent: proj });
+      fx.appendChild(p);
+      p.animate([{ left: '5%' }, { left: '90%' }], { duration: 420, easing: 'ease-in', fill: 'forwards' })
+        .onfinish = () => { p.remove(); resolve(); };
+    });
+  }
+
+  switch (skill.type) {
+    case 'melee': case 'bash': case 'stab':
+      addAnim(myFig, 'anim-atk-r', 700);
+      await new Promise(r => setTimeout(r, 340));
+      addAnim(oppFig, 'anim-hit', 400); addAnim(oppFig, 'anim-shake', 450);
+      await new Promise(r => setTimeout(r, 400));
+      break;
+    case 'heal':
+      addAnim(myFig, 'anim-heal', 650);
+      await new Promise(r => setTimeout(r, 650));
+      break;
+    default:
+      addAnim(myFig, 'anim-magic', 550);
+      await new Promise(r => setTimeout(r, 140));
+      await pvpProjectile();
+      addAnim(oppFig, 'anim-hit', 400);
+      await new Promise(r => setTimeout(r, 340));
+  }
+
+  socket.emit('pvp:action', {
+    sessionId:  pvpState.sessionId,
+    skillName:  skill.name,
+    dmg,
+    healAmt,
+    mpCost:     skill.mpCost,
+    targetSelf: !!skill.heal,
+  });
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────

@@ -241,6 +241,33 @@ async function initDb() {
     _db._save();
   }
 
+  // ── V10 Migration: level_req column on items ──────────────────────────────────
+  const itemColsV10 = (_db.exec('PRAGMA table_info(items)')[0]?.values || []).map(r => r[1]);
+  if (!itemColsV10.includes('level_req')) {
+    _db.exec('ALTER TABLE items ADD COLUMN level_req INTEGER NOT NULL DEFAULT 1');
+    _db._save();
+  }
+
+  // ── V11 Migration: block_rate column on items ──────────────────────────────────
+  const itemColsV11 = (_db.exec('PRAGMA table_info(items)')[0]?.values || []).map(r => r[1]);
+  if (!itemColsV11.includes('block_rate')) {
+    _db.exec('ALTER TABLE items ADD COLUMN block_rate INTEGER NOT NULL DEFAULT 0');
+    _db._save();
+  }
+
+  // ── V12 Migration: player stash ──────────────────────────────────────────────
+  const stashTableExists = (_db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='player_stash'")[0]?.values || []).length > 0;
+  if (!stashTableExists) {
+    _db.exec(`CREATE TABLE player_stash (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      username  TEXT NOT NULL,
+      item_id   INTEGER NOT NULL REFERENCES items(id),
+      stash_slot INTEGER NOT NULL,
+      UNIQUE(username, stash_slot)
+    )`);
+    _db._save();
+  }
+
   return _db;
 }
 
@@ -464,6 +491,27 @@ const adjustAttrPoints = {
     run('UPDATE users SET attr_points = attr_points + ? WHERE username = ?', [delta, username]),
 };
 
+const getStash = {
+  all: (username) => query(
+    `SELECT ps.id as stash_id, ps.stash_slot, i.*
+     FROM player_stash ps
+     JOIN items i ON i.id = ps.item_id
+     WHERE ps.username = ?
+     ORDER BY ps.stash_slot`,
+    [username]
+  ),
+};
+
+const addStashItem = {
+  run: (username, item_id, stash_slot) =>
+    run('INSERT INTO player_stash (username, item_id, stash_slot) VALUES (?,?,?)', [username, item_id, stash_slot]),
+};
+
+const removeStashItem = {
+  run: (stash_id, username) =>
+    run('DELETE FROM player_stash WHERE id = ? AND username = ?', [stash_id, username]),
+};
+
 // Expose raw db for ad-hoc queries in server.js
 const db = { prepare: (sql) => ({ run: (...args) => run(sql, args) }) };
 
@@ -501,4 +549,7 @@ module.exports = {
   adjustSkillPoints,
   addGold,
   adjustAttrPoints,
+  getStash,
+  addStashItem,
+  removeStashItem,
 };
