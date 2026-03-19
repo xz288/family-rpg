@@ -1,0 +1,24 @@
+function playPartyRequest(ctx) {
+  const freqs   = [700, 801, 917, 1049];
+  const noteLen = 0.13;  // 130ms
+  const gap     = 0.018;      // 18ms
+  const vol     = 1.00;
+  const t0      = ctx.currentTime + 0.02;
+  const master  = ctx.createGain();
+  master.gain.value = vol;
+  master.connect(ctx.destination);
+
+  freqs.forEach((freq, i) => {
+    const on  = t0 + i * (noteLen + gap);
+    const off = on + noteLen;
+    const osc = ctx.createOscillator();
+    const gn  = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, on);
+    gn.gain.setValueAtTime(0, on);
+    gn.gain.linearRampToValueAtTime(0.75, on + 0.012);
+    gn.gain.exponentialRampToValueAtTime(0.001, off + 0.04);
+    osc.connect(gn); gn.connect(master);
+    osc.start(on); osc.stop(off + 0.08);
+  });
+}

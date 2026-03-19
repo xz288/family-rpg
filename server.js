@@ -443,6 +443,17 @@ app.post('/api/me/quests/gatehouse', requireAuth, (req, res) => {
   res.json({ ok: true, items });
 });
 
+// Complete the Gatehouse quest (called after Demon Lord is defeated)
+app.post('/api/me/quests/gatehouse/complete', requireAuth, (req, res) => {
+  const username = req.user.username;
+  const quest = db.getPlayerQuests.get(username, 'gatehouse_patrol');
+  if (!quest) return res.json({ ok: false, reason: 'quest not found' });
+  if (quest.status === 'complete') return res.json({ ok: true, alreadyDone: true });
+  run('UPDATE player_quests SET status=? WHERE username=? AND quest_key=?',
+    ['complete', username, 'gatehouse_patrol']);
+  res.json({ ok: true });
+});
+
 // Forest map progress — stored server-side so it persists across devices and resets with seasons
 app.get('/api/me/progress', requireAuth, (req, res) => {
   const user = db.getUserByUsername.get(req.user.username);
@@ -461,6 +472,25 @@ app.post('/api/me/progress', requireAuth, (req, res) => {
     run('UPDATE users SET forest_progress=? WHERE username=?', [forest_progress, req.user.username]);
   }
   res.json({ ok: true, forest_progress: Math.max(forest_progress, user.forest_progress ?? 0) });
+});
+
+// Desert Saharrrra map progress
+app.get('/api/me/desert-progress', requireAuth, (req, res) => {
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ desert_progress: user.desert_progress ?? 0 });
+});
+
+app.post('/api/me/desert-progress', requireAuth, (req, res) => {
+  const { desert_progress } = req.body;
+  if (!Number.isInteger(desert_progress) || desert_progress < 0 || desert_progress > 99)
+    return res.status(400).json({ error: 'Invalid progress' });
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (desert_progress > (user.desert_progress ?? 0)) {
+    run('UPDATE users SET desert_progress=? WHERE username=?', [desert_progress, req.user.username]);
+  }
+  res.json({ ok: true, desert_progress: Math.max(desert_progress, user.desert_progress ?? 0) });
 });
 
 // Grant XP after combat win
@@ -552,13 +582,13 @@ app.post('/api/me/skills/assign', requireAuth, (req, res) => {
 // ── Loot generation helpers ───────────────────────────────────────────────────
 // Slots must match the equipment system: head, chest, gloves, pants, boots, mainhand, offhand
 const LOOT_NAMES = {
-  mainhand: { D:['Rusty Blade','Chipped Sword','Bent Dagger','Cracked Club'], C:['Iron Sword','Steel Dagger','Hunter\'s Shortbow','Oak Staff'], B:['Shadow Blade','Enchanted Staff','Moonbow','Void Shard'] },
-  offhand:  { D:['Cracked Buckler','Worn Shield','Chipped Focus'], C:['Iron Shield','Leather Buckler','Oak Totem'], B:['Shadow Aegis','Enchanted Orb','Knight\'s Bulwark'] },
-  head:     { D:['Torn Hood','Dented Cap','Ragged Hat'], C:['Iron Helm','Leather Cap','Chain Coif'], B:['Shadow Cowl','Mage Crown','Knight\'s Visor'] },
-  chest:    { D:['Tattered Tunic','Cracked Chest Plate','Worn Vest'], C:['Chain Mail','Iron Breastplate','Leather Armor'], B:['Shadow Coat','Mage Robe','Knight\'s Plate'] },
-  pants:    { D:['Torn Pants','Rusted Greaves','Patched Leggings'], C:['Iron Greaves','Leather Pants','Chain Leggings'], B:['Shadow Leggings','Battle Greaves','Mage Trousers'] },
-  boots:    { D:['Worn Boots','Cracked Sandals','Tattered Shoes'], C:['Iron Boots','Leather Boots','Hunter\'s Treads'], B:['Shadow Treads','Knight\'s Sabatons','Mage Slippers'] },
-  gloves:   { D:['Tattered Gloves','Worn Mitts','Cracked Gauntlets'], C:['Iron Gauntlets','Leather Gloves','Chain Mitts'], B:['Shadow Wraps','Knight\'s Gauntlets','Mage Gloves'] },
+  mainhand: { D:['Rusty Blade','Chipped Sword','Bent Dagger','Cracked Club'], C:['Iron Sword','Steel Dagger','Hunter\'s Shortbow','Oak Staff'], B:['Shadow Blade','Enchanted Staff','Moonbow','Void Shard'], A:['Sunseeker\'s Scimitar','Khemeti War-blade','Eye-Blessed Staff','Oasis-Forged Saber'], S:['Eternal Sun Blade','Wrathbound Scepter','Saharrrran Relic Sword'] },
+  offhand:  { D:['Cracked Buckler','Worn Shield','Chipped Focus'], C:['Iron Shield','Leather Buckler','Oak Totem'], B:['Shadow Aegis','Enchanted Orb','Knight\'s Bulwark'], A:['Pharaoh\'s Guard','Sun-disk Aegis','Oasis-Forged Bulwark'], S:['Eternal Sun Shield','Wrathbound Orb','Saharrrran Relic Focus'] },
+  head:     { D:['Torn Hood','Dented Cap','Ragged Hat'], C:['Iron Helm','Leather Cap','Chain Coif'], B:['Shadow Cowl','Mage Crown','Knight\'s Visor'], A:['Sunseeker\'s Khat','Khemeti Crown','Dunestalker Cowl'], S:['Eternal Sun Crown','Wrathbound Mask','Pharaoh\'s Nemes'] },
+  chest:    { D:['Tattered Tunic','Cracked Chest Plate','Worn Vest'], C:['Chain Mail','Iron Breastplate','Leather Armor'], B:['Shadow Coat','Mage Robe','Knight\'s Plate'], A:['Sunseeker\'s Robes','Khemeti Plate','Oasis-Forged Mail'], S:['Eternal Sun Raiment','Wrathbound Shroud','Pharaoh\'s Burial Wraps'] },
+  pants:    { D:['Torn Pants','Rusted Greaves','Patched Leggings'], C:['Iron Greaves','Leather Pants','Chain Leggings'], B:['Shadow Leggings','Battle Greaves','Mage Trousers'], A:['Sunseeker\'s Kilt','Khemeti Greaves','Dunestalker Legwraps'], S:['Eternal Sun Legs','Wrathbound Greaves','Pharaoh\'s Gold Kilt'] },
+  boots:    { D:['Worn Boots','Cracked Sandals','Tattered Shoes'], C:['Iron Boots','Leather Boots','Hunter\'s Treads'], B:['Shadow Treads','Knight\'s Sabatons','Mage Slippers'], A:['Sunseeker\'s Sandals','Khemeti Treads','Oasis-Forged Boots'], S:['Eternal Sun Sabatons','Wrathbound Sandals','Pharaoh\'s Gold Boots'] },
+  gloves:   { D:['Tattered Gloves','Worn Mitts','Cracked Gauntlets'], C:['Iron Gauntlets','Leather Gloves','Chain Mitts'], B:['Shadow Wraps','Knight\'s Gauntlets','Mage Gloves'], A:['Sunseeker\'s Handwraps','Khemeti Gauntlets','Eye-Blessed Mitts'], S:['Eternal Sun Gauntlets','Wrathbound Handwraps','Pharaoh\'s Gold Gloves'] },
 };
 const LOOT_SLOT_ICON = { mainhand:'⚔️', offhand:'🔮', head:'🪖', chest:'🦺', pants:'👖', boots:'👢', gloves:'🧤' };
 const LOOT_TIER_RARITY = { D:'normal', C:'magic', B:'rare', A:'legendary', S:'godly' };
@@ -624,6 +654,86 @@ app.post('/api/me/loot', requireAuth, (req, res) => {
 
   if (gold > 0) db.addGold.run(gold, username);
   res.json({ items: droppedItems, gold });
+});
+
+// ── REST API: Party ───────────────────────────────────────────────────────────
+
+// Public combat stats for another player (used by party leader to load member stats)
+app.get('/api/users/:target/combat-stats', requireAuth, (req, res) => {
+  const user = db.getUserByUsername.get(req.params.target);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const equipped  = parseAffixes(db.getEquipment.all(user.username));
+  const attrStats = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
+  const stats     = calcStats(user.class, sumGear(equipped), attrStats);
+  const curHp     = Math.min(user.hp !== undefined ? user.hp : stats.hp, stats.hp);
+  res.json({ username: user.username, class: user.class, level: user.level, curHp, stats });
+});
+
+// Award XP + independent loot rolls to every party member after a boss win
+app.post('/api/party/reward', requireAuth, (req, res) => {
+  const { partyMembers, xp, monsters } = req.body;
+  if (!Array.isArray(partyMembers) || partyMembers.length < 2 || partyMembers.length > 3)
+    return res.status(400).json({ error: 'Invalid party size' });
+  if (!partyMembers.includes(req.user.username))
+    return res.status(403).json({ error: 'Not in party' });
+  if (!Number.isInteger(xp) || xp <= 0 || xp > 20000)
+    return res.status(400).json({ error: 'Invalid XP' });
+
+  const results = {};
+  for (const member of partyMembers) {
+    const user = db.getUserByUsername.get(member);
+    if (!user) continue;
+
+    // XP
+    const newTotal  = user.xp + xp;
+    const newLevel  = Math.min(30, Math.floor(Math.sqrt(newTotal / 100)) + 1);
+    const levelGain = Math.max(0, newLevel - user.level);
+    db.updateUserXP.run(xp, newLevel, member);
+    if (levelGain > 0) {
+      db.adjustSkillPoints.run(levelGain, member);
+      adjustAttrPoints.run(levelGain * 5, member);
+    }
+
+    // Independent loot roll per member
+    const items = [];
+    let gold = 0;
+    if (Array.isArray(monsters) && monsters.length) {
+      for (const mon of monsters) {
+        const tier = mon.tier || 'D';
+        const g = { D:[5,18], C:[18,45], B:[45,95], A:[95,180], S:[180,350] }[tier] || [5,18];
+        gold += lootRandInt(g[0], g[1]);
+      }
+      const maxItems = Math.min(3, monsters.length + 1);
+      for (const mon of monsters) {
+        if (items.length >= maxItems) break;
+        const tier   = mon.tier || 'D';
+        const chance = { D:0.35, C:0.55, B:0.72, A:0.88, S:0.96 }[tier] || 0.35;
+        if (Math.random() >= chance) continue;
+        const slot   = SLOTS[Math.floor(Math.random() * SLOTS.length)];
+        const names  = LOOT_NAMES[slot]?.[tier] || [`${tier} ${slot}`];
+        const name   = names[Math.floor(Math.random() * names.length)];
+        const icon   = slot === 'offhand' ? _offhandIcon(name) : (LOOT_SLOT_ICON[slot] || '🎒');
+        const rarity = LOOT_TIER_RARITY[tier] || 'normal';
+        let { affixes, bonuses } = generateItemAffixes(slot, rarity);
+        if (slot !== 'mainhand') ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity));
+        if (slot === 'mainhand')  ({ affixes, bonuses } = guaranteeWeaponAtk(affixes, bonuses, rarity, mon.level || 1));
+        const b          = bonuses;
+        const level_req  = Math.min(RARITY_LEVEL_REQ[rarity] ?? 1, mon.level || 1);
+        const block_rate = slot === 'offhand' && _isShield(name) ? _rollBlockRate(rarity, lootRandInt) : 0;
+        const special    = rollSpecialAffix(slot, rarity, level_req, lootRandInt);
+        if (special) affixes = [...affixes, special];
+        const { lastInsertRowid } = db.run(
+          `INSERT INTO items (name,slot,rarity,icon,affixes,str_bonus,dex_bonus,int_bonus,spirit_bonus,hp_bonus,mp_bonus,atk_bonus,def_bonus,level_req,block_rate) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [name,slot,rarity,icon,JSON.stringify(affixes),b.str_bonus||0,b.dex_bonus||0,b.int_bonus||0,b.spirit_bonus||0,b.hp_bonus||0,b.mp_bonus||0,b.atk_bonus||0,b.def_bonus||0,level_req,block_rate]
+        );
+        db.addInventoryItem.run(member, lastInsertRowid);
+        items.push({ id: lastInsertRowid, name, slot, icon, rarity, level_req, affixes, ...b });
+      }
+      if (gold > 0) db.addGold.run(gold, member);
+    }
+    results[member] = { xp, levelGain, gold, items };
+  }
+  res.json({ ok: true, results });
 });
 
 // ── REST API: Inventory ───────────────────────────────────────────────────────
@@ -1067,6 +1177,9 @@ const onlineUsers = new Map();
 const pvpSessions   = new Map(); // sessionId → session
 const pvpChallenges = new Map(); // targetUsername → { from, timer }
 
+// ── Party state ───────────────────────────────────────────────────────────────
+const parties = new Map(); // partyId → { id, leader, members[], memberData:{u→{accepted}}, zone }
+
 function _pvpEnd(sessionId, winnerUsername) {
   const session = pvpSessions.get(sessionId);
   if (!session) return;
@@ -1284,6 +1397,88 @@ io.on('connection', (socket) => {
   });
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
+  // ── Party ──────────────────────────────────────────────────────────────────
+  socket.on('party:invite', ({ invitees, zone }) => {
+    if (!Array.isArray(invitees) || invitees.length < 1 || invitees.length > 2) return;
+    const partyId   = `party_${Date.now()}_${username}`;
+    const memberData = { [username]: { accepted: true } };
+    invitees.forEach(u => { memberData[u] = { accepted: null }; });
+    parties.set(partyId, { id: partyId, leader: username, members: [username, ...invitees], memberData, zone });
+    invitees.forEach(invitee => {
+      const sid = onlineUsers.get(invitee);
+      if (sid) io.to(sid).emit('party:invite_received', { partyId, leader: username, zone });
+    });
+    socket.emit('party:formed', { partyId, invitees });
+  });
+
+  socket.on('party:respond', ({ partyId, accept }) => {
+    const party = parties.get(partyId);
+    if (!party || !party.memberData[username]) return;
+    party.memberData[username].accepted = accept;
+    if (!accept) {
+      party.members = party.members.filter(m => m !== username);
+      delete party.memberData[username];
+    }
+    const leaderSid = onlineUsers.get(party.leader);
+    if (leaderSid) io.to(leaderSid).emit('party:member_responded', { partyId, username, accept });
+  });
+
+  socket.on('party:start', ({ partyId, monsters }) => {
+    const party = parties.get(partyId);
+    if (!party || party.leader !== username) return;
+    const accepted = [party.leader, ...party.members.filter(m => m !== party.leader && party.memberData[m]?.accepted)];
+    accepted.filter(m => m !== username).forEach(m => {
+      const sid = onlineUsers.get(m);
+      if (sid) io.to(sid).emit('party:combat_start', { partyId, zone: party.zone, leader: username, members: accepted, monsters });
+    });
+  });
+
+  socket.on('party:end', ({ partyId, result }) => {
+    const party = parties.get(partyId);
+    if (!party || party.leader !== username) return;
+    party.members.filter(m => m !== username && party.memberData[m]?.accepted).forEach(m => {
+      const sid = onlineUsers.get(m);
+      if (sid) io.to(sid).emit('party:ended', { result, leader: username });
+    });
+    parties.delete(partyId);
+  });
+
+  socket.on('party:cancel', ({ partyId }) => {
+    const party = parties.get(partyId);
+    if (!party || party.leader !== username) return;
+    party.members.filter(m => m !== username).forEach(m => {
+      const sid = onlineUsers.get(m);
+      if (sid) io.to(sid).emit('party:cancelled', { leader: username });
+    });
+    parties.delete(partyId);
+  });
+
+  // Leader broadcasts combat state to all party members
+  socket.on('party:sync', ({ partyId, ...syncData }) => {
+    const party = parties.get(partyId);
+    if (!party || party.leader !== username) return;
+    party.members.filter(m => m !== username).forEach(m => {
+      const sid = onlineUsers.get(m);
+      if (sid) io.to(sid).emit('party:sync', syncData);
+    });
+  });
+
+  // Leader signals a specific member it's their turn (includes state snapshot)
+  socket.on('party:turn', ({ partyId, target, ...syncData }) => {
+    const party = parties.get(partyId);
+    if (!party || party.leader !== username) return;
+    const sid = onlineUsers.get(target);
+    if (sid) io.to(sid).emit('party:turn', syncData);
+  });
+
+  // Member sends their chosen action to the leader
+  socket.on('party:action', ({ partyId, ...actionData }) => {
+    const party = parties.get(partyId);
+    if (!party) return;
+    const leaderSid = onlineUsers.get(party.leader);
+    if (leaderSid) io.to(leaderSid).emit('party:action', { from: username, ...actionData });
+  });
+
   socket.on('disconnect', () => {
     // Clean up PvP session if player was in one
     for (const [sid, session] of pvpSessions) {
@@ -1309,6 +1504,22 @@ io.on('connection', (socket) => {
       pvpChallenges.delete(username);
       const cSid = onlineUsers.get(ch.from);
       if (cSid) io.to(cSid).emit('pvp:declined', { reason: 'offline' });
+    }
+
+    // Clean up parties
+    for (const [pid, party] of parties) {
+      if (party.leader === username) {
+        party.members.filter(m => m !== username).forEach(m => {
+          const sid = onlineUsers.get(m);
+          if (sid) io.to(sid).emit('party:cancelled', { leader: username });
+        });
+        parties.delete(pid);
+      } else if (party.members.includes(username)) {
+        party.members = party.members.filter(m => m !== username);
+        delete party.memberData[username];
+        const leaderSid = onlineUsers.get(party.leader);
+        if (leaderSid) io.to(leaderSid).emit('party:member_responded', { partyId: pid, username, accept: false });
+      }
     }
 
     // Only mark offline if this socket is still the active one

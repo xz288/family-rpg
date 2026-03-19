@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Town Square</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel+Decorative:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blood:#6a0a0a; --ash:#2a2230; --bone:#c8b88a;
+    --mist:#4a4860;  --gold:#c8900a; --dim:#181018;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#0a080e; font-family:'Crimson Text',serif;
+    overflow:hidden; height:100vh; width:100vw;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='4' fill='none' stroke='%23c8900a' stroke-width='1.5'/%3E%3Cline x1='10' y1='0' x2='10' y2='6' stroke='%23c8900a' stroke-width='1'/%3E%3Cline x1='10' y1='14' x2='10' y2='20' stroke='%23c8900a' stroke-width='1'/%3E%3Cline x1='0' y1='10' x2='6' y2='10' stroke='%23c8900a' stroke-width='1'/%3E%3Cline x1='14' y1='10' x2='20' y2='10' stroke='%23c8900a' stroke-width='1'/%3E%3C/svg%3E") 10 10, crosshair;
+  }
+  h1 {
+    font-family:'UnifrakturMaguntia',cursive;
+    font-size:clamp(1.4rem,3vw,2.4rem); color:var(--bone);
+    letter-spacing:.1em;
+    text-shadow:0 0 40px rgba(200,144,10,.5),0 0 80px rgba(100,10,10,.4),0 3px 8px rgba(0,0,0,1);
+    margin-bottom:4px; position:relative; z-index:2;
+  }
+  .subtitle {
+    font-family:'Crimson Text',serif; font-style:italic; color:#6a5840;
+    font-size:clamp(.65rem,1.2vw,.82rem); letter-spacing:.2em;
+    margin-bottom:8px; position:relative; z-index:2; text-transform:uppercase;
+  }
+  .map-container { position:relative; z-index:2; width:min(97vw,920px); aspect-ratio:920/640; }
+  svg#map { width:100%; height:100%; filter:drop-shadow(0 12px 60px rgba(0,0,0,1)); }
+ 
+  .building-group,.forest-group,.gate-group { cursor:pointer; }
+  .building-group .b-body { transition:filter .2s; }
+  .building-group:hover .b-body { filter:brightness(1.25) saturate(.8) sepia(.2); }
+  .building-group.active .b-body { filter:brightness(1.4) drop-shadow(0 0 12px rgba(200,144,10,.7)); }
+  .forest-group .f-body { transition:filter .2s; }
+  .forest-group:hover .f-body { filter:brightness(1.18) saturate(.7); }
+  .forest-group.active .f-body { filter:brightness(1.3) drop-shadow(0 0 14px rgba(80,180,80,.25)); }
+  .gate-group .g-body { transition:filter .2s; }
+  .gate-group:hover .g-body { filter:brightness(1.28) saturate(.8); }
+  .gate-group.active .g-body { filter:brightness(1.4) drop-shadow(0 0 14px rgba(200,144,10,.75)); }
+ 
+  .glow-ring { opacity:0; transition:opacity .22s; }
+  .building-group:hover .glow-ring,
+  .forest-group:hover .glow-ring,
+  .gate-group:hover .glow-ring { opacity:1; }
+ 
+  .bld-label {
+    font-family:'Cinzel Decorative',serif; font-size:7.5px; font-weight:400;
+    fill:#a89060; text-anchor:middle; pointer-events:none;
+    paint-order:stroke; stroke:#0a0610; stroke-width:4px;
+  }
+ 
+  @keyframes cloud-crawl { from{transform:translateX(0)} to{transform:translateX(28px)} }
+  .cloud1 { animation:cloud-crawl 22s ease-in-out infinite alternate; }
+  .cloud2 { animation:cloud-crawl 30s ease-in-out infinite alternate-reverse; animation-delay:-8s; }
+  .cloud3 { animation:cloud-crawl 26s ease-in-out infinite alternate; animation-delay:-14s; }
+ 
+  @keyframes flicker { 0%,100%{opacity:1} 20%{opacity:.55} 50%{opacity:.85} 75%{opacity:.6} 90%{opacity:.95} }
+  .flame  { animation:flicker 1.8s ease-in-out infinite; }
+  .flame2 { animation:flicker 2.3s ease-in-out infinite; animation-delay:.5s; }
+  .flame3 { animation:flicker 1.5s ease-in-out infinite; animation-delay:.9s; }
+ 
+  @keyframes smoke-drift {
+    0%   { transform:translateY(0) translateX(0) scaleX(1);       opacity:.55; }
+    50%  { transform:translateY(-14px) translateX(3px) scaleX(1.3); opacity:.3; }
+    100% { transform:translateY(-28px) translateX(-2px) scaleX(1.7); opacity:0; }
+  }
+  .smoke  { animation:smoke-drift 3.2s ease-out infinite; transform-origin:center bottom; }
+  .smoke2 { animation:smoke-drift 3.8s ease-out infinite; animation-delay:1.6s; transform-origin:center bottom; }
+ 
+  @keyframes blood-moon-pulse { 0%,100%{opacity:.42} 50%{opacity:.62} }
+  .moon-glow { animation:blood-moon-pulse 6s ease-in-out infinite; }
+ 
+  @keyframes mist-drift {
+    0%  { transform:translateX(0) scaleY(1);    opacity:.38; }
+    50% { transform:translateX(12px) scaleY(1.1); opacity:.22; }
+    100%{ transform:translateX(-8px) scaleY(.9);  opacity:.38; }
+  }
+  .mist  { animation:mist-drift  8s ease-in-out infinite; transform-origin:center; }
+  .mist2 { animation:mist-drift 11s ease-in-out infinite; animation-delay:-4s; transform-origin:center; }
+ 
+  @keyframes crow-fly {
+    0%  { transform:translate(0,0) scaleX(1); }
+    40% { transform:translate(40px,-18px) scaleX(-1); }
+    100%{ transform:translate(80px,-8px) scaleX(1); }
+  }
+  .crow  { animation:crow-fly 12s ease-in-out infinite; }
+  .crow2 { animation:crow-fly 16s ease-in-out infinite; animation-delay:-5s; }
+ 
+  @keyframes portcullis-glow { 0%,100%{opacity:.28} 50%{opacity:.48} }
+  .portcullis-glow { animation:portcullis-glow 3s ease-in-out infinite; }
+ 
+  /* Info panel */
+  #info-panel {
+    position:fixed; bottom:-320px; left:50%; transform:translateX(-50%);
+    width:min(92vw,480px);
+    background:linear-gradient(160deg,#150e1e 0%,#0a0812 100%);
+    border:1px solid #4a3020; border-top:1px solid #8a5010;
+    clip-path:polygon(0 8px,8px 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%);
+    padding:22px 28px 28px; z-index:100;
+    transition:bottom .45s cubic-bezier(.22,1,.36,1);
+    box-shadow:0 -10px 50px rgba(0,0,0,.95),inset 0 1px 0 rgba(200,144,10,.08);
+  }
+  #info-panel.open { bottom:0; }
+  #info-panel::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg,transparent 5%,#8a5010 30%,#c8900a 50%,#8a5010 70%,transparent 95%);
+  }
+  #info-panel::after {
+    content:'✦'; position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+    font-size:14px; color:#8a5010; background:#0a0812; padding:0 8px;
+  }
+  .panel-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:12px; }
+  .panel-icon { font-size:1.9rem; margin-right:14px; line-height:1; filter:grayscale(.3); }
+  .panel-title-wrap { flex:1; }
+  .panel-name { font-family:'Cinzel Decorative',serif; font-size:1.05rem; font-weight:700; color:var(--bone); line-height:1.15; text-shadow:0 0 20px rgba(200,144,10,.3); }
+  .panel-type { font-family:'Crimson Text',serif; font-style:italic; font-size:.78rem; color:#6a5030; letter-spacing:.12em; margin-top:3px; }
+  .close-btn { background:none; border:1px solid #3a2818; color:#6a5030; width:26px; height:26px; cursor:pointer; font-size:.9rem; transition:all .2s; flex-shrink:0; }
+  .close-btn:hover { border-color:#8a5010; color:#c8900a; }
+  .divider { height:1px; background:repeating-linear-gradient(90deg,transparent,transparent 4px,#3a2414 4px,#3a2414 8px); margin:12px 0; }
+  .panel-desc { font-size:1rem; color:#9a8060; line-height:1.7; font-style:italic; }
+  .panel-actions { display:flex; gap:10px; margin-top:16px; }
+  .action-btn {
+    flex:1; padding:9px 12px;
+    font-family:'Cinzel Decorative',serif; font-size:.65rem; font-weight:400;
+    letter-spacing:.1em; cursor:pointer; transition:all .2s; border:1px solid;
+    clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,6px 100%,0 calc(100% - 6px));
+  }
+  .action-btn.primary { background:linear-gradient(135deg,#3a1a08,#6a2a08); border-color:#8a4010; color:#d4a060; }
+  .action-btn.primary:hover { background:linear-gradient(135deg,#5a2a10,#8a3a10); border-color:#c8900a; }
+  .action-btn.secondary { background:transparent; border-color:#2a1e14; color:#6a5030; }
+  .action-btn.secondary:hover { border-color:#5a4020; color:#9a7040; }
+  .hint { position:relative; z-index:2; font-family:'Crimson Text',serif; font-style:italic; color:#3a2820; font-size:.76rem; margin-top:7px; letter-spacing:.08em; }
+</style>
+</head>
+<body>
+<h1>⸸ Town Square ⸸</h1>
+<p class="subtitle">― click to enter ―</p>
+<div class="map-container">
+<svg id="map" viewBox="0 0 920 640" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#040208"/>
+    <stop offset="18%"  stop-color="#0c0818"/>
+    <stop offset="42%"  stop-color="#1a0818"/>
+    <stop offset="62%"  stop-color="#380a0a"/>
+    <stop offset="78%"  stop-color="#580c08"/>
+    <stop offset="90%"  stop-color="#7a1408"/>
+    <stop offset="100%" stop-color="#8a2008"/>
+  </linearGradient>
+  <radialGradient id="moon-body" cx="40%" cy="38%" r="50%">
+    <stop offset="0%"  stop-color="#ffd0b0"/>
+    <stop offset="50%" stop-color="#d04020"/>
+    <stop offset="100%" stop-color="#800808"/>
+  </radialGradient>
+  <radialGradient id="ember" cx="38%" cy="100%" r="55%">
+    <stop offset="0%"  stop-color="#c01808" stop-opacity=".7"/>
+    <stop offset="35%" stop-color="#7a0c04" stop-opacity=".35"/>
+    <stop offset="100%" stop-color="transparent"/>
+  </radialGradient>
+  <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"  stop-color="#1e1810"/>
+    <stop offset="100%" stop-color="#0c0a06"/>
+  </linearGradient>
+  <!-- Wall stone (dark, weathered) -->
+  <linearGradient id="wall-face" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"  stop-color="#2e2820"/>
+    <stop offset="40%" stop-color="#252018"/>
+    <stop offset="100%" stop-color="#181410"/>
+  </linearGradient>
+  <linearGradient id="wall-side" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"  stop-color="#181410"/>
+    <stop offset="100%" stop-color="#100e0a"/>
+  </linearGradient>
+  <linearGradient id="tower-face" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"  stop-color="#34302a"/>
+    <stop offset="100%" stop-color="#1c1a14"/>
+  </linearGradient>
+  <pattern id="cobble" patternUnits="userSpaceOnUse" width="22" height="14">
+    <rect width="22" height="14" fill="#181208"/>
+    <rect x="1" y="1" width="9" height="5" rx="1" fill="#221a0c" opacity=".8"/>
+    <rect x="12" y="1" width="9" height="5" rx="1" fill="#14100a" opacity=".8"/>
+    <rect x="1"  y="8" width="9" height="5" rx="1" fill="#1c1608" opacity=".8"/>
+    <rect x="12" y="8" width="9" height="5" rx="1" fill="#201a0c" opacity=".8"/>
+  </pattern>
+  <pattern id="stone" patternUnits="userSpaceOnUse" width="26" height="18">
+    <rect width="26" height="18" fill="#3a3028"/>
+    <rect x="0"  y="0"  width="12" height="8" rx=".5" fill="#44382e" opacity=".9"/>
+    <rect x="14" y="0"  width="12" height="8" rx=".5" fill="#342c24" opacity=".9"/>
+    <rect x="7"  y="10" width="12" height="8" rx=".5" fill="#403830" opacity=".9"/>
+    <rect x="21" y="10" width="5"  height="8" rx=".5" fill="#382e28" opacity=".9"/>
+    <rect x="0"  y="10" width="5"  height="8" rx=".5" fill="#3e3428" opacity=".9"/>
+  </pattern>
+  <pattern id="dstone" patternUnits="userSpaceOnUse" width="26" height="18">
+    <rect width="26" height="18" fill="#2a2418"/>
+    <rect x="0"  y="0"  width="12" height="8" rx=".5" fill="#322c20" opacity=".9"/>
+    <rect x="14" y="0"  width="12" height="8" rx=".5" fill="#241e14" opacity=".9"/>
+    <rect x="7"  y="10" width="12" height="8" rx=".5" fill="#2e2818" opacity=".9"/>
+    <rect x="0"  y="10" width="5"  height="8" rx=".5" fill="#281e14" opacity=".9"/>
+  </pattern>
+  <!-- Wall stone blocks -->
+  <pattern id="wallstone" patternUnits="userSpaceOnUse" width="28" height="16">
+    <rect width="28" height="16" fill="#252018"/>
+    <rect x="0"  y="0"  width="13" height="7" rx=".5" fill="#2e2820" opacity=".85"/>
+    <rect x="15" y="0"  width="13" height="7" rx=".5" fill="#201c16" opacity=".85"/>
+    <rect x="7"  y="9"  width="13" height="7" rx=".5" fill="#2a2418" opacity=".85"/>
+    <rect x="22" y="9"  width="6"  height="7" rx=".5" fill="#1e1a12" opacity=".85"/>
+    <rect x="0"  y="9"  width="5"  height="7" rx=".5" fill="#2a2418" opacity=".85"/>
+  </pattern>
+  <pattern id="r-slate" patternUnits="userSpaceOnUse" width="16" height="11">
+    <rect width="16" height="11" fill="#282838"/>
+    <rect x="0" y="0"   width="8" height="5.5" fill="#323248" opacity=".7"/>
+    <rect x="8" y="5.5" width="8" height="5.5" fill="#1e1e2c" opacity=".7"/>
+  </pattern>
+  <pattern id="r-dark" patternUnits="userSpaceOnUse" width="16" height="11">
+    <rect width="16" height="11" fill="#1e1810"/>
+    <rect x="0" y="0"   width="8" height="5.5" fill="#282218" opacity=".7"/>
+    <rect x="8" y="5.5" width="8" height="5.5" fill="#161208" opacity=".7"/>
+  </pattern>
+  <pattern id="r-iron" patternUnits="userSpaceOnUse" width="16" height="11">
+    <rect width="16" height="11" fill="#303040"/>
+    <rect x="0" y="0"   width="8" height="5.5" fill="#3a3a50" opacity=".7"/>
+    <rect x="8" y="5.5" width="8" height="5.5" fill="#262638" opacity=".7"/>
+  </pattern>
+  <filter id="b2"><feGaussianBlur stdDeviation="2"/></filter>
+  <filter id="b4"><feGaussianBlur stdDeviation="4"/></filter>
+  <filter id="b8"><feGaussianBlur stdDeviation="8"/></filter>
+  <filter id="b14"><feGaussianBlur stdDeviation="14"/></filter>
+  <filter id="sd2"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".7"/></filter>
+  <filter id="sd4"><feDropShadow dx="2" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".75"/></filter>
+  <filter id="sd6"><feDropShadow dx="3" dy="5" stdDeviation="5" flood-color="#000" flood-opacity=".8"/></filter>
+  <filter id="orange-glow">
+    <feGaussianBlur stdDeviation="4" result="blur"/>
+    <feFlood flood-color="#c04008" flood-opacity=".55" result="color"/>
+    <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+    <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="red-glow">
+    <feGaussianBlur stdDeviation="5" result="blur"/>
+    <feFlood flood-color="#aa1008" flood-opacity=".5" result="color"/>
+    <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+    <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <radialGradient id="vign" cx="50%" cy="50%" r="68%">
+    <stop offset="50%" stop-color="transparent"/>
+    <stop offset="100%" stop-color="#000" stop-opacity=".85"/>
+  </radialGradient>
+  <!-- Gate arch gradient -->
+  <radialGradient id="gate-void" cx="50%" cy="100%" r="70%">
+    <stop offset="0%"  stop-color="#200808" stop-opacity=".9"/>
+    <stop offset="100%" stop-color="#060204"/>
+  </radialGradient>
+  <!-- Portcullis amber glow from within -->
+  <radialGradient id="inner-glow" cx="50%" cy="80%" r="60%">
+    <stop offset="0%"  stop-color="#c06008" stop-opacity=".35"/>
+    <stop offset="100%" stop-color="transparent"/>
+  </radialGradient>
+</defs>
+ 
+<!-- ══ SKY ══ -->
+<rect width="920" height="640" fill="url(#sky)"/>
+<rect x="0" y="200" width="920" height="440" fill="url(#ember)" opacity=".8"/>
+ 
+<!-- Stars -->
+<g fill="#e8d0b0" opacity=".6">
+  <circle cx="42" cy="28" r="1"/><circle cx="88" cy="16" r="1.2"/><circle cx="130" cy="42" r=".9"/>
+  <circle cx="178" cy="22" r="1"/><circle cx="224" cy="38" r=".8"/><circle cx="260" cy="14" r="1.1"/>
+  <circle cx="310" cy="30" r=".9"/><circle cx="356" cy="18" r="1"/><circle cx="390" cy="50" r=".8"/>
+  <circle cx="430" cy="24" r="1.2"/><circle cx="470" cy="12" r=".9"/><circle cx="510" cy="38" r="1"/>
+  <circle cx="560" cy="20" r=".8"/><circle cx="600" cy="44" r="1.1"/><circle cx="645" cy="16" r=".9"/>
+  <circle cx="68"  cy="60" r=".8"/><circle cx="114" cy="72" r="1"/><circle cx="162" cy="58" r=".9"/>
+</g>
+ 
+<!-- ══ BLOOD MOON ══ -->
+<circle cx="680" cy="92" r="58" fill="#aa0808" opacity=".18" filter="url(#b14)" class="moon-glow"/>
+<circle cx="680" cy="92" r="40" fill="#880606" opacity=".25" filter="url(#b8)"  class="moon-glow"/>
+<circle cx="680" cy="92" r="28" fill="url(#moon-body)" filter="url(#sd2)"/>
+<circle cx="670" cy="84" r="5"  fill="#600404" opacity=".5"/>
+<circle cx="686" cy="96" r="3"  fill="#500404" opacity=".4"/>
+ 
+<!-- ══ CLOUDS ══ -->
+<g class="cloud1">
+  <ellipse cx="155" cy="148" rx="100" ry="32" fill="#14081e" opacity=".9" filter="url(#b4)"/>
+  <ellipse cx="155" cy="142" rx="78"  ry="24" fill="#1a0a22" opacity=".85" filter="url(#b2)"/>
+  <ellipse cx="118" cy="152" rx="42"  ry="20" fill="#120818"/>
+  <ellipse cx="195" cy="150" rx="46"  ry="18" fill="#160a1e"/>
+</g>
+<g class="cloud2">
+  <ellipse cx="400" cy="95" rx="80"  ry="26" fill="#18091c" opacity=".88" filter="url(#b4)"/>
+  <ellipse cx="400" cy="89" rx="60"  ry="18" fill="#1e0c24" opacity=".82" filter="url(#b2)"/>
+</g>
+<g class="cloud3">
+  <ellipse cx="760" cy="160" rx="90" ry="28" fill="#1c0a10" opacity=".85" filter="url(#b4)"/>
+  <ellipse cx="760" cy="154" rx="70" ry="20" fill="#220c14" opacity=".8"  filter="url(#b2)"/>
+</g>
+<ellipse cx="220" cy="292" rx="180" ry="30" fill="#380808" opacity=".3" filter="url(#b8)"/>
+ 
+<!-- Crows -->
+<g class="crow" transform="translate(200,140)">
+  <path d="M0,0 Q-8,-5,-14,0 M0,0 Q8,-5,14,0 M0,0 L0,6" stroke="#0a0810" stroke-width="1.5" fill="none"/>
+</g>
+<g class="crow2" transform="translate(320,110)">
+  <path d="M0,0 Q-6,-4,-11,0 M0,0 Q6,-4,11,0 M0,0 L0,5" stroke="#0a0810" stroke-width="1.3" fill="none"/>
+</g>
+ 
+<!-- ══ MOUNTAINS ══ -->
+<polygon points="0,285 40,228 90,270 148,210 210,268 285,205 355,262 418,208 485,264 548,212 610,258 672,215 738,255 800,210 860,248 900,222 920,240 920,298 0,298"
+         fill="#06040c" opacity=".98"/>
+<polygon points="0,306 55,248 110,292 172,232 238,288 302,226 370,282 438,230 502,278 560,236 620,272 682,232 748,268 808,235 868,265 900,245 920,258 920,315 0,315"
+         fill="#0e0608" opacity=".96"/>
+<polygon points="0,312 55,254 110,298 172,238 238,294 302,232 370,288 438,236 502,284 560,242 620,278 682,238 748,274 808,241 868,271 900,251 920,264 920,318 0,318"
+         fill="#380c08" opacity=".5"/>
+<polygon points="0,325 70,265 138,308 200,252 272,305 342,248 410,298 475,252 538,295 598,255 660,292 724,258 786,290 840,260 900,282 920,270 920,335 0,335"
+         fill="#180a08" opacity=".98"/>
+ 
+<!-- ══ FOREST (right, large, clickable) ══ -->
+<g class="forest-group" id="bld-forest" onclick="openPanel('forest')">
+  <ellipse class="glow-ring" cx="790" cy="400" rx="130" ry="22" fill="rgba(40,100,40,.18)" stroke="rgba(60,140,60,.22)" stroke-width="2"/>
+  <g class="f-body">
+    <polygon points="575,335 592,278 606,330 620,270 636,325 648,260 664,318 676,252 694,310 708,248 722,305 736,255 752,300 764,245 778,298 790,242 804,292 818,250 832,288 844,255 858,282 870,260 882,276 896,265 910,274 920,268 920,480 575,480"
+             fill="#060c04" opacity=".98"/>
+    <polygon points="575,355 590,300 604,348 618,290 632,342 646,278 660,336 672,270 690,328 704,265 718,320 730,268 746,315 758,260 774,308 786,258 800,302 814,264 828,296 840,268 856,287 868,270 882,280 896,272 910,278 920,283 920,495 575,495"
+             fill="#0a1208" opacity=".96"/>
+    <polygon points="575,380 588,326 602,372 616,314 630,366 644,302 660,355 672,294 690,348 704,288 718,340 730,296 748,335 760,284 776,330 790,278 804,325 816,288 832,320 846,292 860,314 874,298 888,308 902,298 912,304 920,300 920,510 575,510"
+             fill="#0e1a0a" opacity="1"/>
+    <!-- Spindly trunks -->
+    <g fill="none" stroke="#06080a">
+      <line x1="585" y1="280" x2="585" y2="382" stroke-width="5"/>
+      <path d="M585,310 Q574,298 568,286" stroke-width="2"/>
+      <path d="M585,334 Q596,322 602,312" stroke-width="2"/>
+      <line x1="606" y1="262" x2="606" y2="374" stroke-width="4"/>
+      <path d="M606,290 Q616,278 622,268" stroke-width="2"/>
+      <path d="M606,318 Q596,308 590,300" stroke-width="1.5"/>
+      <line x1="626" y1="248" x2="626" y2="372" stroke-width="5"/>
+      <path d="M626,274 Q614,260 608,250" stroke-width="2"/>
+      <path d="M626,302 Q637,290 643,280" stroke-width="2"/>
+      <path d="M626,328 Q616,318 610,310" stroke-width="1.5"/>
+      <line x1="648" y1="238" x2="648" y2="374" stroke-width="4"/>
+      <path d="M648,264 Q658,252 664,242" stroke-width="2"/>
+      <path d="M648,292 Q638,280 632,272" stroke-width="1.5"/>
+      <path d="M648,318 Q657,307 663,298" stroke-width="1.5"/>
+      <line x1="668" y1="244" x2="668" y2="374" stroke-width="5"/>
+      <path d="M668,270 Q657,258 651,248" stroke-width="2"/>
+      <path d="M668,296 Q679,284 685,274" stroke-width="2"/>
+      <path d="M668,322 Q659,312 653,304" stroke-width="1.5"/>
+      <line x1="690" y1="232" x2="690" y2="374" stroke-width="4"/>
+      <path d="M690,256 Q700,244 706,234" stroke-width="2"/>
+      <path d="M690,282 Q680,270 674,260" stroke-width="1.5"/>
+      <path d="M690,308 Q700,298 705,288" stroke-width="2"/>
+      <line x1="710" y1="240" x2="710" y2="372" stroke-width="5"/>
+      <path d="M710,264 Q720,252 726,242" stroke-width="2"/>
+      <path d="M710,292 Q700,280 694,272" stroke-width="2"/>
+      <path d="M710,318 Q719,307 725,298" stroke-width="1.5"/>
+      <line x1="730" y1="232" x2="730" y2="372" stroke-width="4"/>
+      <path d="M730,255 Q720,244 714,234" stroke-width="1.5"/>
+      <path d="M730,280 Q739,268 745,258" stroke-width="2"/>
+      <path d="M730,306 Q721,296 715,288" stroke-width="1.5"/>
+      <line x1="752" y1="226" x2="752" y2="370" stroke-width="5"/>
+      <path d="M752,248 Q762,237 768,227" stroke-width="2"/>
+      <path d="M752,274 Q742,262 736,253" stroke-width="2"/>
+      <path d="M752,300 Q761,289 767,280" stroke-width="1.5"/>
+      <path d="M752,324 Q744,315 738,307" stroke-width="1.5"/>
+      <line x1="774" y1="220" x2="774" y2="368" stroke-width="4"/>
+      <path d="M774,242 Q764,231 758,221" stroke-width="2"/>
+      <path d="M774,268 Q783,257 789,248" stroke-width="2"/>
+      <path d="M774,294 Q765,285 759,276" stroke-width="1.5"/>
+      <line x1="794" y1="224" x2="794" y2="366" stroke-width="5"/>
+      <path d="M794,246 Q803,235 810,225" stroke-width="2"/>
+      <path d="M794,272 Q784,262 778,253" stroke-width="2"/>
+      <path d="M794,297 Q803,286 809,277" stroke-width="1.5"/>
+      <line x1="816" y1="228" x2="816" y2="366" stroke-width="4"/>
+      <path d="M816,250 Q825,240 831,230" stroke-width="2"/>
+      <path d="M816,277 Q807,267 801,258" stroke-width="1.5"/>
+      <line x1="836" y1="234" x2="836" y2="364" stroke-width="5"/>
+      <path d="M836,256 Q846,245 852,235" stroke-width="2"/>
+      <path d="M836,282 Q826,272 820,264" stroke-width="2"/>
+      <line x1="858" y1="242" x2="858" y2="362" stroke-width="4"/>
+      <path d="M858,264 Q867,254 872,244" stroke-width="2"/>
+      <line x1="878" y1="248" x2="878" y2="362" stroke-width="5"/>
+      <path d="M878,270 Q887,260 893,250" stroke-width="2"/>
+      <line x1="900" y1="256" x2="900" y2="358" stroke-width="4"/>
+    </g>
+    <!-- Conical crowns -->
+    <g fill="#060c04">
+      <polygon points="587,260 594,302 580,302"/>
+      <polygon points="608,242 615,288 601,288"/>
+      <polygon points="628,228 636,276 620,276"/>
+      <polygon points="650,220 658,268 642,268"/>
+      <polygon points="670,226 678,272 662,272"/>
+      <polygon points="692,214 701,264 683,264"/>
+      <polygon points="712,220 720,267 704,267"/>
+      <polygon points="732,214 740,262 724,262"/>
+      <polygon points="754,207 763,256 745,256"/>
+      <polygon points="776,202 785,250 767,250"/>
+      <polygon points="796,206 805,254 787,254"/>
+      <polygon points="818,210 826,256 810,256"/>
+      <polygon points="838,215 846,262 830,262"/>
+      <polygon points="860,222 868,268 852,268"/>
+      <polygon points="880,228 888,272 872,272"/>
+      <polygon points="902,235 909,276 895,276"/>
+    </g>
+    <!-- Foliage mass -->
+    <polygon points="575,340 590,308 604,338 618,298 634,332 648,288 664,325 678,282 696,320 710,275 724,314 738,278 756,308 770,268 786,305 798,262 814,300 828,270 844,294 858,274 872,288 886,276 900,284 912,278 920,282 920,460 575,460"
+             fill="#080e06" opacity=".9"/>
+    <!-- Wisps & eyes -->
+    <ellipse class="mist"  cx="720" cy="390" rx="80" ry="22" fill="#0a2008" opacity=".6" filter="url(#b8)"/>
+    <ellipse class="mist2" cx="820" cy="410" rx="60" ry="18" fill="#0c2810" opacity=".5" filter="url(#b8)"/>
+    <circle cx="695" cy="385" r="5" fill="#40b040" opacity=".22" filter="url(#b4)"/>
+    <circle cx="748" cy="395" r="4" fill="#30a030" opacity=".18" filter="url(#b4)"/>
+    <circle cx="810" cy="388" r="4" fill="#3ab038" opacity=".2"  filter="url(#b4)"/>
+    <circle cx="700" cy="410" r="2.5" fill="#d01010" opacity=".4" filter="url(#b2)"/>
+    <circle cx="707" cy="410" r="2.5" fill="#d01010" opacity=".4" filter="url(#b2)"/>
+    <circle cx="762" cy="420" r="2"   fill="#b80c0c" opacity=".35" filter="url(#b2)"/>
+    <circle cx="768" cy="420" r="2"   fill="#b80c0c" opacity=".35" filter="url(#b2)"/>
+    <rect x="575" y="440" width="345" height="60" fill="#040806" opacity=".8"/>
+  </g>
+  <text class="bld-label" x="748" y="532">THE DARKWOOD</text>
+</g>
+ 
+<!-- Horizon haze -->
+<rect x="0" y="315" width="920" height="50" fill="#380808" opacity=".12" filter="url(#b8)"/>
+<rect x="0" y="335" width="920" height="35" fill="#200404" opacity=".18" filter="url(#b4)"/>
+ 
+<!-- ══ GROUND PLANE ══ -->
+<polygon points="15,362 905,362 985,640 -65,640" fill="url(#ground)"/>
+<polygon points="15,362 905,362 985,640 -65,640" fill="url(#cobble)" opacity=".82"/>
+<line x1="15" y1="362" x2="905" y2="362" stroke="#2a2010" stroke-width="2" opacity=".6"/>
+<!-- Road through gate (north-south) -->
+<polygon points="400,362 520,362 574,640 346,640" fill="#0c0a06" opacity=".28"/>
+<polygon points="400,362 520,362 574,640 346,640" fill="url(#cobble)" opacity=".38"/>
+ 
+<!-- Ground mist -->
+<ellipse class="mist"  cx="280" cy="500" rx="180" ry="30" fill="#1a1208" opacity=".5" filter="url(#b8)"/>
+<ellipse class="mist2" cx="530" cy="520" rx="150" ry="25" fill="#181008" opacity=".45" filter="url(#b8)"/>
+ 
+<!-- ════════════════════════════════════════════════════ -->
+<!--   T O W N   W A L L S                              -->
+<!--   The wall follows a trapezoidal perspective shape  -->
+<!--   matching the ground plane tilt                    -->
+<!-- ════════════════════════════════════════════════════ -->
+ 
+<!-- ── WALL SHADOW (cast on ground) ── -->
+<polygon points="88,375 832,375 870,410 50,410" fill="#000" opacity=".3" filter="url(#b4)"/>
+ 
+<!-- ── REAR WALL (north face, top of map — full width) ── -->
+<!-- Wall body — runs full width between corner towers, with gate gap -->
+<!-- Left segment: left corner tower to gate -->
+<rect x="100" y="348" width="270" height="30" fill="url(#wallstone)" filter="url(#sd4)"/>
+<!-- Battlements left segment -->
+<g fill="#2a2418">
+  <rect x="102" y="336" width="14" height="14" rx="1"/><rect x="120" y="336" width="14" height="14" rx="1"/>
+  <rect x="138" y="336" width="14" height="14" rx="1"/><rect x="156" y="336" width="14" height="14" rx="1"/>
+  <rect x="174" y="336" width="14" height="14" rx="1"/><rect x="192" y="336" width="14" height="14" rx="1"/>
+  <rect x="210" y="336" width="14" height="14" rx="1"/><rect x="228" y="336" width="14" height="14" rx="1"/>
+  <rect x="246" y="336" width="14" height="14" rx="1"/><rect x="264" y="336" width="14" height="14" rx="1"/>
+  <rect x="282" y="336" width="14" height="14" rx="1"/><rect x="300" y="336" width="14" height="14" rx="1"/>
+  <rect x="318" y="336" width="14" height="14" rx="1"/><rect x="336" y="336" width="14" height="14" rx="1"/>
+  <rect x="354" y="336" width="14" height="14" rx="1"/>
+</g>
+<!-- Walkway top of left wall -->
+<rect x="100" y="344" width="270" height="5" fill="#1e1c14" opacity=".8"/>
+ 
+<!-- Right segment: gate to right corner tower -->
+<rect x="550" y="348" width="270" height="30" fill="url(#wallstone)" filter="url(#sd4)"/>
+<!-- Battlements right segment -->
+<g fill="#2a2418">
+  <rect x="552" y="336" width="14" height="14" rx="1"/><rect x="570" y="336" width="14" height="14" rx="1"/>
+  <rect x="588" y="336" width="14" height="14" rx="1"/><rect x="606" y="336" width="14" height="14" rx="1"/>
+  <rect x="624" y="336" width="14" height="14" rx="1"/><rect x="642" y="336" width="14" height="14" rx="1"/>
+  <rect x="660" y="336" width="14" height="14" rx="1"/><rect x="678" y="336" width="14" height="14" rx="1"/>
+  <rect x="696" y="336" width="14" height="14" rx="1"/><rect x="714" y="336" width="14" height="14" rx="1"/>
+  <rect x="732" y="336" width="14" height="14" rx="1"/><rect x="750" y="336" width="14" height="14" rx="1"/>
+  <rect x="768" y="336" width="14" height="14" rx="1"/><rect x="786" y="336" width="14" height="14" rx="1"/>
+  <rect x="804" y="336" width="14" height="14" rx="1"/>
+</g>
+<rect x="550" y="344" width="270" height="5" fill="#1e1c14" opacity=".8"/>
+ 
+<!-- ── SIDE WALLS (perspective, converging) ── -->
+<!-- Left wall (runs from top-left corner toward bottom-left) -->
+<!-- Wall face (front-facing, in perspective) -->
+<polygon points="88,378 130,378 160,530 48,530" fill="url(#wallstone)" filter="url(#sd4)"/>
+<!-- Wall top edge -->
+<polygon points="88,366 130,366 130,378 88,378" fill="#2e2820" opacity=".9"/>
+<!-- Battlements on left wall (perspective, simplified) -->
+<g fill="#252018" opacity=".9">
+  <polygon points="90,358 102,358 102,368 90,368"/>
+  <polygon points="106,359 116,359 116,369 106,369"/>
+  <polygon points="120,360 130,360 130,370 120,370"/>
+</g>
+<!-- Wall arrow slits -->
+<rect x="96"  y="395" width="6" height="14" rx="1" fill="#0a0806" opacity=".8"/>
+<rect x="104" y="415" width="6" height="14" rx="1" fill="#0a0806" opacity=".8"/>
+<rect x="110" y="438" width="6" height="14" rx="1" fill="#0a0806" opacity=".8"/>
+ 
+<!-- Right wall (perspective right side) -->
+<polygon points="790,378 832,378 872,530 760,530" fill="url(#wallstone)" filter="url(#sd4)"/>
+<polygon points="790,366 832,366 832,378 790,378" fill="#2e2820" opacity=".9"/>
+<g fill="#252018" opacity=".9">
+  <polygon points="790,358 802,358 802,368 790,368"/>
+  <polygon points="808,359 818,359 818,369 808,369"/>
+  <polygon points="820,360 832,360 832,370 820,370"/>
+</g>
+<rect x="808" y="395" width="6" height="14" rx="1" fill="#0a0806" opacity=".8"/>
+<rect x="816" y="415" width="6" height="14" rx="1" fill="#0a0806" opacity=".8"/>
+<rect x="822" y="438" width="6" height="14" rx="1" fill="#0a0806" opacity=".8"/>
+ 
+<!-- ── CORNER TOWERS (4 corners) ── -->
+<!-- CORNER: Top-Left -->
+<g filter="url(#sd6)">
+  <rect x="72" y="318" width="44" height="60" rx="1" fill="url(#tower-face)"/>
+  <!-- Tower side (right face, darker) -->
+  <polygon points="116,318 134,326 134,378 116,378" fill="#181410" opacity=".9"/>
+  <!-- Battlements top -->
+  <g fill="#302a20">
+    <rect x="74"  y="307" width="10" height="13" rx="1"/>
+    <rect x="88"  y="307" width="10" height="13" rx="1"/>
+    <rect x="102" y="307" width="10" height="13" rx="1"/>
+  </g>
+  <rect x="72" y="316" width="44" height="5" fill="#201c14" opacity=".8"/>
+  <!-- Arrow slits -->
+  <rect x="83"  y="332" width="5" height="14" rx="1" fill="#0a0806" opacity=".9"/>
+  <rect x="97"  y="350" width="5" height="14" rx="1" fill="#0a0806" opacity=".9"/>
+  <!-- Wall torch -->
+  <rect x="88" y="315" width="3" height="7" rx="1" fill="#3a2010"/>
+  <circle cx="89" cy="313" r="4" fill="#b04008" opacity=".9" class="flame" filter="url(#orange-glow)"/>
+</g>
+ 
+<!-- CORNER: Top-Right -->
+<g filter="url(#sd6)">
+  <rect x="804" y="318" width="44" height="60" rx="1" fill="url(#tower-face)"/>
+  <polygon points="804,318 786,326 786,378 804,378" fill="#181410" opacity=".9"/>
+  <g fill="#302a20">
+    <rect x="806" y="307" width="10" height="13" rx="1"/>
+    <rect x="820" y="307" width="10" height="13" rx="1"/>
+    <rect x="834" y="307" width="10" height="13" rx="1"/>
+  </g>
+  <rect x="804" y="316" width="44" height="5" fill="#201c14" opacity=".8"/>
+  <rect x="832" y="332" width="5" height="14" rx="1" fill="#0a0806" opacity=".9"/>
+  <rect x="818" y="350" width="5" height="14" rx="1" fill="#0a0806" opacity=".9"/>
+  <rect x="828" y="315" width="3" height="7" rx="1" fill="#3a2010"/>
+  <circle cx="829" cy="313" r="4" fill="#b04008" opacity=".9" class="flame2" filter="url(#orange-glow)"/>
+</g>
+ 
+<!-- CORNER: Bottom-Left (larger, perspective) -->
+<g filter="url(#sd6)">
+  <polygon points="30,505 90,505 110,570 10,570" fill="url(#tower-face)"/>
+  <polygon points="90,505 110,490 128,555 110,570" fill="#181410" opacity=".9"/>
+  <!-- Battlements (perspective) -->
+  <g fill="#302a20">
+    <polygon points="32,494 46,494 46,506 32,506"/>
+    <polygon points="50,494 64,494 64,506 50,506"/>
+    <polygon points="68,494 82,494 82,506 68,506"/>
+  </g>
+  <polygon points="30,503 90,503 90,507 30,507" fill="#201c14" opacity=".8"/>
+  <rect x="48" y="522" width="6" height="16" rx="1" fill="#0a0806" opacity=".9"/>
+  <rect x="38" y="318" width="3" height="7" rx="1" fill="#3a2010"/>
+  <circle cx="39" cy="316" r="4" fill="#b04008" opacity=".85" class="flame3" filter="url(#orange-glow)"/>
+</g>
+ 
+<!-- CORNER: Bottom-Right (larger, perspective) -->
+<g filter="url(#sd6)">
+  <polygon points="830,505 890,505 910,570 810,570" fill="url(#tower-face)"/>
+  <polygon points="830,505 812,490 794,555 810,570" fill="#181410" opacity=".9"/>
+  <g fill="#302a20">
+    <polygon points="832,494 846,494 846,506 832,506"/>
+    <polygon points="850,494 864,494 864,506 850,506"/>
+    <polygon points="868,494 882,494 882,506 868,506"/>
+  </g>
+  <polygon points="830,503 890,503 890,507 830,507" fill="#201c14" opacity=".8"/>
+  <rect x="856" y="522" width="6" height="16" rx="1" fill="#0a0806" opacity=".9"/>
+  <rect x="878" y="318" width="3" height="7" rx="1" fill="#3a2010"/>
+  <circle cx="879" cy="316" r="4" fill="#b04008" opacity=".85" class="flame" filter="url(#orange-glow)"/>
+</g>
+ 
+<!-- ══════════════════════════════════════════ -->
+<!--   N O R T H   G A T E  (clickable)       -->
+<!-- ══════════════════════════════════════════ -->
+<g class="gate-group" id="bld-gate" onclick="openPanel('gate')">
+  <ellipse class="glow-ring" cx="460" cy="358" rx="85" ry="16" fill="rgba(200,144,10,.2)" stroke="rgba(200,144,10,.4)" stroke-width="2"/>
+ 
+  <g class="g-body">
+    <!-- Gate towers (flanking) — left -->
+    <rect x="370" y="295" width="52" height="85" rx="1" fill="url(#tower-face)" filter="url(#sd6)"/>
+    <!-- Left tower right side face -->
+    <polygon points="422,295 444,305 444,380 422,380" fill="#161210" opacity=".92"/>
+    <!-- Left tower battlements -->
+    <g fill="#302a20">
+      <rect x="372" y="282" width="11" height="14" rx="1"/>
+      <rect x="387" y="282" width="11" height="14" rx="1"/>
+      <rect x="402" y="282" width="11" height="14" rx="1"/>
+      <rect x="417" y="282" width="7"  height="14" rx="1"/>
+    </g>
+    <rect x="370" y="292" width="52" height="5" fill="#201c14" opacity=".85"/>
+    <!-- Left tower arrow slits -->
+    <rect x="382" y="314" width="5" height="16" rx="1" fill="#080604" opacity=".9"/>
+    <rect x="396" y="334" width="5" height="16" rx="1" fill="#080604" opacity=".9"/>
+    <rect x="410" y="314" width="5" height="16" rx="1" fill="#080604" opacity=".9"/>
+    <!-- Left tower top torch -->
+    <rect x="393" y="283" width="3" height="8" rx="1" fill="#3a2010"/>
+    <circle cx="395" cy="281" r="5" fill="#c04808" opacity=".95" class="flame" filter="url(#orange-glow)"/>
+ 
+    <!-- Gate towers (flanking) — right -->
+    <rect x="498" y="295" width="52" height="85" rx="1" fill="url(#tower-face)" filter="url(#sd6)"/>
+    <!-- Right tower left side face -->
+    <polygon points="498,295 476,305 476,380 498,380" fill="#161210" opacity=".92"/>
+    <!-- Right tower battlements -->
+    <g fill="#302a20">
+      <rect x="500" y="282" width="11" height="14" rx="1"/>
+      <rect x="515" y="282" width="11" height="14" rx="1"/>
+      <rect x="530" y="282" width="11" height="14" rx="1"/>
+      <rect x="541" y="282" width="9"  height="14" rx="1"/>
+    </g>
+    <rect x="498" y="292" width="52" height="5" fill="#201c14" opacity=".85"/>
+    <!-- Right tower arrow slits -->
+    <rect x="522" y="314" width="5" height="16" rx="1" fill="#080604" opacity=".9"/>
+    <rect x="536" y="334" width="5" height="16" rx="1" fill="#080604" opacity=".9"/>
+    <rect x="507" y="314" width="5" height="16" rx="1" fill="#080604" opacity=".9"/>
+    <!-- Right tower top torch -->
+    <rect x="522" y="283" width="3" height="8" rx="1" fill="#3a2010"/>
+    <circle cx="524" cy="281" r="5" fill="#c04808" opacity=".95" class="flame2" filter="url(#orange-glow)"/>
+ 
+    <!-- Gate arch opening — the dark void -->
+    <!-- Arch frame -->
+    <rect x="422" y="314" width="76" height="70" rx="0" fill="#100c08" stroke="#2a2018" stroke-width="2"/>
+    <!-- Gothic pointed arch top -->
+    <path d="M422,335 Q422,305 460,298 Q498,305 498,335" fill="#0c0808" stroke="#2a2018" stroke-width="2"/>
+    <!-- Gate void interior -->
+    <rect x="424" y="314" width="72" height="66" fill="url(#gate-void)"/>
+    <path d="M424,332 Q424,304 460,298 Q496,304 496,332" fill="url(#gate-void)"/>
+    <!-- Inner amber glow (torchlight from within) -->
+    <rect x="424" y="330" width="72" height="50" fill="url(#inner-glow)" opacity=".7"/>
+    <!-- Portcullis grid -->
+    <g stroke="#2a1e0e" stroke-width="2" opacity=".75" class="portcullis-glow">
+      <!-- Vertical bars -->
+      <line x1="432" y1="300" x2="432" y2="380"/>
+      <line x1="446" y1="300" x2="446" y2="380"/>
+      <line x1="460" y1="300" x2="460" y2="380"/>
+      <line x1="474" y1="300" x2="474" y2="380"/>
+      <line x1="488" y1="300" x2="488" y2="380"/>
+      <!-- Horizontal bars -->
+      <line x1="422" y1="320" x2="498" y2="320"/>
+      <line x1="422" y1="338" x2="498" y2="338"/>
+      <line x1="422" y1="356" x2="498" y2="356"/>
+      <line x1="422" y1="372" x2="498" y2="372"/>
+    </g>
+    <!-- Portcullis spikes at bottom -->
+    <g fill="#2a1e0e" opacity=".8">
+      <polygon points="429,376 435,376 432,384"/>
+      <polygon points="443,376 449,376 446,384"/>
+      <polygon points="457,376 463,376 460,384"/>
+      <polygon points="471,376 477,376 474,384"/>
+      <polygon points="485,376 491,376 488,384"/>
+    </g>
+    <!-- Gate arch keystone -->
+    <polygon points="452,297 460,289 468,297" fill="#3a3028"/>
+    <!-- Iron ring handles on portcullis -->
+    <circle cx="440" cy="350" r="4" fill="none" stroke="#2a1a08" stroke-width="2"/>
+    <circle cx="480" cy="350" r="4" fill="none" stroke="#2a1a08" stroke-width="2"/>
+    <!-- Wall segment connecting towers -->
+    <rect x="370" y="348" width="52" height="30"  fill="url(#wallstone)"/>
+    <rect x="498" y="348" width="52" height="30"  fill="url(#wallstone)"/>
+    <!-- Skull / warning above gate -->
+    <text x="460" y="312" text-anchor="middle" font-size="11" fill="#4a3820" opacity=".7" font-family="serif">☠</text>
+    <!-- Gate name sign (iron plaque) -->
+    <rect x="430" y="270" width="60" height="14" rx="1" fill="#0e0a04" stroke="#3a2a10" stroke-width="1.5"/>
+    <text x="460" y="280" text-anchor="middle" font-family="Crimson Text,serif" font-style="italic" font-size="7.5" fill="#7a5820">North Gate</text>
+    <!-- Chain detail -->
+    <line x1="432" y1="280" x2="432" y2="296" stroke="#2a2010" stroke-width="2.5"/>
+    <line x1="488" y1="280" x2="488" y2="296" stroke="#2a2010" stroke-width="2.5"/>
+    <!-- Torch brackets flanking arch -->
+    <rect x="418" y="332" width="3" height="10" rx="1" fill="#2a1808"/>
+    <circle cx="419" cy="330" r="5" fill="#c04808" opacity=".9" class="flame3" filter="url(#orange-glow)"/>
+    <rect x="499" y="332" width="3" height="10" rx="1" fill="#2a1808"/>
+    <circle cx="500" cy="330" r="5" fill="#c04808" opacity=".9" class="flame"  filter="url(#orange-glow)"/>
+  </g>
+  <text class="bld-label" x="460" y="400">NORTH GATE</text>
+</g>
+ 
+<!-- ══ FOUNTAIN ══ -->
+<ellipse cx="450" cy="492" rx="65" ry="30" fill="#100e1a" stroke="#2a2030" stroke-width="2.5"/>
+<ellipse cx="450" cy="492" rx="60" ry="26" fill="#0c0a16" stroke="#1e1828" stroke-width="1.5"/>
+<ellipse cx="450" cy="492" rx="55" ry="22" fill="#0e0e20" opacity=".9"/>
+<ellipse cx="440" cy="488" rx="22" ry="8" fill="#141428" opacity=".6"/>
+<ellipse cx="464" cy="496" rx="16" ry="6" fill="#101020" opacity=".55"/>
+<rect x="445" y="460" width="10" height="34" rx="2" fill="#3a3028"/>
+<ellipse cx="450" cy="460" rx="11" ry="5" fill="#4a3e30"/>
+<circle  cx="450" cy="456" r="6"  fill="#5a4838"/>
+<path d="M450,459 Q430,447 417,457" fill="none" stroke="#2a3040" stroke-width="1.5" opacity=".6"/>
+<path d="M450,459 Q470,447 483,457" fill="none" stroke="#2a3040" stroke-width="1.5" opacity=".6"/>
+<text x="450" y="530" text-anchor="middle" font-family="Crimson Text,serif" font-style="italic" font-size="8.5" fill="#3a3020">Dead Fountain</text>
+ 
+<!-- Lamp posts -->
+<g stroke="#2a2018" fill="#2a2018">
+  <line x1="300" y1="388" x2="297" y2="435" stroke-width="2.5"/>
+  <path d="M297,388 Q290,380 285,388" fill="none" stroke-width="2"/>
+  <circle cx="286" cy="388" r="5" fill="#c06008" opacity=".7" filter="url(#b2)"/>
+  <circle cx="286" cy="388" r="3" fill="#e08010" opacity=".8"/>
+  <line x1="600" y1="388" x2="603" y2="435" stroke-width="2.5"/>
+  <path d="M603,388 Q610,380 615,388" fill="none" stroke-width="2"/>
+  <circle cx="614" cy="388" r="5" fill="#c06008" opacity=".7" filter="url(#b2)"/>
+  <circle cx="614" cy="388" r="3" fill="#e08010" opacity=".8"/>
+</g>
+ 
+<!-- Dead corner trees -->
+<g fill="none" stroke="#1a1410" stroke-width="2">
+  <line x1="162" y1="428" x2="162" y2="398"/><path d="M162,416 Q152,408 146,400"/><path d="M162,408 Q170,400 176,396"/>
+  <line x1="756" y1="428" x2="756" y2="398"/><path d="M756,416 Q766,408 772,400"/><path d="M756,408 Q748,400 742,396"/>
+</g>
+ 
+<!-- ══════════════ BUILDINGS ══════════════ -->
+ 
+<!-- ── TOWN HALL ── -->
+<g class="building-group" id="bld-townhall" onclick="openPanel('townhall')" transform="translate(-80,0)">
+  <ellipse class="glow-ring" cx="450" cy="420" rx="80" ry="13" fill="rgba(200,100,10,.15)" stroke="rgba(200,100,10,.3)" stroke-width="1.5"/>
+  <ellipse cx="458" cy="440" rx="70" ry="13" fill="#000" opacity=".45"/>
+  <g class="b-body">
+    <polygon points="508,368 530,378 530,445 508,440" fill="#1e1810" opacity=".95"/>
+    <rect x="392" y="368" width="116" height="72" rx="1" fill="url(#dstone)" filter="url(#sd4)"/>
+    <rect x="400" y="370" width="7"  height="70" rx="1" fill="#5a5040" opacity=".6"/>
+    <rect x="414" y="370" width="7"  height="70" rx="1" fill="#4e4438" opacity=".55"/>
+    <rect x="481" y="370" width="7"  height="70" rx="1" fill="#4e4438" opacity=".55"/>
+    <rect x="495" y="370" width="7"  height="70" rx="1" fill="#5a5040" opacity=".6"/>
+    <rect x="394" y="435" width="114" height="6" rx="1" fill="#302820"/>
+    <rect x="388" y="440" width="120" height="5" rx="1" fill="#282018"/>
+    <rect x="435" y="400" width="30" height="40" rx="15 15 0 0" fill="#080406"/>
+    <rect x="437" y="402" width="26" height="36" rx="13 13 0 0" fill="#100808" stroke="#2a1e10" stroke-width="1"/>
+    <path d="M459,420 Q462,416 459,412" fill="none" stroke="#5a4020" stroke-width="1.5"/>
+    <rect x="402" y="382" width="22" height="22" rx="11 11 0 0" fill="#0e1018" stroke="#3a3028" stroke-width="1.5"/>
+    <rect x="478" y="382" width="22" height="22" rx="11 11 0 0" fill="#0e1018" stroke="#3a3028" stroke-width="1.5"/>
+    <rect x="404" y="390" width="18" height="12" rx="9 9 0 0" fill="#5a2a04" opacity=".6" filter="url(#b2)"/>
+    <rect x="480" y="390" width="18" height="12" rx="9 9 0 0" fill="#5a2a04" opacity=".6" filter="url(#b2)"/>
+    <polygon points="508,368 530,378 480,348 450,338" fill="#181420" opacity=".9"/>
+    <polygon points="388,368 450,328 512,368" fill="url(#r-slate)" filter="url(#sd4)"/>
+    <polygon points="388,368 450,328 512,368" fill="none" stroke="#141220" stroke-width="1.5"/>
+    <rect x="432" y="335" width="36" height="38" rx="1" fill="url(#dstone)" filter="url(#sd2)"/>
+    <rect x="438" y="344" width="10" height="16" rx="5 5 0 0" fill="#0a0610" stroke="#2a2018" stroke-width="1"/>
+    <rect x="452" y="344" width="10" height="16" rx="5 5 0 0" fill="#0a0610" stroke="#2a2018" stroke-width="1"/>
+    <polygon points="428,336 450,298 472,336" fill="url(#r-iron)" filter="url(#sd4)"/>
+    <polygon points="428,336 450,298 472,336" fill="none" stroke="#101020" stroke-width="1.5"/>
+    <line x1="450" y1="298" x2="450" y2="280" stroke="#3a3030" stroke-width="1.5"/>
+    <path d="M450,288 L460,284 L450,288 L440,292 Z" fill="#3a3030"/>
+    <circle cx="390" cy="368" r="4" fill="#282018"/>
+    <circle cx="510" cy="368" r="4" fill="#282018"/>
+  </g>
+  <text class="bld-label" x="450" y="458">TOWN HALL</text>
+</g>
+ 
+<!-- ── CHURCH ── -->
+<g class="building-group" id="bld-church" onclick="openPanel('church')">
+  <ellipse class="glow-ring" cx="638" cy="425" rx="72" ry="12" fill="rgba(180,140,220,.12)" stroke="rgba(180,140,220,.25)" stroke-width="1.5"/>
+  <ellipse cx="644" cy="442" rx="62" ry="12" fill="#000" opacity=".42"/>
+  <g class="b-body">
+    <polygon points="696,378 712,388 712,447 696,447" fill="#181414" opacity=".95"/>
+    <rect x="596" y="378" width="100" height="69" rx="1" fill="url(#dstone)" filter="url(#sd4)"/>
+    <rect x="600" y="443" width="96"  height="5"  rx="1" fill="#282018"/>
+    <rect x="629" y="400" width="24"  height="34" rx="12 12 0 0" fill="#060404" stroke="#2a1e10" stroke-width="1"/>
+    <rect x="602" y="390" width="18"  height="26" rx="9 9 0 0"   fill="#0c0e14" stroke="#302830" stroke-width="1.5"/>
+    <rect x="676" y="390" width="18"  height="26" rx="9 9 0 0"   fill="#0c0e14" stroke="#302830" stroke-width="1.5"/>
+    <circle cx="641" cy="392" r="12" fill="#10101e" stroke="#3a3040" stroke-width="1.5"/>
+    <circle cx="641" cy="392" r="8"  fill="#0c0c18"/>
+    <circle cx="641" cy="392" r="6"  fill="#180828" opacity=".5" filter="url(#b2)"/>
+    <line x1="641" y1="380" x2="641" y2="404" stroke="#2a2838" stroke-width=".8"/>
+    <line x1="629" y1="392" x2="653" y2="392" stroke="#2a2838" stroke-width=".8"/>
+    <polygon points="696,378 712,388 658,365 641,356" fill="#141020" opacity=".9"/>
+    <polygon points="592,380 641,352 690,380" fill="url(#r-iron)" filter="url(#sd4)"/>
+    <polygon points="592,380 641,352 690,380" fill="none" stroke="#0e0c18" stroke-width="1.5"/>
+    <rect x="633" y="350" width="16" height="34" rx="1" fill="url(#dstone)" filter="url(#sd2)"/>
+    <polygon points="630,351 641,316 652,351" fill="url(#r-iron)" filter="url(#sd4)"/>
+    <polygon points="630,351 641,316 652,351" fill="none" stroke="#0a0818" stroke-width="1.2"/>
+    <line x1="641" y1="312" x2="641" y2="325" stroke="#3a3040" stroke-width="2.5"/>
+    <line x1="634" y1="317" x2="648" y2="317" stroke="#3a3040" stroke-width="2.5"/>
+    <circle cx="594" cy="380" r="4" fill="#1e1818"/>
+    <circle cx="688" cy="380" r="4" fill="#1e1818"/>
+  </g>
+  <text class="bld-label" x="638" y="460">THE CHAPEL</text>
+</g>
+ 
+<!-- ── MARKET ── -->
+<g class="building-group" id="bld-market" onclick="openPanel('market')">
+  <ellipse class="glow-ring" cx="234" cy="472" rx="84" ry="15" fill="rgba(180,140,10,.12)" stroke="rgba(180,140,10,.25)" stroke-width="1.5"/>
+  <ellipse cx="240" cy="491" rx="74" ry="14" fill="#000" opacity=".4"/>
+  <g class="b-body">
+    <polygon points="302,420 320,430 320,496 302,496" fill="#181410" opacity=".95"/>
+    <rect x="170" y="420" width="132" height="76" rx="1" fill="url(#stone)" filter="url(#sd4)"/>
+    <polygon points="166,430 306,430 306,443 166,447" fill="#3a1808" opacity=".9"/>
+    <path d="M195,430 L192,447" stroke="#2a1004" stroke-width="1.5" opacity=".7"/>
+    <path d="M228,430 L224,447" stroke="#2a1004" stroke-width="1.5" opacity=".7"/>
+    <path d="M262,430 L258,447" stroke="#2a1004" stroke-width="1.5" opacity=".7"/>
+    <path d="M292,430 L290,447" stroke="#2a1004" stroke-width="1.5" opacity=".7"/>
+    <polygon points="166,447 176,441 186,447 196,441 206,447 216,443 226,447 236,442 246,447 256,442 266,447 276,443 286,447 296,442 306,447 306,452 166,452" fill="#300e06"/>
+    <rect x="178" y="454" width="34" height="26" rx="1" fill="#1a1008" stroke="#2a2010" stroke-width="1.5"/>
+    <line x1="178" y1="462" x2="212" y2="462" stroke="#241a0e" stroke-width="2" opacity=".8"/>
+    <line x1="185" y1="454" x2="185" y2="480" stroke="#1e1608" stroke-width="1.5" opacity=".7"/>
+    <rect x="252" y="454" width="34" height="26" rx="1" fill="#1a1008" stroke="#2a2010" stroke-width="1.5"/>
+    <line x1="252" y1="462" x2="286" y2="462" stroke="#241a0e" stroke-width="2" opacity=".8"/>
+    <rect x="262" y="459" width="8" height="10" rx="1" fill="#703808" opacity=".55" filter="url(#b2)"/>
+    <rect x="218" y="462" width="30" height="34" rx="1" fill="#100a04" stroke="#2a1808" stroke-width="1.5"/>
+    <line x1="218" y1="476" x2="248" y2="476" stroke="#2a1808" stroke-width="2" opacity=".8"/>
+    <circle cx="244" cy="478" r="2.5" fill="#4a3820"/>
+    <rect x="206" y="411" width="60" height="14" rx="1" fill="#1e1008" stroke="#3a2010" stroke-width="1"/>
+    <text x="236" y="421" text-anchor="middle" font-family="Crimson Text,serif" font-size="7.5" font-style="italic" fill="#6a5020">The Market</text>
+    <polygon points="302,420 320,430 252,400 234,392" fill="#281e10" opacity=".88"/>
+    <polygon points="162,422 234,390 306,422" fill="url(#r-dark)" filter="url(#sd4)"/>
+    <polygon points="162,422 234,390 306,422" fill="none" stroke="#1e1608" stroke-width="1.5"/>
+    <rect x="256" y="394" width="13" height="20" rx="1" fill="#3a3020"/>
+    <rect x="254" y="391" width="17" height="5"  rx="1" fill="#4a3e28"/>
+    <ellipse class="smoke" cx="262" cy="389" rx="5" ry="3" fill="#2a2820" opacity=".4"/>
+  </g>
+  <text class="bld-label" x="234" y="512">THE MARKET</text>
+</g>
+ 
+<!-- ── INN ── -->
+<g class="building-group" id="bld-inn" onclick="openPanel('inn')">
+  <ellipse class="glow-ring" cx="636" cy="497" rx="88" ry="16" fill="rgba(180,80,10,.13)" stroke="rgba(180,80,10,.28)" stroke-width="1.5"/>
+  <ellipse cx="642" cy="516" rx="76" ry="15" fill="#000" opacity=".38"/>
+  <g class="b-body">
+    <polygon points="704,436 722,446 722,518 704,518" fill="#1a1208" opacity=".95"/>
+    <rect x="572" y="436" width="132" height="82" rx="1" fill="url(#stone)" filter="url(#sd4)"/>
+    <rect x="572" y="436" width="132" height="38" rx="1" fill="#3a2c18" opacity=".45"/>
+    <line x1="572" y1="456" x2="704" y2="456" stroke="#1e1408" stroke-width="2"   opacity=".5"/>
+    <line x1="614" y1="436" x2="610" y2="474" stroke="#1e1408" stroke-width="2"   opacity=".5"/>
+    <line x1="656" y1="436" x2="656" y2="474" stroke="#1e1408" stroke-width="2"   opacity=".5"/>
+    <rect x="580" y="443" width="24" height="18" rx="1" fill="#b04808" stroke="#5a3010" stroke-width="1.5" opacity=".85" filter="url(#b2)"/>
+    <rect x="678" y="443" width="24" height="18" rx="1" fill="#b04808" stroke="#5a3010" stroke-width="1.5" opacity=".85" filter="url(#b2)"/>
+    <rect x="580" y="481" width="24" height="18" rx="1" fill="#100e08" stroke="#2a2010" stroke-width="1.5"/>
+    <rect x="678" y="481" width="24" height="18" rx="1" fill="#100e08" stroke="#2a2010" stroke-width="1.5"/>
+    <rect x="620" y="477" width="18" height="34" rx="1" fill="#0c0804"/>
+    <rect x="639" y="477" width="18" height="34" rx="1" fill="#0c0804"/>
+    <rect x="621" y="478" width="16" height="32" rx="1" fill="#141008" stroke="#2a1808" stroke-width="1"/>
+    <rect x="640" y="478" width="16" height="32" rx="1" fill="#141008" stroke="#2a1808" stroke-width="1"/>
+    <line x1="621" y1="493" x2="637" y2="493" stroke="#2a1808" stroke-width="1.5" opacity=".7"/>
+    <line x1="640" y1="493" x2="656" y2="493" stroke="#2a1808" stroke-width="1.5" opacity=".7"/>
+    <rect x="613" y="474" width="3" height="9" rx="1" fill="#3a2010"/>
+    <circle cx="615" cy="472" r="5" fill="#c04808" opacity=".9" class="flame" filter="url(#orange-glow)"/>
+    <rect x="659" y="474" width="3" height="9" rx="1" fill="#3a2010"/>
+    <circle cx="661" cy="472" r="5" fill="#c04808" opacity=".9" class="flame2" filter="url(#orange-glow)"/>
+    <line x1="622" y1="428" x2="622" y2="440" stroke="#3a2810" stroke-width="2"/>
+    <line x1="622" y1="430" x2="640" y2="430" stroke="#3a2810" stroke-width="1.5"/>
+    <rect x="604" y="417" width="46" height="16" rx="1" fill="#140c04" stroke="#3a2010" stroke-width="1.5"/>
+    <text x="627" y="428" text-anchor="middle" font-family="Crimson Text,serif" font-size="7" font-style="italic" fill="#7a5828">The Black Boar</text>
+    <polygon points="704,436 722,446 650,414 634,406" fill="#1c1408" opacity=".9"/>
+    <polygon points="568,438 634,406 700,438" fill="url(#r-dark)" filter="url(#sd4)"/>
+    <polygon points="568,438 634,406 700,438" fill="none" stroke="#181008" stroke-width="1.5"/>
+    <rect x="588" y="409" width="13" height="24" rx="1" fill="#3a3020"/>
+    <rect x="586" y="406" width="17" height="5"  rx="1" fill="#4a3e28"/>
+    <ellipse class="smoke"  cx="594" cy="404" rx="5" ry="4" fill="#2a2818" opacity=".65"/>
+    <ellipse class="smoke2" cx="592" cy="396" rx="7" ry="4" fill="#222018" opacity=".45"/>
+  </g>
+  <text class="bld-label" x="634" y="538">INN &amp; TAVERN</text>
+</g>
+ 
+<!-- ── BLACKSMITH ── -->
+<g class="building-group" id="bld-blacksmith" onclick="openPanel('blacksmith')">
+  <ellipse class="glow-ring" cx="224" cy="565" rx="96" ry="18" fill="rgba(200,60,10,.13)" stroke="rgba(200,60,10,.25)" stroke-width="1.5"/>
+  <ellipse cx="230" cy="584" rx="83" ry="16" fill="#000" opacity=".42"/>
+  <g class="b-body">
+    <polygon points="300,518 318,528 318,598 300,598" fill="#14100a" opacity=".95"/>
+    <rect x="152" y="518" width="148" height="80" rx="1" fill="url(#dstone)" filter="url(#sd6)"/>
+    <rect x="152" y="518" width="148" height="80" rx="1" fill="#020100" opacity=".4"/>
+    <rect x="194" y="552" width="62" height="46" rx="1" fill="#0e0604"/>
+    <rect x="196" y="554" width="58" height="42" rx="1" fill="#901c00" opacity=".8" filter="url(#b2)"/>
+    <rect x="200" y="558" width="50" height="34" rx="1" fill="#c02800" opacity=".6"/>
+    <rect x="204" y="562" width="42" height="26" rx="1" fill="#e04000" opacity=".4"/>
+    <ellipse cx="225" cy="596" rx="44" ry="12" fill="#901800" opacity=".16" filter="url(#b4)"/>
+    <rect x="206" y="570" width="6"  height="22" rx="1" fill="#10080a"/>
+    <rect x="234" y="566" width="6"  height="26" rx="1" fill="#10080a"/>
+    <rect x="232" y="564" width="12" height="6"  rx="1" fill="#141010"/>
+    <rect x="215" y="588" width="32" height="8"  rx="1" fill="#1a1412"/>
+    <rect x="219" y="583" width="24" height="7"  rx="1" fill="#221c16"/>
+    <rect x="160" y="529" width="28" height="22" rx="1" fill="#100608" stroke="#2a2018" stroke-width="1.5"/>
+    <line x1="174" y1="529" x2="174" y2="551" stroke="#2a2018" stroke-width="1.5" opacity=".9"/>
+    <line x1="160" y1="539" x2="188" y2="539" stroke="#2a2018" stroke-width="1.5" opacity=".9"/>
+    <rect x="162" y="531" width="24" height="18" rx="1" fill="#8a1400" opacity=".4" filter="url(#b2)"/>
+    <rect x="268" y="529" width="28" height="22" rx="1" fill="#100608" stroke="#2a2018" stroke-width="1.5"/>
+    <line x1="282" y1="529" x2="282" y2="551" stroke="#2a2018" stroke-width="1.5" opacity=".9"/>
+    <rect x="182" y="508" width="94" height="15" rx="1" fill="#0e0a04" stroke="#2a1808" stroke-width="1.5"/>
+    <path d="M182,508 L176,504 L176,512 L182,512" fill="none" stroke="#2a1808" stroke-width="1"/>
+    <path d="M276,508 L282,504 L282,512 L276,512" fill="none" stroke="#2a1808" stroke-width="1"/>
+    <text x="229" y="519" text-anchor="middle" font-family="Crimson Text,serif" font-size="8" font-style="italic" fill="#7a5020">Gorren's Forge</text>
+    <polygon points="300,518 318,528 244,498 224,490" fill="#1a1208" opacity=".9"/>
+    <polygon points="146,520 224,489 302,520" fill="url(#r-dark)" filter="url(#sd6)"/>
+    <polygon points="146,520 224,489 302,520" fill="none" stroke="#141008" stroke-width="1.5"/>
+    <rect x="238" y="491" width="22" height="30" rx="1" fill="#2a2418" stroke="#1a1808" stroke-width="1" filter="url(#sd2)"/>
+    <rect x="235" y="488" width="28" height="6"  rx="1" fill="#343028"/>
+    <ellipse class="smoke"  cx="249" cy="486" rx="8" ry="5" fill="#282018" opacity=".75"/>
+    <ellipse class="smoke2" cx="247" cy="478" rx="10" ry="6" fill="#201810" opacity=".55"/>
+    <circle cx="260" cy="556" r="1.5" fill="#f04000" opacity=".6" class="flame3"/>
+    <circle cx="214" cy="562" r="1"   fill="#e03000" opacity=".5" class="flame"/>
+  </g>
+  <text class="bld-label" x="224" y="612">BLACKSMITH</text>
+</g>
+ 
+<!-- Compass rose -->
+<g transform="translate(880,608)" opacity=".38">
+  <circle cx="0" cy="0" r="18" fill="none" stroke="#3a2818" stroke-width="1.5"/>
+  <circle cx="0" cy="0" r="3"  fill="#3a2818"/>
+  <polygon points="0,-16 2,-4 0,-6 -2,-4" fill="#6a4820"/>
+  <polygon points="0,16 2,4 0,6 -2,4"    fill="#3a2818"/>
+  <polygon points="-16,0 -4,-2 -6,0 -4,2" fill="#3a2818"/>
+  <polygon points="16,0 4,-2 6,0 4,2"    fill="#3a2818"/>
+  <text x="0" y="-20" text-anchor="middle" font-family="Cinzel Decorative,serif" font-size="7" fill="#6a4820">N</text>
+</g>
+ 
+<!-- Vignette -->
+<rect width="920" height="640" fill="url(#vign)" pointer-events="none"/>
+<!-- Frame -->
+<rect x="1" y="1" width="918" height="638" fill="none" stroke="#1a1010" stroke-width="2" opacity=".8"/>
+<rect x="4" y="4" width="912" height="632" fill="none" stroke="#140c0c" stroke-width="1" opacity=".5"/>
+</svg>
+</div>
+<p class="hint">⸸ click to enter ⸸</p>
+ 
+<!-- Info Panel -->
+<div id="info-panel">
+  <div class="panel-header">
+    <span class="panel-icon" id="panel-icon">🏛</span>
+    <div class="panel-title-wrap">
+      <div class="panel-name" id="panel-name">–</div>
+      <div class="panel-type" id="panel-type">–</div>
+    </div>
+    <button class="close-btn" onclick="closePanel()">✕</button>
+  </div>
+  <div class="divider"></div>
+  <p class="panel-desc" id="panel-desc"></p>
+  <div class="panel-actions">
+    <button class="action-btn primary"   id="panel-action1" onclick="handleAction(1)">–</button>
+    <button class="action-btn secondary" id="panel-action2" onclick="handleAction(2)">–</button>
+  </div>
+</div>
+ 
+<script>
+const buildings = {
+  gate: {
+    icon:'🚪', name:'The North Gate', type:'Threshold of No Return',
+    desc:"The portcullis groans but never fully closes — its chains rusted open decades ago. Guards once stood here. Their posts remain. The skulls mounted above the arch are a warning, though none can say anymore who put them there, or why.",
+    action1:'Pass Through', action2:'Inspect Gate'
+  },
+  townhall: {
+    icon:'🏛', name:'Town Hall', type:'Seat of a Dying Governance',
+    desc:"The Mayor has not been seen in a fortnight. His seal still hangs on the door, but something else inhabits the upper chambers now. The bounty board lists only one reward — and the poster has no name.",
+    action1:'Enter Hall', action2:'Read Bounties'
+  },
+  church: {
+    icon:'⛪', name:'The Chapel of the Fallen Saint', type:'Sanctuary — or Prison',
+    desc:"Father Aldric's sermons grow darker each week. He speaks of a god that answers, though none can say what was asked. The crypt door is welded shut from the inside.",
+    action1:'Seek Absolution', action2:'Speak to Aldric'
+  },
+  market: {
+    icon:'🏚', name:'The Market', type:'Trade in Forbidden Goods',
+    desc:"Mira Goldenscale deals in things best left unnamed. Her shelves hold jars of murky fluid, bound tomes, and teeth from creatures that should not exist. She never asks why you need them.",
+    action1:'Browse Wares', action2:'Haggle'
+  },
+  inn: {
+    icon:'🍺', name:'The Black Boar Inn', type:'Last Refuge of the Weary',
+    desc:"The only warm light in the square. Innkeeper Brom pours drinks without questions and buries bodies without complaints. Travelers sleep with their backs to the wall here — those wise enough to sleep at all.",
+    action1:'Rent a Room', action2:'Seek Rumours'
+  },
+  blacksmith: {
+    icon:'⚒️', name:"Gorren's Forge", type:'Iron & Ill Intent',
+    desc:"Gorren speaks to his forge. The hammer falls in rhythms no natural craftsman follows. The blades he produces cut through things other blades cannot — and he charges accordingly.",
+    action1:'Buy Arms', action2:'Commission Work'
+  },
+  forest: {
+    icon:'🌲', name:'The Darkwood', type:'Ancient & Hungry',
+    desc:"No path through the Darkwood leads where it should. Lights move among the trees that carry no lantern. Those who enter by night return changed, if they return at all. The will-o-wisps are not a warning — they are an invitation.",
+    action1:'Enter the Wood', action2:'Observe from Afar'
+  },
+};
+ 
+let active = null;
+function openPanel(id) {
+  const b = buildings[id]; if (!b) return;
+  if (active) document.getElementById('bld-'+active)?.classList.remove('active');
+  active = id;
+  document.getElementById('bld-'+id)?.classList.add('active');
+  document.getElementById('panel-icon').textContent    = b.icon;
+  document.getElementById('panel-name').textContent    = b.name;
+  document.getElementById('panel-type').textContent    = b.type;
+  document.getElementById('panel-desc').textContent    = b.desc;
+  document.getElementById('panel-action1').textContent = b.action1;
+  document.getElementById('panel-action2').textContent = b.action2;
+  document.getElementById('info-panel').classList.add('open');
+}
+function closePanel() {
+  document.getElementById('info-panel').classList.remove('open');
+  if (active) { document.getElementById('bld-'+active)?.classList.remove('active'); active = null; }
+}
+function handleAction(n) {
+  const b = buildings[active]; if (!b) return;
+  alert(`[Game Action]\n"${n===1?b.action1:b.action2}"\n— ${b.name} —\n\nWire this to your game engine.`);
+}
+document.getElementById('map').addEventListener('click', e => {
+  if (!e.target.closest('.building-group') && !e.target.closest('.forest-group') && !e.target.closest('.gate-group')) closePanel();
+});
+</script>
+</body>
+</html>

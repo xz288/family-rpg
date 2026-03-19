@@ -268,6 +268,13 @@ async function initDb() {
     _db._save();
   }
 
+  // ── V13 Migration: desert_progress column on users ────────────────────────────
+  const userColsV13 = (_db.exec('PRAGMA table_info(users)')[0]?.values || []).map(r => r[1]);
+  if (!userColsV13.includes('desert_progress')) {
+    _db.exec('ALTER TABLE users ADD COLUMN desert_progress INTEGER NOT NULL DEFAULT 0');
+    _db._save();
+  }
+
   return _db;
 }
 

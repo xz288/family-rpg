@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boss Fight — The Final Confrontation</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#0c0408;
+  font-family:'Crimson Text',serif;
+  min-height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:24px 16px;
+  color:#d0a0a0;
+}
+
+h1 {
+  font-family:'UnifrakturMaguntia',cursive;
+  font-size:clamp(1.5rem,4vw,2.5rem);
+  color:#d04040;
+  letter-spacing:.08em;
+  text-shadow:0 0 50px rgba(200,20,20,.6), 0 0 100px rgba(120,0,0,.4), 0 3px 8px rgba(0,0,0,1);
+  margin-bottom:4px; text-align:center;
+}
+.subtitle {
+  font-family:'Crimson Text',serif; font-style:italic;
+  color:#5a1818; font-size:.82rem; letter-spacing:.2em;
+  text-transform:uppercase; margin-bottom:24px; text-align:center;
+}
+
+.card {
+  width:min(96vw,600px);
+  background:linear-gradient(160deg,#120608 0%,#080408 100%);
+  border:1px solid #3a1010;
+  clip-path:polygon(0 10px,10px 0,calc(100% - 10px) 0,100% 10px,100% calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,0 calc(100% - 10px));
+  padding:24px 24px 20px;
+  position:relative;
+}
+.card::before {
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent 5%,#6a0808 25%,#c01010 50%,#6a0808 75%,transparent 95%);
+}
+.card::after {
+  content:'⚔';
+  position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+  font-size:14px; color:#6a0808; background:#0c0408; padding:0 8px;
+}
+
+/* Visualiser */
+#viz-canvas {
+  width:100%; height:100px;
+  background:#060208;
+  border:1px solid #1e0808;
+  border-radius:2px;
+  margin-bottom:18px; display:block;
+}
+
+/* Beat indicator row */
+.beat-row {
+  display:flex; gap:5px; justify-content:center;
+  margin-bottom:18px; align-items:center;
+}
+.beat-dot {
+  width:10px; height:10px; border-radius:50%;
+  background:#1a0808; transition:background .05s, box-shadow .05s;
+  flex-shrink:0;
+}
+.beat-dot.kick  { width:14px; height:14px; }
+.beat-dot.lit-kick   { background:#d04010; box-shadow:0 0 10px rgba(200,60,10,.9); }
+.beat-dot.lit-snare  { background:#c0a020; box-shadow:0 0 8px rgba(180,140,20,.8); }
+.beat-dot.lit-hihat  { background:#608090; box-shadow:0 0 6px rgba(80,120,140,.7); }
+
+/* Play button */
+.play-btn {
+  width:100%; padding:14px;
+  font-family:'Cinzel Decorative',serif;
+  font-size:.75rem; letter-spacing:.15em;
+  cursor:pointer; border:1px solid #5a1010;
+  color:#c03020; background:transparent;
+  clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,7px 100%,0 calc(100% - 7px));
+  transition:all .22s; margin-bottom:20px;
+}
+.play-btn:hover  { border-color:#c03020; background:rgba(180,30,20,.07); color:#e04030; }
+.play-btn.playing { border-color:#2a3a8a; color:#4060c0; background:rgba(40,60,130,.07); }
+
+/* Phase selector */
+.section-title {
+  font-family:'Cinzel Decorative',serif;
+  font-size:.58rem; letter-spacing:.18em; color:#4a1010;
+  text-transform:uppercase; margin-bottom:10px; margin-top:16px;
+}
+.section-title:first-of-type { margin-top:0; }
+
+.phase-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+.phase-btn {
+  font-family:'Cinzel Decorative',serif; font-size:.58rem;
+  letter-spacing:.1em; padding:7px 13px; cursor:pointer;
+  border:1px solid #200c0c; color:#4a1818; background:transparent;
+  transition:all .2s;
+  clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,4px 100%,0 calc(100% - 4px));
+}
+.phase-btn:hover  { border-color:#6a1010; color:#8a2820; }
+.phase-btn.active { border-color:#c03020; color:#e05040; background:rgba(180,30,20,.09); }
+
+/* Layers */
+.layer-row {
+  display:grid; grid-template-columns:148px 1fr 42px;
+  align-items:center; gap:10px; margin-bottom:9px;
+}
+.layer-name {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.9rem; color:#6a3028;
+}
+input[type=range] {
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:3px; background:#1a0a0a;
+  border-radius:2px; outline:none; cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:13px; height:13px;
+  border-radius:50%; background:#6a1010;
+  border:1px solid #c03020; cursor:pointer; transition:background .15s;
+}
+input[type=range]:hover::-webkit-slider-thumb { background:#c03020; }
+.vol-val {
+  font-family:'Crimson Text',serif; font-size:.78rem;
+  color:#4a1818; text-align:right;
+}
+
+/* Tempo */
+.tempo-row {
+  display:grid; grid-template-columns:148px 1fr 60px;
+  align-items:center; gap:10px; margin-bottom:9px;
+}
+
+/* Event buttons */
+.event-row { display:flex; gap:7px; flex-wrap:wrap; margin-top:4px; }
+.event-btn {
+  font-family:'Cinzel Decorative',serif; font-size:.56rem;
+  letter-spacing:.08em; padding:7px 11px; cursor:pointer;
+  border:1px solid #2a1010; color:#4a2018; background:transparent;
+  transition:all .18s;
+  clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,4px 100%,0 calc(100% - 4px));
+}
+.event-btn:hover { border-color:#8a2010; color:#c04020; }
+.event-btn:active { transform:scale(.97); }
+
+.divider {
+  height:1px;
+  background:repeating-linear-gradient(90deg,transparent,transparent 4px,#200a0a 4px,#200a0a 8px);
+  margin:14px 0;
+}
+
+#status-line {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.78rem; color:#3a1010; text-align:center;
+  margin-top:12px; min-height:1.1em; letter-spacing:.05em;
+}
+
+/* HP-style bar for intensity */
+.intensity-wrap { margin-bottom:14px; }
+.intensity-label {
+  font-family:'Cinzel Decorative',serif; font-size:.56rem;
+  letter-spacing:.15em; color:#3a1010; margin-bottom:5px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.intensity-bar-bg {
+  height:5px; background:#100608; border-radius:1px;
+  border:1px solid #200a0a; overflow:hidden;
+}
+#intensity-fill {
+  height:100%; width:35%;
+  background:linear-gradient(90deg,#6a0808,#c03020,#e06020);
+  border-radius:1px; transition:width .3s ease;
+}
+</style>
+</head>
+<body>
+
+<h1>⚔ The Final Confrontation ⚔</h1>
+<p class="subtitle">― boss fight ― epic orchestral ―</p>
+
+<div class="card">
+
+  <!-- Visualiser -->
+  <canvas id="viz-canvas"></canvas>
+
+  <!-- Beat indicator -->
+  <div class="beat-row" id="beat-row"></div>
+
+  <!-- Intensity bar -->
+  <div class="intensity-wrap">
+    <div class="intensity-label">
+      <span>Intensity</span>
+      <span id="intensity-pct">35%</span>
+    </div>
+    <div class="intensity-bar-bg"><div id="intensity-fill"></div></div>
+  </div>
+
+  <!-- Play -->
+  <button class="play-btn" id="play-btn" onclick="togglePlay()">
+    ▶ &nbsp; Begin the Confrontation
+  </button>
+
+  <!-- PHASE -->
+  <div class="section-title">Phase</div>
+  <div class="phase-row">
+    <button class="phase-btn active" id="phase-approach"  onclick="setPhase('approach')">Approach</button>
+    <button class="phase-btn"        id="phase-combat"    onclick="setPhase('combat')">Combat</button>
+    <button class="phase-btn"        id="phase-rage"      onclick="setPhase('rage')">Enraged</button>
+    <button class="phase-btn"        id="phase-final"     onclick="setPhase('final')">Final Stand</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- TEMPO -->
+  <div class="section-title">Tempo</div>
+  <div class="tempo-row">
+    <span class="layer-name">BPM</span>
+    <input type="range" id="bpm-slider" min="60" max="160" value="88" step="1"
+           oninput="setBPM(this.value)"/>
+    <span class="vol-val" id="lbl-bpm">88 bpm</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- LAYERS -->
+  <div class="section-title">Layers</div>
+
+  <div class="layer-row">
+    <span class="layer-name">War Drums</span>
+    <input type="range" id="vol-drums" min="0" max="100" value="90"
+           oninput="setVol('drums',this.value)"/>
+    <span class="vol-val" id="lbl-drums">90</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Aria (Soprano)</span>
+    <input type="range" id="vol-aria" min="0" max="100" value="75"
+           oninput="setVol('aria',this.value)"/>
+    <span class="vol-val" id="lbl-aria">75</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Choir (Low)</span>
+    <input type="range" id="vol-choir" min="0" max="100" value="70"
+           oninput="setVol('choir',this.value)"/>
+    <span class="vol-val" id="lbl-choir">70</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Brass Swells</span>
+    <input type="range" id="vol-brass" min="0" max="100" value="65"
+           oninput="setVol('brass',this.value)"/>
+    <span class="vol-val" id="lbl-brass">65</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Dark Strings</span>
+    <input type="range" id="vol-strings" min="0" max="100" value="60"
+           oninput="setVol('strings',this.value)"/>
+    <span class="vol-val" id="lbl-strings">60</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Organ</span>
+    <input type="range" id="vol-organ" min="0" max="100" value="55"
+           oninput="setVol('organ',this.value)"/>
+    <span class="vol-val" id="lbl-organ">55</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Sub Bass</span>
+    <input type="range" id="vol-bass" min="0" max="100" value="80"
+           oninput="setVol('bass',this.value)"/>
+    <span class="vol-val" id="lbl-bass">80</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- SOUND EVENTS -->
+  <div class="section-title">Combat Events</div>
+  <div class="event-row">
+    <button class="event-btn" onclick="triggerStrike()">⚔ Boss Strike</button>
+    <button class="event-btn" onclick="triggerRoar()">💀 Boss Roar</button>
+    <button class="event-btn" onclick="triggerVictory()">🏆 Victory</button>
+    <button class="event-btn" onclick="triggerDefeat()">💔 Defeat</button>
+    <button class="event-btn" onclick="triggerSting()">🎵 Dramatic Sting</button>
+  </div>
+
+  <div id="status-line">the ground trembles beneath ancient footsteps...</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   BOSS FIGHT MUSIC — Epic Orchestral + War Drums + Aria
+   Web Audio API — pure synthesis
+   ══════════════════════════════════════════════════ */
+
+let ctx = null;
+let isPlaying = false;
+let masterGain, analyser, compressor;
+const gains = {};
+const vols = { drums:.9, aria:.75, choir:.7, brass:.65, strings:.6, organ:.55, bass:.8 };
+let bpm = 88;
+let beatInterval = 60 / bpm; // seconds per beat
+let liveNodes = [];
+let scheduledTimers = [];
+let nextBeatTime = 0;
+let beatCount = 0;
+let lookaheadTimer = null;
+let vizFrame = null;
+let currentPhase = 'approach';
+let intensity = 35;
+
+/* ── Phase definitions ── */
+const phases = {
+  approach: {
+    rootHz:55,   /* A1 */
+    scale:[0,2,3,5,7,8,10],   /* natural minor */
+    bpmMult:1,   drumPattern:[1,0,0,0,0,0,1,0, 0,0,1,0,0,0,0,0],
+    chordsemi:[0,3,7,10],  ariaActive:true, chordsSwing:false,
+    intensity:35, name:'Approach', statusLine:'The darkness coalesces before you...'
+  },
+  combat: {
+    rootHz:55,
+    scale:[0,2,3,5,7,8,10],
+    bpmMult:1.18, drumPattern:[1,0,0,1,0,0,1,0, 1,0,0,0,1,0,0,0],
+    chordsemi:[0,3,7,10],  ariaActive:true, chordsSwing:false,
+    intensity:65, name:'Combat', statusLine:'Steel meets ancient flesh — fight!'
+  },
+  rage: {
+    rootHz:51.9, /* Ab1 — darker */
+    scale:[0,1,3,5,6,8,10],   /* phrygian dominant */
+    bpmMult:1.4,  drumPattern:[1,0,1,0,1,0,1,0, 1,1,0,1,0,0,1,0],
+    chordsemi:[0,1,6,10],  ariaActive:true, chordsSwing:true,
+    intensity:85, name:'Enraged', statusLine:'IT RISES! The beast is enraged!'
+  },
+  final: {
+    rootHz:48.9, /* G1 */
+    scale:[0,1,2,6,7,8,11],   /* double harmonic / byzantine */
+    bpmMult:1.6,  drumPattern:[1,1,0,1,1,0,1,0, 1,1,1,0,1,1,0,1],
+    chordsemi:[0,1,6,11],  ariaActive:true, chordsSwing:true,
+    intensity:100, name:'Final Stand', statusLine:'THIS IS THE END. One of you will not rise.'
+  },
+};
+
+/* ── 16-step beat indicators ── */
+function buildBeatRow() {
+  const row = document.getElementById('beat-row');
+  row.innerHTML = '';
+  for (let i=0;i<16;i++){
+    const d = document.createElement('div');
+    d.className = 'beat-dot';
+    d.id = 'bd-'+i;
+    row.appendChild(d);
+  }
+}
+buildBeatRow();
+
+/* ── Audio init ── */
+function initCtx() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -14;
+  compressor.knee.value = 6;
+  compressor.ratio.value = 4;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.25;
+
+  masterGain = ctx.createGain();
+  masterGain.gain.value = 0.82;
+
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.85;
+
+  masterGain.connect(compressor);
+  compressor.connect(analyser);
+  analyser.connect(ctx.destination);
+
+  ['drums','aria','choir','brass','strings','organ','bass'].forEach(k => {
+    gains[k] = ctx.createGain();
+    gains[k].gain.value = vols[k] * 0.88;
+    gains[k].connect(masterGain);
+  });
+}
+
+/* ── Reverb factory ── */
+function makeReverb(dur=2.5, decay=2) {
+  const len = ctx.sampleRate * dur;
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c=0;c<2;c++){
+    const d=buf.getChannelData(c);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+  }
+  const cv=ctx.createConvolver(); cv.buffer=buf; return cv;
+}
+
+/* ── Shared reverbs ── */
+let drumReverb=null, stringsReverb=null, ariaReverb=null;
+function getDrumRev()    { if(!drumReverb)    drumReverb=makeReverb(1.2,3);    return drumReverb; }
+function getStringsRev() { if(!stringsReverb) stringsReverb=makeReverb(3,1.8); return stringsReverb; }
+function getAriaRev()    { if(!ariaReverb)    ariaReverb=makeReverb(4,1.5);    return ariaReverb; }
+
+/* ══════════════════════
+   DRUM ENGINE
+   Lookahead scheduler — the gold standard for precise Web Audio timing
+   ══════════════════════ */
+const LOOKAHEAD   = 0.12; // seconds to schedule ahead
+const SCHEDULE_MS = 35;   // how often to call scheduler (ms)
+let drumStep = 0;
+
+function scheduleDrum(time, step) {
+  const phase = phases[currentPhase];
+  const pat   = phase.drumPattern;
+  const beat  = pat[step % 16];
+  const rev   = getDrumRev();
+
+  /* flash indicator */
+  const delay = Math.max(0,(time - ctx.currentTime)*1000);
+  setTimeout(() => {
+    /* clear prev */
+    document.querySelectorAll('.beat-dot').forEach(d=>d.className='beat-dot');
+    const el = document.getElementById('bd-'+(step%16));
+    if (el) {
+      const cls = (step%16)===0||step%4===0&&beat ? 'lit-kick' :
+                  step%8===4 ? 'lit-snare' : 'lit-hihat';
+      el.classList.add(cls);
+    }
+  }, delay);
+
+  if (beat === 0) return;
+
+  const isKick  = step%8===0 || (step%8===4 && phase.chordsSwing);
+  const isSnare = step%8===4;
+
+  if (isKick) {
+    /* KICK DRUM — deep resonant thud */
+    const osc = ctx.createOscillator();
+    const gn  = ctx.createGain();
+    osc.type  = 'sine';
+    osc.frequency.setValueAtTime(phase.rootHz*1.5, time);
+    osc.frequency.exponentialRampToValueAtTime(phase.rootHz*0.5, time+0.12);
+    gn.gain.setValueAtTime(0, time);
+    gn.gain.linearRampToValueAtTime(1.1, time+0.005);
+    gn.gain.exponentialRampToValueAtTime(0.001, time+0.45);
+    osc.connect(gn); gn.connect(getDrumRev());
+    getDrumRev().connect(gains.drums);
+    osc.start(time); osc.stop(time+0.5);
+    liveNodes.push(osc);
+
+    /* Kick click transient */
+    const click=ctx.createOscillator(); const cg=ctx.createGain();
+    click.type='square'; click.frequency.value=120;
+    cg.gain.setValueAtTime(.7,time); cg.gain.exponentialRampToValueAtTime(.001,time+.03);
+    click.connect(cg); cg.connect(gains.drums);
+    click.start(time); click.stop(time+.04); liveNodes.push(click);
+  }
+
+  if (isSnare) {
+    /* SNARE — noise burst + tone */
+    const snareLen=ctx.sampleRate*.18;
+    const snBuf=ctx.createBuffer(1,snareLen,ctx.sampleRate);
+    const d=snBuf.getChannelData(0);
+    for(let i=0;i<snareLen;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/snareLen,1.5);
+    const snSrc=ctx.createBufferSource(); snSrc.buffer=snBuf;
+    const snFilt=ctx.createBiquadFilter(); snFilt.type='bandpass'; snFilt.frequency.value=2200; snFilt.Q.value=0.8;
+    const snGn=ctx.createGain(); snGn.gain.setValueAtTime(.8,time); snGn.gain.exponentialRampToValueAtTime(.001,time+.22);
+    snSrc.connect(snFilt); snFilt.connect(snGn); snGn.connect(gains.drums);
+    snSrc.start(time); liveNodes.push(snSrc);
+
+    /* snare tone */
+    const st=ctx.createOscillator(); const sg=ctx.createGain();
+    st.type='triangle'; st.frequency.setValueAtTime(200,time);
+    st.frequency.exponentialRampToValueAtTime(100,time+.08);
+    sg.gain.setValueAtTime(.4,time); sg.gain.exponentialRampToValueAtTime(.001,time+.1);
+    st.connect(sg); sg.connect(gains.drums); st.start(time); st.stop(time+.12); liveNodes.push(st);
+  }
+
+  /* Hi-hat on most beats */
+  if (step%2===0 || phase.chordsSwing) {
+    const hhLen=ctx.sampleRate*.05;
+    const hhBuf=ctx.createBuffer(1,hhLen,ctx.sampleRate);
+    const hd=hhBuf.getChannelData(0);
+    for(let i=0;i<hhLen;i++) hd[i]=(Math.random()*2-1);
+    const hhSrc=ctx.createBufferSource(); hhSrc.buffer=hhBuf;
+    const hhFilt=ctx.createBiquadFilter(); hhFilt.type='highpass'; hhFilt.frequency.value=8000;
+    const hhGn=ctx.createGain(); hhGn.gain.setValueAtTime(.25,time); hhGn.gain.exponentialRampToValueAtTime(.001,time+.05);
+    hhSrc.connect(hhFilt); hhFilt.connect(hhGn); hhGn.connect(gains.drums);
+    hhSrc.start(time); liveNodes.push(hhSrc);
+  }
+}
+
+/* ── Main scheduler loop ── */
+function scheduler() {
+  if (!isPlaying) return;
+  const stepDur = beatInterval / 4; /* 16th note */
+  while (nextBeatTime < ctx.currentTime + LOOKAHEAD) {
+    scheduleDrum(nextBeatTime, drumStep);
+    scheduleHarmony(nextBeatTime, drumStep);
+    drumStep++;
+    nextBeatTime += stepDur;
+  }
+  lookaheadTimer = setTimeout(scheduler, SCHEDULE_MS);
+}
+
+/* ══════════════════════
+   HARMONY SCHEDULER
+   Schedules chords, strings, brass on beat grid
+   ══════════════════════ */
+function semToHz(base, semi) { return base * Math.pow(2, semi/12); }
+
+function scheduleHarmony(time, step) {
+  const phase = phases[currentPhase];
+
+  /* ── BASS on every kick (step 0, 8) ── */
+  if (step % 16 === 0 || step % 16 === 8) {
+    scheduleBassNote(time, phase);
+  }
+
+  /* ── STRINGS chord on every 4 beats ── */
+  if (step % 16 === 0) {
+    scheduleStringsChord(time, phase, step);
+  }
+
+  /* ── BRASS stab on beat 3 ── */
+  if (step % 16 === 8) {
+    scheduleBrassStab(time, phase);
+  }
+
+  /* ── ORGAN on downbeat ── */
+  if (step % 32 === 0) {
+    scheduleOrganChord(time, phase);
+  }
+}
+
+function scheduleBassNote(time, phase) {
+  const rev=makeReverb(1.5,2.5); rev.connect(gains.bass);
+  [1, 2].forEach((oct,i) => {
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='sawtooth'; osc.frequency.value=phase.rootHz*oct;
+    const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=180;
+    const dur=beatInterval*1.8;
+    gn.gain.setValueAtTime(0,time);
+    gn.gain.linearRampToValueAtTime(i===0?.6:.3, time+.02);
+    gn.gain.setTargetAtTime(0, time+dur*.6, .15);
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(time); osc.stop(time+dur+.3); liveNodes.push(osc);
+  });
+}
+
+function scheduleStringsChord(time, phase, step) {
+  const rev=getStringsRev(); rev.connect(gains.strings);
+  /* chord progression — step through 4 chords */
+  const progressions = [
+    [0,3,7,10],   /* i7 */
+    [5,8,12,15],  /* iv7 */
+    [7,10,14,17], /* v7 */
+    [8,11,15,20], /* VI7 */
+  ];
+  const chordIdx = Math.floor((step/16) % progressions.length);
+  const chord    = progressions[chordIdx];
+
+  chord.forEach((semi,i) => {
+    const freq=semToHz(phase.rootHz*4, semi);
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='triangle';
+    osc.frequency.value=freq;
+    osc.detune.value=(Math.random()-.5)*8;
+    const dur=beatInterval*3.8;
+    gn.gain.setValueAtTime(0,time+i*.01);
+    gn.gain.linearRampToValueAtTime(.18, time+i*.01+.08);
+    gn.gain.setTargetAtTime(0, time+dur*.8, .2);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(time+i*.01); osc.stop(time+dur+.4); liveNodes.push(osc);
+  });
+}
+
+function scheduleBrassStab(time, phase) {
+  const rev=makeReverb(1.8,2.2); rev.connect(gains.brass);
+  const stabFreqs=[
+    semToHz(phase.rootHz*4, phase.chordsemi[1]),
+    semToHz(phase.rootHz*4, phase.chordsemi[2]),
+    semToHz(phase.rootHz*8, phase.chordsemi[0]),
+  ];
+  stabFreqs.forEach((f,i) => {
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1800;
+    osc.type='sawtooth'; osc.frequency.value=f;
+    osc.detune.value=i*8;
+    gn.gain.setValueAtTime(0,time);
+    gn.gain.linearRampToValueAtTime(.28/(i+1), time+.025);
+    gn.gain.exponentialRampToValueAtTime(.001, time+beatInterval*.9);
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(time); osc.stop(time+beatInterval+.2); liveNodes.push(osc);
+  });
+}
+
+function scheduleOrganChord(time, phase) {
+  const rev=makeReverb(4,1.4); rev.connect(gains.organ);
+  phase.chordsemi.forEach((semi,i) => {
+    [4,8].forEach(octMult => {
+      const f=semToHz(phase.rootHz*octMult, semi);
+      const osc=ctx.createOscillator(); const gn=ctx.createGain();
+      osc.type=i%2===0?'square':'sawtooth';
+      osc.frequency.value=f;
+      const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=900;
+      const dur=beatInterval*7.8;
+      gn.gain.setValueAtTime(0,time);
+      gn.gain.linearRampToValueAtTime(.08/(i+1), time+.15);
+      gn.gain.setTargetAtTime(0, time+dur*.7, .4);
+      osc.connect(filt); filt.connect(gn); gn.connect(rev);
+      osc.start(time); osc.stop(time+dur+.5); liveNodes.push(osc);
+    });
+  });
+}
+
+/* ══════════════════════
+   ARIA — Soprano voice synthesis
+   Uses additive sine partials + formant filtering to mimic a human voice
+   ══════════════════════ */
+let ariaTimer = null;
+
+/* Aria sings a 4-note phrase looped on a timer */
+function scheduleAria() {
+  if (!isPlaying) return;
+  const phase = phases[currentPhase];
+  if (!phase.ariaActive) { ariaTimer=setTimeout(scheduleAria, 4000); return; }
+
+  const rev = getAriaRev(); rev.connect(gains.aria);
+  const scale  = phase.scale;
+  const rootHz = phase.rootHz * 8; /* soprano register — 3 octaves up */
+
+  /* Pick a phrase from the scale — step 0,2,4,3 then rest */
+  const phrase = [
+    scale[0], scale[2], scale[4], scale[6%scale.length],
+    scale[3], scale[5%scale.length], scale[2], scale[0]
+  ];
+  const noteDur = beatInterval * 1.8;
+
+  phrase.forEach((semi, i) => {
+    const freq = semToHz(rootHz, semi);
+    const on   = ctx.currentTime + .1 + i * noteDur;
+    const off  = on + noteDur * .82;
+
+    /* Additive synthesis: fundamental + harmonics to mimic voice */
+    const partials = [1, 2, 3, 4, 5, 6];
+    const ampEnv   = [1, .4, .25, .15, .1, .08];
+
+    partials.forEach((p, pi) => {
+      const osc  = ctx.createOscillator();
+      const gn   = ctx.createGain();
+      /* Formant filter — F1 around 800Hz (open 'Ah' vowel) */
+      const f1   = ctx.createBiquadFilter(); f1.type='peaking'; f1.frequency.value=800; f1.Q.value=3; f1.gain.value=8;
+      const f2   = ctx.createBiquadFilter(); f2.type='peaking'; f2.frequency.value=1200; f2.Q.value=4; f2.gain.value=5;
+
+      osc.type='sine';
+      osc.frequency.value=freq*p;
+      /* gentle vibrato on fundamental */
+      if (pi===0) {
+        const vib=ctx.createOscillator(); vib.frequency.value=5.5;
+        const vg=ctx.createGain(); vg.gain.value=freq*.012;
+        vib.connect(vg); vg.connect(osc.frequency);
+        vib.start(on); vib.stop(off+.3); liveNodes.push(vib);
+      }
+
+      gn.gain.setValueAtTime(0,on);
+      gn.gain.linearRampToValueAtTime(ampEnv[pi]*.55, on+.08);
+      gn.gain.setTargetAtTime(ampEnv[pi]*.45, on+.12, .3);
+      gn.gain.exponentialRampToValueAtTime(.001, off+.15);
+
+      osc.connect(f1); f1.connect(f2); f2.connect(gn); gn.connect(rev);
+      osc.start(on); osc.stop(off+.4); liveNodes.push(osc);
+    });
+  });
+
+  const totalMs = phrase.length * noteDur * 1000;
+  const restMs  = (1 + Math.random()*2) * beatInterval * 1000;
+  ariaTimer = setTimeout(scheduleAria, totalMs + restMs);
+  scheduledTimers.push(ariaTimer);
+}
+
+/* ── CHOIR (low male voices) ── */
+let choirNodes = [];
+function startChoir(phase) {
+  stopChoir();
+  const rev=makeReverb(5,1.6); rev.connect(gains.choir);
+  /* three voice parts: bass, baritone, tenor */
+  const parts=[
+    { freq: phase.rootHz*2,   type:'sawtooth', gain:.22 },
+    { freq: semToHz(phase.rootHz*2, phase.chordsemi[1]), type:'triangle', gain:.18 },
+    { freq: semToHz(phase.rootHz*4, phase.chordsemi[0]), type:'triangle', gain:.14 },
+  ];
+  parts.forEach((p,i) => {
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    const filt=ctx.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=400+i*200; filt.Q.value=1.2;
+    osc.type=p.type; osc.frequency.value=p.freq;
+    osc.detune.value=(i-1)*6;
+    gn.gain.setValueAtTime(0,ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(p.gain, ctx.currentTime+2.5+i*.5);
+    /* slow swell */
+    const lfo=ctx.createOscillator(); lfo.frequency.value=.07+i*.03;
+    const lg=ctx.createGain(); lg.gain.value=p.gain*.3;
+    lfo.connect(lg); lg.connect(gn.gain); lfo.start();
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(); liveNodes.push(osc); liveNodes.push(lfo);
+    choirNodes.push(osc); choirNodes.push(lfo);
+  });
+}
+function stopChoir() { choirNodes.forEach(n=>{ try{n.stop();}catch(e){} }); choirNodes=[]; }
+
+/* ══ ONE-SHOT EVENTS ══ */
+function triggerStrike() {
+  if (!ctx) return;
+  const rev=makeReverb(2,2.5); rev.connect(masterGain);
+  /* metallic crash */
+  const len=ctx.sampleRate*.6;
+  const buf=ctx.createBuffer(1,len,ctx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.2);
+  const src=ctx.createBufferSource(); src.buffer=buf;
+  const filt=ctx.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=3000; filt.Q.value=1.5;
+  const gn=ctx.createGain(); gn.gain.setValueAtTime(.9,ctx.currentTime); gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.7);
+  /* low thud */
+  const thud=ctx.createOscillator(); const tg=ctx.createGain();
+  thud.type='sine'; thud.frequency.setValueAtTime(80,ctx.currentTime); thud.frequency.exponentialRampToValueAtTime(30,ctx.currentTime+.15);
+  tg.gain.setValueAtTime(1,ctx.currentTime); tg.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.2);
+  src.connect(filt); filt.connect(gn); gn.connect(rev);
+  thud.connect(tg); tg.connect(masterGain);
+  src.start(); thud.start(); thud.stop(ctx.currentTime+.25);
+  setStatus('The boss strikes! The earth shakes beneath the blow!');
+  setTimeout(()=>setStatus(statusIdle()),3000);
+}
+
+function triggerRoar() {
+  if (!ctx) return;
+  const rev=makeReverb(4,1.4); rev.connect(masterGain);
+  const osc=ctx.createOscillator(); const gn=ctx.createGain();
+  const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=600; filt.Q.value=2;
+  osc.type='sawtooth';
+  osc.frequency.setValueAtTime(55,ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(220,ctx.currentTime+.5);
+  osc.frequency.exponentialRampToValueAtTime(80,ctx.currentTime+2);
+  /* ring mod for bestial texture */
+  const rm=ctx.createOscillator(); const rmg=ctx.createGain(); rmg.gain.value=1;
+  rm.frequency.value=87; rm.connect(rmg); rmg.connect(osc.frequency);
+  gn.gain.setValueAtTime(0,ctx.currentTime);
+  gn.gain.linearRampToValueAtTime(.9,ctx.currentTime+.1);
+  gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+2.5);
+  osc.connect(filt); filt.connect(gn); gn.connect(rev);
+  osc.start(); rm.start(); osc.stop(ctx.currentTime+3); rm.stop(ctx.currentTime+3);
+  setStatus('The beast ROARS — a sound that splits stone!');
+  setTimeout(()=>setStatus(statusIdle()),3500);
+}
+
+function triggerVictory() {
+  if (!ctx) return;
+  const rev=makeReverb(5,1.2); rev.connect(masterGain);
+  /* triumphant fanfare — major chord ascending */
+  const rootHz=phases[currentPhase].rootHz;
+  [[0,.0],[4,.15],[7,.3],[12,.45],[16,.6],[19,.8]].forEach(([semi,t])=>{
+    const freq=semToHz(rootHz*8,semi);
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='triangle'; osc.frequency.value=freq;
+    gn.gain.setValueAtTime(0,ctx.currentTime+t);
+    gn.gain.linearRampToValueAtTime(.45,ctx.currentTime+t+.05);
+    gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+t+3);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(ctx.currentTime+t); osc.stop(ctx.currentTime+t+3.5);
+  });
+  setStatus('VICTORY! The ancient evil is undone. The square breathes again.');
+  setTimeout(()=>setStatus(statusIdle()),5000);
+}
+
+function triggerDefeat() {
+  if (!ctx) return;
+  const rev=makeReverb(6,0.9); rev.connect(masterGain);
+  /* descending minor — doom */
+  const rootHz=phases[currentPhase].rootHz;
+  [[12,.0],[8,.3],[5,.65],[3,1.0],[0,1.4],[-1,2.0],[-5,2.8]].forEach(([semi,t])=>{
+    const freq=semToHz(rootHz*8,semi);
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='sine'; osc.frequency.value=freq;
+    gn.gain.setValueAtTime(0,ctx.currentTime+t);
+    gn.gain.linearRampToValueAtTime(.5,ctx.currentTime+t+.08);
+    gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+t+2.5);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(ctx.currentTime+t); osc.stop(ctx.currentTime+t+3);
+  });
+  /* master fade */
+  masterGain.gain.setTargetAtTime(0, ctx.currentTime+2.5, 1.2);
+  setStatus('You have fallen. The darkness claims another soul...');
+}
+
+function triggerSting() {
+  if (!ctx) return;
+  const rev=makeReverb(3,1.6); rev.connect(masterGain);
+  const phase=phases[currentPhase];
+  /* dramatic 3-note sting */
+  const notes=[0, phase.scale[4], phase.scale[6%phase.scale.length]];
+  notes.forEach((semi,i)=>{
+    const freq=semToHz(phase.rootHz*8,semi);
+    const on=ctx.currentTime+i*.18;
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='triangle'; osc.frequency.value=freq;
+    gn.gain.setValueAtTime(0,on); gn.gain.linearRampToValueAtTime(.6,on+.04);
+    gn.gain.exponentialRampToValueAtTime(.001,on+1.4);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(on); osc.stop(on+1.8); liveNodes.push(osc);
+  });
+  setStatus('Something changes...');
+  setTimeout(()=>setStatus(statusIdle()),2500);
+}
+
+/* ── PHASE / BPM / VOL ── */
+function setPhase(p) {
+  currentPhase = p;
+  document.querySelectorAll('.phase-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('phase-'+p).classList.add('active');
+
+  const phObj=phases[p];
+  /* auto-adjust BPM */
+  const newBPM = Math.round(bpm / (phObj.bpmMult) * phObj.bpmMult);
+  bpm = Math.round(88 * phObj.bpmMult);
+  bpm = Math.max(60,Math.min(160,bpm));
+  document.getElementById('bpm-slider').value=bpm;
+  document.getElementById('lbl-bpm').textContent=bpm+' bpm';
+  beatInterval=60/bpm;
+
+  setIntensity(phObj.intensity);
+  setStatus(phObj.statusLine);
+
+  if (isPlaying) {
+    stopChoir();
+    setTimeout(()=>startChoir(phases[currentPhase]), 300);
+    clearTimeout(ariaTimer);
+    setTimeout(scheduleAria, 400);
+  }
+}
+
+function setBPM(val) {
+  bpm=parseInt(val);
+  beatInterval=60/bpm;
+  document.getElementById('lbl-bpm').textContent=val+' bpm';
+}
+
+function setVol(layer,val) {
+  vols[layer]=val/100;
+  document.getElementById('lbl-'+layer).textContent=val;
+  if(gains[layer]) gains[layer].gain.setTargetAtTime(vols[layer]*.88,ctx.currentTime,.12);
+}
+
+function setIntensity(v) {
+  intensity=v;
+  document.getElementById('intensity-fill').style.width=v+'%';
+  document.getElementById('intensity-pct').textContent=v+'%';
+}
+
+/* ── PLAY / STOP ── */
+function togglePlay() {
+  initCtx();
+  if(ctx.state==='suspended') ctx.resume();
+  if(!isPlaying){
+    isPlaying=true;
+    drumStep=0; nextBeatTime=ctx.currentTime+.05;
+    masterGain.gain.setValueAtTime(.82,ctx.currentTime);
+    startChoir(phases[currentPhase]);
+    scheduler();
+    scheduleAria();
+    document.getElementById('play-btn').textContent='◼  Flee the Battle';
+    document.getElementById('play-btn').classList.add('playing');
+    setStatus(phases[currentPhase].statusLine);
+    startViz();
+  } else {
+    isPlaying=false;
+    clearTimeout(lookaheadTimer);
+    clearTimeout(ariaTimer);
+    scheduledTimers.forEach(t=>clearTimeout(t)); scheduledTimers=[];
+    stopChoir();
+    liveNodes.forEach(n=>{ try{n.stop(ctx.currentTime+.3);}catch(e){} }); liveNodes=[];
+    drumReverb=null; stringsReverb=null; ariaReverb=null;
+    document.querySelectorAll('.beat-dot').forEach(d=>d.className='beat-dot');
+    document.getElementById('play-btn').textContent='▶  Begin the Confrontation';
+    document.getElementById('play-btn').classList.remove('playing');
+    setStatus('the ground trembles beneath ancient footsteps...');
+    cancelAnimationFrame(vizFrame);
+  }
+}
+
+/* ── VISUALISER — blood red / amber ── */
+function startViz(){
+  const canvas=document.getElementById('viz-canvas');
+  const W=canvas.width=canvas.offsetWidth;
+  const H=canvas.height=canvas.offsetHeight;
+  const c=canvas.getContext('2d');
+  const bufLen=analyser.frequencyBinCount;
+  const data=new Uint8Array(bufLen);
+  function draw(){
+    vizFrame=requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+    c.fillStyle='#060208'; c.fillRect(0,0,W,H);
+    const bw=W/bufLen*2.2; let x=0;
+    for(let i=0;i<bufLen;i++){
+      const v=data[i]/255; const bh=v*H*.92;
+      const r=Math.round(100+v*155);
+      const g=Math.round(v*v*100);
+      const b=Math.round(v*15);
+      c.fillStyle=`rgb(${r},${g},${b})`;
+      c.fillRect(x,H-bh,bw-1,bh); x+=bw;
+    }
+    const peak=Math.max(...data)/255;
+    if(peak>.05){
+      const ly=H-peak*H*.92;
+      const grad=c.createLinearGradient(0,0,W,0);
+      grad.addColorStop(0,'transparent');
+      grad.addColorStop(.3,`rgba(180,20,10,${peak*.5})`);
+      grad.addColorStop(.5,`rgba(220,80,10,${peak*.65})`);
+      grad.addColorStop(.7,`rgba(180,20,10,${peak*.5})`);
+      grad.addColorStop(1,'transparent');
+      c.strokeStyle=grad; c.lineWidth=1.5;
+      c.beginPath(); c.moveTo(0,ly); c.lineTo(W,ly); c.stroke();
+    }
+  }
+  draw();
+}
+
+const idleLines=[
+  'the ground trembles beneath ancient footsteps...',
+  'the air tastes of iron and old power...',
+  'your heartbeat pounds against your ribs...',
+  'the sky above the square turns blood red...',
+  'every scar on your body begins to ache...',
+];
+function statusIdle(){ return idleLines[Math.floor(Math.random()*idleLines.length)]; }
+function setStatus(msg){ document.getElementById('status-line').textContent=msg; }
+</script>
+</body>
+</html>

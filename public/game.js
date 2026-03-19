@@ -1,4 +1,4 @@
-/* global MONSTER_DEFS, MONSTER_SVGS, PLAYER_SVGS, MONSTER_SKILLS, ZONE_MONSTER_POOL, TIER_COLORS, TIER_BASE_XP, CLASS_SKILLS, ANIM_PROJECTILE, SKILL_TREES, FOREST_ZONES */
+/* global MONSTER_DEFS, MONSTER_SVGS, PLAYER_SVGS, MONSTER_SKILLS, ZONE_MONSTER_POOL, TIER_COLORS, TIER_BASE_XP, CLASS_SKILLS, ANIM_PROJECTILE, SKILL_TREES, FOREST_ZONES, DESERT_ZONES */
 // ── State ─────────────────────────────────────────────────────────────────────
 const token   = localStorage.getItem('rpg_token');
 const meRaw   = localStorage.getItem('rpg_user');
@@ -9,6 +9,9 @@ const me = JSON.parse(meRaw);
 let dmTarget  = null;   // { username, avatar }
 let allUsers  = [];
 let onlineSet = new Set();
+
+// ── Party state ───────────────────────────────────────────────────────────────
+let partyState = null; // { partyId, leader, members[], memberStats:{u→data}, zoneId, isLeader }
 
 // ── PvP state ─────────────────────────────────────────────────────────────────
 let pvpState          = null;   // active pvp session
@@ -54,6 +57,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const progressRes = await api('GET', '/api/me/progress');
   _forestProgress = progressRes?.forest_progress ?? 0;
 
+  // Load desert progress
+  const desertProgressRes = await api('GET', '/api/me/desert-progress');
+  _desertProgress = desertProgressRes?.desert_progress ?? 0;
+
+  // Show/hide Eastern Gate based on forest completion
+  updateEasternGate();
+
   await Promise.all([loadUsers(), loadPublicHistory(), loadEvents(), loadMyInvites(), loadQuestLog()]);
 
   // Listeners
@@ -61,6 +71,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-send').addEventListener('click', sendMessage);
   document.getElementById('msg-input').addEventListener('keydown', onInputKey);
   document.getElementById('msg-input').addEventListener('input', onTyping);
+
+  // Start town music on first user interaction (AudioContext requires a gesture)
+  const _startTownMusic = () => {
+    SoundEngine.play('town');
+    document.removeEventListener('click', _startTownMusic);
+  };
+  document.addEventListener('click', _startTownMusic);
 });
 
 // ── API helpers ───────────────────────────────────────────────────────────────
@@ -956,7 +973,34 @@ const GREGOR_LINES = [
 
 function openGatehouseDialogue() {
   closeBldPopup();
+  const quests = charCache?.quests || [];
+  const questState = quests.find(q => q.quest_key === 'gatehouse_patrol');
   const box = document.getElementById('npc-dialogue');
+
+  if (questState) {
+    const followUp = questState.status === 'completed'
+      ? 'You have done the town a great service, adventurer. The people will not forget your courage.'
+      : 'You still live. Good. The Darkwood awaits — find out what happened to those hunting parties. Do not fail us.';
+    box.innerHTML = `
+      <div class="dlg-npc-name">🪖 Captain Gregor — Commander of the Gatehouse</div>
+      <div id="dlg-lines"></div>
+      <div id="dlg-choices" class="dlg-choices" style="display:none"></div>`;
+    box.style.display = 'block';
+    const p = document.createElement('p');
+    p.className = 'dlg-line';
+    p.textContent = followUp;
+    document.getElementById('dlg-lines').appendChild(p);
+    requestAnimationFrame(() => requestAnimationFrame(() => p.classList.add('visible')));
+    setTimeout(() => {
+      const choicesEl = document.getElementById('dlg-choices');
+      if (choicesEl) {
+        choicesEl.innerHTML = `<button class="dlg-btn no" onclick="closeDialogue()">✦ Understood, Captain.</button>`;
+        choicesEl.style.display = 'flex';
+      }
+    }, 1200);
+    return;
+  }
+
   box.innerHTML = `
     <div class="dlg-npc-name">🪖 Captain Gregor — Commander of the Gatehouse</div>
     <div id="dlg-lines"></div>
@@ -1016,14 +1060,18 @@ async function loadQuestLog() {
   if (!section || !list) return;
   if (!quests.length) { section.style.display = 'none'; return; }
   section.style.display = '';
-  list.innerHTML = quests.map(q => `
-    <div class="ql-card">
-      <span class="ql-icon">📜</span>
+  list.innerHTML = quests.map(q => {
+    const done = q.status === 'complete';
+    return `<div class="ql-card${done ? ' ql-done' : ''}">
+      <span class="ql-icon">${done ? '✅' : '📜'}</span>
       <div>
         <div class="ql-title">${escHtml(q.title)}</div>
-        <div class="ql-status">● ${q.status.toUpperCase()}</div>
+        <div class="ql-status" style="color:${done ? '#4ade80' : 'var(--muted)'}">
+          ${done ? '✓ COMPLETE' : '● ACTIVE'}
+        </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   updateDarkForestHotspot();
 }
 
@@ -1270,9 +1318,9 @@ function getPlayerCombatSkills(data) {
 
 function updateDarkForestHotspot() {
   const quests = charCache?.quests || [];
-  const active = quests.some(q => q.quest_key === 'gatehouse_patrol' && q.status === 'active');
+  const hasQuest = quests.some(q => q.quest_key === 'gatehouse_patrol');
   const hs = document.getElementById('dark-forest-hs');
-  if (hs) hs.style.display = active ? 'flex' : 'none';
+  if (hs) hs.style.display = hasQuest ? 'flex' : 'none';
 }
 
 // Zone definitions — positions mapped to dark-forest.jpg
@@ -1325,6 +1373,7 @@ function openDarkForest() {
   // Fixes stale charCache (newly allocated skills not picked up) and the race condition
   // where charCache is null and the old conditional fetch could lose the race.
   fetchAndCacheStats().catch(() => {});
+  SoundEngine.play('forest');
 
   const overlay = document.getElementById('forest-overlay');
   const loading = document.getElementById('forest-loading');
@@ -1354,69 +1403,483 @@ function closeDarkForest() {
   document.getElementById('forest-overlay').style.display = 'none';
   document.getElementById('forest-loading').style.display = '';
   document.getElementById('forest-map').style.display = 'none';
+  SoundEngine.play('town');
 }
 
 function onForestZoneClick(id) {
   const idx      = FOREST_ZONES.findIndex(z => z.id === id);
   const progress = getForestProgress();
   if (idx > progress) { showToast('🔒 Complete the previous area first.'); return; }
-  startCombat(id);
+  const pool = ZONE_MONSTER_POOL[id] || [];
+  const hasBoss = pool.some(mid => MONSTER_DEFS[mid]?.isBoss);
+  if (hasBoss) {
+    openPartyModal(id);
+  } else {
+    startCombat(id);
+  }
+}
+
+// ── Party system ──────────────────────────────────────────────────────────────
+
+function openPartyModal(zoneId) {
+  partyState = { zoneId, pendingInvites: new Set() };
+  const overlay = document.getElementById('party-modal-overlay');
+  const listEl  = document.getElementById('party-player-list');
+  const waitSec = document.getElementById('party-wait-section');
+  const btns    = document.getElementById('party-modal-btns');
+  const bWait   = document.getElementById('party-modal-btns-waiting');
+
+  waitSec.style.display = 'none';
+  btns.style.display    = 'flex';
+  bWait.style.display   = 'none';
+
+  const others = allUsers.filter(u => u.username !== me.username && onlineSet.has(u.username));
+  if (!others.length) {
+    listEl.innerHTML = '<div style="color:var(--muted);font-size:12px;font-style:italic;text-align:center;padding:10px 0">No other players are online.</div>';
+  } else {
+    listEl.innerHTML = others.slice(0, 2).map(u => `
+      <label class="party-player-row">
+        <input type="checkbox" class="party-checkbox" value="${escHtml(u.username)}" onchange="partyCheckboxChanged()">
+        <span class="party-player-avatar">${escHtml(u.avatar || '?')}</span>
+        <span class="party-player-name">${escHtml(u.username)}</span>
+        <span class="party-player-class" style="color:var(--muted);font-size:11px">${escHtml(u.class || '')}</span>
+      </label>
+    `).join('');
+  }
+
+  document.getElementById('party-confirm-btn').disabled = true;
+  overlay.classList.add('show');
+}
+
+function partyCheckboxChanged() {
+  const checked = document.querySelectorAll('.party-checkbox:checked').length;
+  document.getElementById('party-confirm-btn').disabled = checked === 0;
+}
+
+function closePartyModal() {
+  document.getElementById('party-modal-overlay').classList.remove('show');
+  partyState = null;
+}
+
+function partyStartSolo() {
+  document.getElementById('party-modal-overlay').classList.remove('show');
+  const zoneId = partyState?.zoneId;
+  partyState = null;
+  startCombat(zoneId);
+}
+
+function partyConfirmStart() {
+  const checked = [...document.querySelectorAll('.party-checkbox:checked')].map(cb => cb.value);
+  if (!checked.length) return;
+
+  // Switch UI to waiting state
+  document.getElementById('party-player-list').style.display = 'none';
+  document.getElementById('party-wait-section').style.display = 'block';
+  document.getElementById('party-modal-btns').style.display = 'none';
+  document.getElementById('party-modal-btns-waiting').style.display = 'flex';
+
+  const waitList = document.getElementById('party-wait-list');
+  waitList.innerHTML = checked.map(u => `
+    <div class="party-wait-row" id="party-wait-${CSS.escape(u)}">
+      <span>${escHtml(u)}</span>
+      <span class="party-wait-status" style="color:var(--muted)">Waiting…</span>
+    </div>
+  `).join('');
+
+  partyState.invited = checked;
+  partyState.responses = {};
+  checked.forEach(u => { partyState.responses[u] = null; });
+
+  socket.emit('party:invite', { invitees: checked, zone: partyState.zoneId });
+}
+
+function partyCancelInvite() {
+  if (partyState?.partyId) {
+    socket.emit('party:cancel', { partyId: partyState.partyId });
+  }
+  document.getElementById('party-modal-overlay').classList.remove('show');
+  document.getElementById('party-player-list').style.display = '';
+  partyState = null;
+}
+
+function partyRespondInvite(accept) {
+  const notif = document.getElementById('party-invite-notif');
+  notif.classList.remove('show');
+  socket.emit('party:respond', { partyId: partyState?.pendingPartyId, accept });
+  if (accept) SoundEngine.playPartyJoined();
+  else partyState = null;
+}
+
+// ── Party socket events ───────────────────────────────────────────────────────
+
+socket.on('party:formed', ({ partyId }) => {
+  if (!partyState) return;
+  partyState.partyId  = partyId;
+  partyState.isLeader = true;
+});
+
+socket.on('party:member_responded', ({ username, accept }) => {
+  if (!partyState) return;
+  partyState.responses[username] = accept;
+  if (accept) SoundEngine.playPartyJoined();
+  const row = document.getElementById(`party-wait-${CSS.escape(username)}`);
+  if (row) {
+    const st = row.querySelector('.party-wait-status');
+    if (st) st.textContent = accept ? '✅ Accepted' : '❌ Declined';
+    if (st) st.style.color = accept ? '#4ade80' : '#e07070';
+  }
+
+  // If all responded, enable "Start" button or auto-start
+  const allDone = Object.values(partyState.responses).every(r => r !== null);
+  if (allDone) {
+    const accepted = Object.entries(partyState.responses).filter(([, v]) => v).map(([k]) => k);
+    document.getElementById('party-modal-btns-waiting').innerHTML =
+      `<button class="party-btn secondary" onclick="partyCancelInvite()">Cancel</button>
+       <button class="party-btn primary" onclick="partyBeginBossFight()">⚔ Start Fight (${accepted.length + 1})</button>`;
+  }
+});
+
+socket.on('party:invite_received', ({ partyId, leader, zone }) => {
+  partyState = { pendingPartyId: partyId, zoneId: zone };
+  const notif  = document.getElementById('party-invite-notif');
+  const msgEl  = document.getElementById('party-invite-msg');
+  const zInfo  = FOREST_ZONES.find(z => z.id === zone);
+  msgEl.textContent = `${leader} invites you to face ${zInfo?.name || zone}!`;
+  notif.classList.add('show');
+  SoundEngine.playPartyRequest();
+  // Auto-dismiss after 30s
+  setTimeout(() => {
+    if (notif.classList.contains('show')) {
+      notif.classList.remove('show');
+      partyState = null;
+    }
+  }, 30000);
+});
+
+socket.on('party:cancelled', () => {
+  document.getElementById('party-invite-notif').classList.remove('show');
+  document.getElementById('party-modal-overlay').classList.remove('show');
+  partyState = null;
+  showToast('Party was cancelled.');
+});
+
+socket.on('party:combat_start', async ({ partyId, members, zone, monsters }) => {
+  document.getElementById('party-invite-notif').classList.remove('show');
+  partyState = { partyId, isLeader: false, zoneId: zone, members };
+  showToast(`⚔ Party combat starting — ${zone}!`);
+
+  // Fetch stats for all party members except self
+  const others = (members || []).filter(u => u !== me.username);
+  const memberStats = {};
+  await Promise.all(others.map(async u => {
+    const data = await api('GET', `/api/users/${encodeURIComponent(u)}/combat-stats`).catch(() => null);
+    if (data) memberStats[u] = data;
+  }));
+  partyState.memberStats = memberStats;
+
+  await new Promise(r => setTimeout(r, 800));
+  document.getElementById('forest-overlay').style.display = 'none';
+  // Use the leader's pre-built monsters so all players fight the same boss
+  startCombat(zone, members, memberStats, monsters || null, false);
+});
+
+socket.on('party:ended', async ({ result } = {}) => {
+  if (result === 'lose' && combatState && combatState.partyRole === 'member' &&
+      combatState.phase !== 'lose' && combatState.phase !== 'win') {
+    combatState.phase = 'lose';
+    renderSkillButtons();
+    addCombatLog('💀 The party has been wiped out...');
+    const pfig = document.getElementById('cb-player-figure');
+    if (pfig) pfig.classList.add('anim-death');
+    api('POST', '/api/me/die').then(() => { if (charCache) charCache.curHp = 1; }).catch(() => {});
+    await new Promise(r => setTimeout(r, 1500));
+    closeCombat();
+    showToast('💀 Your party was defeated. Visit the Chapel to receive a blessing!');
+  }
+  partyState = null;
+});
+
+// Leader receives a party member's chosen action
+socket.on('party:action', ({ from, skillId, targetIdx, dmg, logText, healAmt }) => {
+  if (_partyActionResolve) {
+    _partyActionResolve({ from, skillId, targetIdx, dmg, logText, healAmt });
+    _partyActionResolve = null;
+  }
+});
+
+// Party member receives a state sync from the leader
+socket.on('party:sync', async (syncData) => {
+  if (!combatState || combatState.partyRole !== 'member') return;
+  if (syncData.monsters) {
+    syncData.monsters.forEach((m, i) => {
+      if (!combatState.monsters[i]) return;
+      const wasAlive = combatState.monsters[i].curHp > 0;
+      combatState.monsters[i].curHp = m.curHp;
+      if (wasAlive && m.curHp <= 0) {
+        const fig = monsterEl(i);
+        if (fig) fig.classList.add('anim-death');
+      }
+    });
+  }
+  if (syncData.memberHps) {
+    const hps = syncData.memberHps;
+    if (hps[me.username] !== undefined) combatState.player.curHp = hps[me.username];
+    for (const pm of combatState.partyMembers) {
+      if (hps[pm.username] !== undefined) pm.curHp = hps[pm.username];
+    }
+  }
+  if (syncData.newLogs) {
+    for (const entry of syncData.newLogs) addCombatLog(entry);
+  }
+  renderCombatBars();
+  // If all monsters are dead and we haven't won yet, trigger win flow
+  if (combatState.monsters.every(m => m.curHp <= 0) &&
+      combatState.phase !== 'win' && combatState.phase !== 'lose') {
+    await handleCombatWin();
+  }
+});
+
+// Party member receives notification it's their turn to act
+socket.on('party:turn', (syncData) => {
+  if (!combatState || combatState.partyRole !== 'member') return;
+  if (syncData.monsters) {
+    syncData.monsters.forEach((m, i) => {
+      if (!combatState.monsters[i]) return;
+      const wasAlive = combatState.monsters[i].curHp > 0;
+      combatState.monsters[i].curHp = m.curHp;
+      if (wasAlive && m.curHp <= 0) {
+        const fig = monsterEl(i);
+        if (fig) fig.classList.add('anim-death');
+      }
+    });
+  }
+  if (syncData.memberHps) {
+    const hps = syncData.memberHps;
+    if (hps[me.username] !== undefined) combatState.player.curHp = hps[me.username];
+    for (const pm of combatState.partyMembers) {
+      if (hps[pm.username] !== undefined) pm.curHp = hps[pm.username];
+    }
+  }
+  if (syncData.newLogs) {
+    for (const entry of syncData.newLogs) addCombatLog(entry);
+  }
+  combatState.phase = 'player';
+  renderCombatBars();
+  renderSkillButtons();
+  showToast('⚔ Your turn! Choose a skill.');
+});
+
+async function partyBeginBossFight() {
+  if (!partyState?.partyId) return;
+  const accepted = Object.entries(partyState.responses).filter(([, v]) => v).map(([k]) => k);
+  partyState.members = [me.username, ...accepted];
+  document.getElementById('party-modal-overlay').classList.remove('show');
+
+  // Fetch stats for all accepted members
+  const memberStats = {};
+  await Promise.all(accepted.map(async u => {
+    const data = await api('GET', `/api/users/${encodeURIComponent(u)}/combat-stats`).catch(() => null);
+    if (data) memberStats[u] = data;
+  }));
+  partyState.memberStats = memberStats;
+
+  // Leader generates monsters — members will receive the same list so all fight the same boss
+  const monsters = generateMonsters(partyState.zoneId, partyState.members.length);
+
+  socket.emit('party:start', { partyId: partyState.partyId, monsters });
+  startCombat(partyState.zoneId, partyState.members, memberStats, monsters, true);
 }
 
 // ── Combat system ─────────────────────────────────────────────────────────────
 
 let combatState = null;
+let _partyActionResolve = null;
+
+// Broadcast current combat state (HPs + new log entries) to all party members
+function emitPartySync() {
+  if (!combatState || combatState.partyRole !== 'leader' || !partyState?.partyId) return;
+  const memberHps = { [me.username]: combatState.player.curHp };
+  for (const pm of combatState.partyMembers) memberHps[pm.username] = pm.curHp;
+  const newLogs = combatState.log.slice(combatState._syncedLogLen || 0);
+  combatState._syncedLogLen = combatState.log.length;
+  socket.emit('party:sync', {
+    partyId: partyState.partyId,
+    monsters: combatState.monsters.map(m => ({ curHp: m.curHp })),
+    memberHps,
+    newLogs,
+  });
+}
+
+// Leader gives each alive party member an interactive turn, then returns
+async function doPartyMemberTurns() {
+  if (!combatState?.isParty || combatState.partyRole !== 'leader') return;
+  for (let mi = 0; mi < combatState.partyMembers.length; mi++) {
+    const member = combatState.partyMembers[mi];
+    if (member.curHp <= 0) continue;
+    if (!combatState || combatState.monsters.every(m => m.curHp <= 0)) break;
+    // Sync state and signal this member's turn
+    const memberHps = { [me.username]: combatState.player.curHp };
+    for (const pm of combatState.partyMembers) memberHps[pm.username] = pm.curHp;
+    const newLogs = combatState.log.slice(combatState._syncedLogLen || 0);
+    combatState._syncedLogLen = combatState.log.length;
+    socket.emit('party:turn', {
+      partyId: partyState.partyId,
+      target: member.username,
+      monsters: combatState.monsters.map(m => ({ curHp: m.curHp })),
+      memberHps,
+      newLogs,
+    });
+    addCombatLog(`⏳ Waiting for ${member.username}…`);
+    // Wait up to 20s for the member's action
+    const action = await Promise.race([
+      new Promise(resolve => { _partyActionResolve = resolve; }),
+      new Promise(resolve => setTimeout(() => resolve(null), 20000)),
+    ]);
+    _partyActionResolve = null;
+    if (!combatState) return;
+    const mfig = partyMemberFig(mi);
+    // Apply action or auto-attack on timeout
+    if (action && action.dmg > 0 && action.targetIdx >= 0) {
+      const target = combatState.monsters[action.targetIdx];
+      if (target && target.curHp > 0) {
+        addAnim(mfig, 'anim-atk-r', 700);
+        await new Promise(r => setTimeout(r, 340));
+        const tfig = monsterEl(action.targetIdx);
+        addAnim(tfig, 'anim-hit', 400); addAnim(tfig, 'anim-shake', 450);
+        target.curHp = Math.max(0, target.curHp - action.dmg);
+        addCombatLog(action.logText);
+        if (target.curHp <= 0) {
+          target.curHp = 0;
+          if (tfig) tfig.classList.add('anim-death');
+          addCombatLog(`💀 ${target.name} is defeated!`);
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+    } else if (action && action.targetIdx === -1 && action.logText) {
+      // Heal or non-damage action
+      addAnim(mfig, 'anim-magic', 550);
+      addCombatLog(action.logText);
+      member.curHp = Math.min(member.maxHp, member.curHp + (action.healAmt || 0));
+    } else {
+      // Timeout — auto basic attack
+      const aliveMonsters = combatState.monsters.filter(m => m.curHp > 0);
+      if (aliveMonsters.length) {
+        const target = aliveMonsters[0];
+        const ti = combatState.monsters.indexOf(target);
+        addAnim(mfig, 'anim-atk-r', 700);
+        await new Promise(r => setTimeout(r, 340));
+        const tfig = monsterEl(ti);
+        addAnim(tfig, 'anim-hit', 400); addAnim(tfig, 'anim-shake', 450);
+        const atk = member.stats?.atk || 20;
+        const dmg = Math.max(1, atk - Math.floor(target.def * 0.5) + randInt(-3, 3));
+        target.curHp = Math.max(0, target.curHp - dmg);
+        addCombatLog(`⚔ ${member.username} attacks ${target.name}: −${dmg} (auto)`);
+        if (target.curHp <= 0) {
+          target.curHp = 0;
+          if (tfig) tfig.classList.add('anim-death');
+          addCombatLog(`💀 ${target.name} is defeated!`);
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+    }
+    renderCombatBars();
+    emitPartySync();
+    if (!combatState || combatState.monsters.every(m => m.curHp <= 0)) break;
+  }
+}
 
 function randInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
-function monsterEl(idx)  { return document.getElementById(`cb-mon-fig-${idx}`); }
-function monsterCard(idx){ return document.getElementById(`cb-mon-card-${idx}`); }
+function monsterEl(idx)     { return document.getElementById(`cb-mon-fig-${idx}`); }
+function monsterCard(idx)   { return document.getElementById(`cb-mon-card-${idx}`); }
+function partyMemberFig(idx){ return document.getElementById(`cb-party-fig-${idx}`); }
 
-function startCombat(zoneId) {
+function generateMonsters(zoneId, partySize) {
+  const pool = ZONE_MONSTER_POOL[zoneId];
+  if (!pool?.length) return [];
+  const zone = FOREST_ZONES.find(z => z.id === zoneId) || DESERT_ZONES.find(z => z.id === zoneId);
+  const [lvMin, lvMax] = zone?.levelRange || [1, 4];
+  const hasBoss = pool.some(id => MONSTER_DEFS[id]?.isBoss);
+  const maxCount = hasBoss ? 1 : randInt(1, 3);
+  return Array.from({ length: maxCount }, () => {
+    const id   = pool[randInt(0, pool.length - 1)];
+    const base = MONSTER_DEFS[id];
+    const lv   = base.isBoss ? base.level : randInt(lvMin, lvMax);
+    const hpBase = Math.round(base.hp * (1 + (lv - 1) * 0.15));
+    const hp   = base.isBoss && partySize > 1 ? Math.round(hpBase * (1 + 0.5 * (partySize - 1))) : hpBase;
+    const atk  = Math.round(base.atk * (1 + (lv - 1) * 0.10));
+    const def  = Math.round(base.def * (1 + (lv - 1) * 0.10));
+    const xp   = Math.round((TIER_BASE_XP[base.tier] || 5) * (1 + (lv - 1) * 0.2));
+    return { ...base, monsterId: id, level: lv, hp, atk, def, xp, curHp: hp };
+  });
+}
+
+function startCombat(zoneId, partyMembers = null, memberStats = null, preBuiltMonsters = null, isPartyLeader = true) {
   const pool = ZONE_MONSTER_POOL[zoneId];
   if (!pool?.length) { showToast('⚠ This area is not yet implemented.'); return; }
 
   const stats = getEffectiveStats(charCache);
   const cls   = charCache?.class || 'Warrior';
 
-  // Spawn monsters; boss zones always spawn exactly 1 boss
-  const zone = FOREST_ZONES.find(z => z.id === zoneId);
-  const [lvMin, lvMax] = zone?.levelRange || [1, 4];
-  const hasBoss = pool.some(id => MONSTER_DEFS[id]?.isBoss);
-  const maxCount = hasBoss ? 1 : randInt(1, 3);
-  const monsters = Array.from({ length: maxCount }, () => {
-    const id   = pool[randInt(0, pool.length - 1)];
-    const base = MONSTER_DEFS[id];
-    const lv   = base.isBoss ? base.level : randInt(lvMin, lvMax);
-    const hp   = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
-    const atk  = Math.round(base.atk * (1 + (lv - 1) * 0.10));
-    const def  = Math.round(base.def * (1 + (lv - 1) * 0.10));
-    const xp   = Math.round((TIER_BASE_XP[base.tier] || 5) * (1 + (lv - 1) * 0.2));
-    return { ...base, monsterId: id, level: lv, hp, atk, def, xp, curHp: hp };
-  });
+  // Use pre-built monsters (party members share the same monsters as leader) or generate fresh
+  const partySize = partyMembers ? partyMembers.length : 1;
+  const monsters = preBuiltMonsters || generateMonsters(zoneId, partySize);
+  const hasBoss = monsters.some(m => m.isBoss);
 
   const firstTier = monsters[0].tier;
   const tc = TIER_COLORS[firstTier] || TIER_COLORS.D;
 
+  // Start appropriate music
+  const isDesertZone = DESERT_ZONES.some(z => z.id === zoneId);
+  try {
+    if (hasBoss) {
+      SoundEngine.play('boss');
+    } else if (isDesertZone) {
+      SoundEngine.play('desert');
+    } else {
+      SoundEngine.play('forest');
+    }
+  } catch(e) { console.warn('SoundEngine error:', e); }
+
+  // Build party member combatants (exclude self)
+  const partyOthers = partyMembers ? partyMembers.filter(u => u !== me.username) : [];
+  const partyMemberCombatants = partyOthers.map(u => {
+    const d = memberStats?.[u];
+    const hp = d?.stats?.hp || 100;
+    return { username: u, class: d?.class || 'Warrior', curHp: hp, maxHp: hp, stats: d?.stats || {} };
+  });
+
+  const _preInvIds = new Set((charCache?.inventory || []).map(i => i.inv_id));
+
+  const _desertZoneIdx = DESERT_ZONES.findIndex(z => z.id === zoneId);
   combatState = {
     zoneId,
-    zoneIdx:  FOREST_ZONES.findIndex(z => z.id === zoneId),
+    zoneIdx:           FOREST_ZONES.findIndex(z => z.id === zoneId),
+    desertZoneIdx:     _desertZoneIdx,
     monsters,
-    player:   { curHp: Math.min(charCache?.curHp ?? stats.hp, stats.hp), maxHp: stats.hp, curMp: stats.mp, maxMp: stats.mp, class: cls, stats },
-    phase:    'player',
-    log:      [],
-    busy:     false,
-    bossRound: 0,
+    _preInvIds,
+    _syncedLogLen: 0,
+    player:       { curHp: Math.min(charCache?.curHp ?? stats.hp, stats.hp), maxHp: stats.hp, curMp: stats.mp, maxMp: stats.mp, class: cls, stats },
+    partyMembers: partyMemberCombatants,
+    isParty:      partyOthers.length > 0,
+    partyRole:    partyOthers.length > 0 ? (isPartyLeader ? 'leader' : 'member') : null,
+    phase:        (partyOthers.length > 0 && !isPartyLeader) ? 'waiting' : 'player',
+    log:          [],
+    busy:         false,
+    bossRound:    0,
   };
 
   // Header
-  const zoneInfo = FOREST_ZONES.find(z => z.id === zoneId);
+  const zoneInfo = FOREST_ZONES.find(z => z.id === zoneId) || DESERT_ZONES.find(z => z.id === zoneId);
   const badge = document.getElementById('cb-tier-badge');
   badge.textContent      = `Tier ${firstTier}`;
   badge.className        = `cb-tier cb-tier-${firstTier}`;
   badge.style.background = tc.bg;
   badge.style.color      = tc.text;
   document.getElementById('cb-zone-label').textContent = zoneInfo?.name || zoneId;
+
+  // Clear stale party member cards from any previous fight
+  document.getElementById('cb-party-members').innerHTML = '';
 
   // Player figure — clear death animation from previous fight before injecting SVG
   const pfig = document.getElementById('cb-player-figure');
@@ -1454,13 +1917,15 @@ function startCombat(zoneId) {
   }
 
   const names = monsters.map(m => m.name).join(', ');
-  addCombatLog(`⚔ ${maxCount > 1 ? `${maxCount} enemies appear` : `A ${names} appears`}!`);
+  addCombatLog(`⚔ ${monsters.length > 1 ? `${monsters.length} enemies appear` : `A ${names} appears`}!`);
   renderCombatBars();
   renderSkillButtons();
 
   const showCombat = () => { document.getElementById('combat-overlay').style.display = 'flex'; };
   if (zoneId === 'demon') {
     showBossIntro(showCombat);
+  } else if (zoneId === 'pharaoh_tomb') {
+    showDesertBossIntro(showCombat);
   } else {
     showCombat();
   }
@@ -1522,6 +1987,35 @@ function renderCombatBars() {
     if (num)  num.textContent  = `${Math.max(0, mon.curHp)}/${mon.hp}`;
     if (card) card.className   = `cb-monster-card${mon.curHp <= 0 ? ' dead' : ''}`;
   });
+
+  // Party member cards — persistent DOM so animation classes survive re-renders
+  const partyEl = document.getElementById('cb-party-members');
+  if (combatState.isParty && combatState.partyMembers.length) {
+    partyEl.style.display = 'flex';
+    combatState.partyMembers.forEach((m, i) => {
+      let card = document.getElementById(`cb-party-card-${i}`);
+      if (!card) {
+        card = document.createElement('div');
+        card.id = `cb-party-card-${i}`;
+        card.innerHTML = `
+          <div class="cb-player-figure" id="cb-party-fig-${i}" style="transform:scaleX(-1)">${PLAYER_SVGS[m.class] || PLAYER_SVGS.Warrior}</div>
+          <div class="cb-name">${escHtml(m.username)}</div>
+          <div class="cb-hero-bar-row">
+            <span class="cb-bar-lbl">HP</span>
+            <div class="cb-bar-track"><div class="cb-bar-fill cb-hp-fill" id="cb-party-hp-fill-${i}"></div></div>
+            <span class="cb-bar-num" id="cb-party-hp-num-${i}"></span>
+          </div>`;
+        partyEl.appendChild(card);
+      }
+      const fill = document.getElementById(`cb-party-hp-fill-${i}`);
+      const num  = document.getElementById(`cb-party-hp-num-${i}`);
+      if (fill) fill.style.width = pct(m.curHp, m.maxHp);
+      if (num)  num.textContent  = `${Math.max(0, m.curHp)}/${m.maxHp}`;
+      card.className = `cb-hero-card${m.curHp <= 0 ? ' ko' : ''}`;
+    });
+  } else {
+    partyEl.style.display = 'none';
+  }
 }
 
 function renderSkillButtons() {
@@ -1529,6 +2023,11 @@ function renderSkillButtons() {
   if (!el || !combatState) return;
   if (combatState.phase === 'win')  { el.innerHTML = '<div class="cb-phase-msg" style="color:var(--gold)">🏆 Victory!</div>'; return; }
   if (combatState.phase === 'lose') { el.innerHTML = '<div class="cb-phase-msg" style="color:#e07070">💀 Defeated...</div>'; return; }
+  if (combatState.player.ko) { el.innerHTML = '<div class="cb-phase-msg" style="color:#e07070">💀 KO\'d — allies fight on...</div>'; return; }
+  if (combatState.partyRole === 'member' && combatState.phase === 'waiting') {
+    el.innerHTML = '<div class="cb-phase-msg" style="color:#aaa">⏳ Waiting for your turn…</div>';
+    return;
+  }
   if (combatState.targetMode) {
     el.innerHTML = `<div class="cb-phase-msg" style="color:#8aaccc;font-size:12px">
       🎯 Select a target&hellip;
@@ -1644,11 +2143,41 @@ async function doAnimation(type, playerAttacking, monIdx = 0) {
 // ── Turn logic ────────────────────────────────────────────────────────────────
 
 function useSkill(skillId) {
-  if (!combatState || combatState.busy || combatState.phase !== 'player') return;
+  if (!combatState || combatState.busy || combatState.phase !== 'player' || combatState.player.ko) return;
   const skills = getPlayerCombatSkills(charCache);
   const skill  = skills.find(s => s.id === skillId);
   if (!skill) return;
   if (skill.mpCost > combatState.player.curMp) { showToast('❌ Not enough MP!'); return; }
+
+  // Party member: compute action locally and relay to leader
+  if (combatState.partyRole === 'member') {
+    combatState.player.curMp -= skill.mpCost;
+    let dmg = 0, targetIdx = -1, logText = '', healAmt = 0;
+    if (skill.heal) {
+      healAmt = Math.floor(combatState.player.stats.spirit * (skill.healMult || 3));
+      combatState.player.curHp = Math.min(combatState.player.maxHp, combatState.player.curHp + healAmt);
+      logText = `💚 ${me.username} uses ${skill.name}: +${healAmt} HP`;
+    } else {
+      targetIdx = combatState.monsters.findIndex(m => m.curHp > 0);
+      if (targetIdx === -1) return;
+      const target = combatState.monsters[targetIdx];
+      const isCrit = Math.random() * 100 < (combatState.player.stats.critRate || 0);
+      const raw = Math.floor(combatState.player.stats.atk * skill.dmgMult) - Math.floor(target.def * 0.5) + randInt(-3, 3);
+      dmg = Math.max(1, isCrit ? raw * 2 : raw);
+      logText = `⚔ ${me.username} uses ${skill.name} on ${target.name}: ${isCrit ? '💥 CRIT ' : ''}−${dmg}`;
+    }
+    combatState.phase = 'waiting';
+    renderSkillButtons();
+    renderCombatBars();
+    // Show local animation so the member sees their own character act
+    const pfig = document.getElementById('cb-player-figure');
+    addAnim(pfig, skill.heal ? 'anim-magic' : 'anim-atk-r', 700);
+    if (!skill.heal && targetIdx >= 0) {
+      setTimeout(() => { addAnim(monsterEl(targetIdx), 'anim-hit', 400); addAnim(monsterEl(targetIdx), 'anim-shake', 450); }, 340);
+    }
+    socket.emit('party:action', { partyId: partyState.partyId, skillId, targetIdx, dmg, healAmt, logText });
+    return;
+  }
 
   // Single-target with multiple live enemies → ask player to pick
   if (!skill.heal && skill.target === 'single') {
@@ -1756,6 +2285,13 @@ async function executeSkill(skillId, targetIdx = null) {
   renderCombatBars();
   if (combatState.monsters.every(m => m.curHp <= 0)) { await handleCombatWin(); return; }
 
+  // Party member interactive turns (leader awaits each member's chosen action)
+  if (combatState.isParty && combatState.partyRole === 'leader') {
+    await doPartyMemberTurns();
+    if (!combatState || combatState.phase === 'win' || combatState.phase === 'lose') return;
+    if (combatState.monsters.every(m => m.curHp <= 0)) { await handleCombatWin(); return; }
+  }
+
   combatState.phase = 'enemy';
   renderSkillButtons();
   await new Promise(r => setTimeout(r, 400));
@@ -1763,6 +2299,308 @@ async function executeSkill(skillId, targetIdx = null) {
 }
 
 // ── Boss intro cutscene ────────────────────────────────────────────────────────
+
+// ── Desert Saharrrra ──────────────────────────────────────────────────────────
+
+const DESERT_ZONES = [
+  { id:'dunes',        name:'The Sunscorched Dunes',     sub:'Scorching heat · Sand as far as the eye can see', pos:{left:'26%',top:'65%'}, levelRange:[13,18] },
+  { id:'bone_wastes',  name:'The Bone Wastes',           sub:'Ancient dead · Sandstorms rattle the bones',       pos:{left:'44%',top:'50%'}, levelRange:[18,23], danger:true },
+  { id:'canyons',      name:'The Whispering Canyons',    sub:'Wind-carved walls · Echoes of the fallen',         pos:{left:'60%',top:'36%'}, levelRange:[23,28], danger:true },
+  { id:'mirror_oasis', name:'The Oasis of Mirrors',      sub:'Mirages shimmer · Trust nothing',                  pos:{left:'75%',top:'52%'}, levelRange:[28,33], danger:true },
+  { id:'pharaoh_tomb', name:'☠ Tomb of the Forgotten Sun', sub:'??? · Do not enter alone',                       pos:{left:'88%',top:'20%'}, levelRange:[35,35], danger:true },
+];
+
+let _desertProgress = 0;
+
+function getDesertProgress() { return _desertProgress; }
+
+async function setDesertProgress(v) {
+  _desertProgress = v;
+  await api('POST', '/api/me/desert-progress', { desert_progress: v });
+}
+
+function updateEasternGate() {
+  const btn = document.getElementById('eastern-gate-btn');
+  if (btn) btn.style.display = _forestProgress >= FOREST_ZONES.length ? 'block' : 'none';
+}
+
+function renderDesertMap() {
+  const progress = getDesertProgress();
+  const campDescs = [
+    'A lone tent. A dying campfire. The wind carries only sand.',
+    'A spice merchant has set up stall. The smell of cardamom cuts through the heat.',
+    'Sacred waters have seeped up from the rock. The Holy Well draws weary travelers.',
+    'Oasis Camp — a crossroads of the eastern trade routes. Voices, lanterns, and commerce.',
+  ];
+  const campDesc = campDescs[Math.min(progress, campDescs.length - 1)];
+
+  const zonesHtml = DESERT_ZONES.map((z, i) => {
+    const locked    = i > progress;
+    const completed = i < progress;
+    const dangerCls = z.danger && !locked ? ' danger' : '';
+    const stateCls  = locked ? ' locked' : completed ? ' done' : '';
+    const clickAttr = locked ? '' : `onclick="onDesertZoneClick('${z.id}')"`;
+    return `<div class="dm-zone${dangerCls}${stateCls}" style="left:${z.pos.left};top:${z.pos.top}" ${clickAttr}>
+      <div class="dm-zone-label">
+        ${locked    ? '<div class="dm-lock">🔒</div>' : ''}
+        ${completed ? '<div class="dm-done">✓</div>'  : ''}
+        <div class="dm-zone-name">${z.name}</div>
+        <div class="dm-zone-sub">${locked ? 'Complete previous area first' : z.sub}</div>
+        ${!locked && z.levelRange ? `<div class="dm-zone-lvrange">Lv.${z.levelRange[0]}–${z.levelRange[1]}</div>` : ''}
+      </div>
+      <div class="dm-connector"></div>
+    </div>`;
+  }).join('');
+
+  const campHtml = `<div class="dm-camp" style="left:8%;top:72%" onclick="openDesertCamp()">
+    <div class="dm-zone-label">
+      <div class="dm-zone-name">🏕 Oasis Camp</div>
+      <div class="dm-zone-sub" style="font-style:italic;font-size:10px">${campDesc}</div>
+    </div>
+  </div>`;
+
+  document.getElementById('dm-zones').innerHTML = campHtml + zonesHtml;
+}
+
+let _desertTimer = null;
+
+function openDesert() {
+  fetchAndCacheStats().catch(() => {});
+  try { SoundEngine.play('desert'); } catch(e) {}
+
+  const overlay = document.getElementById('desert-overlay');
+  const loading = document.getElementById('desert-loading');
+  const map     = document.getElementById('desert-map');
+  overlay.style.display = 'block';
+  loading.style.display = '';
+  map.style.display = 'none';
+
+  const bar = document.getElementById('dld-bar');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    bar.style.transition = 'width 1s linear';
+    bar.style.width = '100%';
+  }));
+
+  clearTimeout(_desertTimer);
+  _desertTimer = setTimeout(() => {
+    loading.style.display = 'none';
+    map.style.display = 'block';
+    renderDesertMap();
+  }, 1000);
+}
+
+function closeDesert() {
+  clearTimeout(_desertTimer);
+  document.getElementById('desert-overlay').style.display = 'none';
+  document.getElementById('desert-loading').style.display = '';
+  document.getElementById('desert-map').style.display = 'none';
+  SoundEngine.play('town');
+}
+
+
+function onDesertZoneClick(id) {
+  const idx      = DESERT_ZONES.findIndex(z => z.id === id);
+  const progress = getDesertProgress();
+  if (idx > progress) { showToast('🔒 Complete the previous area first.'); return; }
+  const pool = ZONE_MONSTER_POOL[id] || [];
+  const hasBoss = pool.some(mid => MONSTER_DEFS[mid]?.isBoss);
+  if (hasBoss) {
+    openPartyModal(id);
+  } else {
+    startCombat(id);
+  }
+}
+
+const RASHID_LINES = [
+  'As the last ember of the Demon Lord\'s fire died, the creature let out a final, rattling wheeze...',
+  '"The Eye... sleeps in Saharrrra... when it wakes... all light dies..."',
+  'The scholars were summoned. Their verdict was grim: an ancient cursed artifact — The Eye of the Forgotten Sun — sleeps beneath the desert sands.',
+  'If it awakens, the world drowns in eternal darkness. The only path forward leads east.',
+  '"I can take you by camel. But know this — the desert is no forest. It is vast, merciless... and it has its own dead." — Caravan Master Rashid',
+];
+
+// Module-level handler ref so removeEventListener always removes the right function
+let _teAdvanceHandler = null;
+
+function openEasternGate() {
+  const overlay  = document.getElementById('travel-east-overlay');
+  const textEl   = document.getElementById('te-text');
+  const promptEl = document.getElementById('te-prompt');
+  const journBtn = document.getElementById('te-journey-btn');
+
+  // Remove any leftover listener from a previous open
+  if (_teAdvanceHandler) {
+    overlay.removeEventListener('click', _teAdvanceHandler);
+    _teAdvanceHandler = null;
+  }
+
+  overlay.style.display = 'flex';
+  let lineIdx = 0, typing = false, ticker = null;
+
+  function showFull() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    typing = false;
+    textEl.textContent = RASHID_LINES[lineIdx];
+    const isLast = lineIdx >= RASHID_LINES.length - 1;
+    promptEl.style.display = isLast ? 'none' : 'block';
+    journBtn.style.display  = isLast ? 'block' : 'none';
+  }
+
+  function typeLine(idx) {
+    promptEl.style.display = 'none';
+    journBtn.style.display = 'none';
+    textEl.textContent = '';
+    typing = true;
+    let i = 0;
+    ticker = setInterval(() => {
+      textEl.textContent += RASHID_LINES[idx][i++];
+      if (i >= RASHID_LINES[idx].length) { clearInterval(ticker); ticker = null; showFull(); }
+    }, 34);
+  }
+
+  function advance() {
+    if (typing) { showFull(); return; }
+    if (lineIdx < RASHID_LINES.length - 1) { lineIdx++; typeLine(lineIdx); }
+  }
+
+  function closeAndRide() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    overlay.style.display = 'none';
+    overlay.removeEventListener('click', advance);
+    _teAdvanceHandler = null;
+    journBtn.onclick = null;
+    // Defer openDesert past the current click event to avoid propagation issues
+    setTimeout(openDesert, 80);
+  }
+
+  _teAdvanceHandler = advance;
+  overlay.addEventListener('click', advance);
+  journBtn.onclick = (e) => { e.stopPropagation(); closeAndRide(); };
+  typeLine(0);
+}
+
+function openDesertCamp() {
+  document.getElementById('bld-popup-icon').textContent = '🏕';
+  document.getElementById('bld-popup-name').textContent = 'Oasis Camp';
+  const campDescs = [
+    'A lone tent. A dying campfire. The wind carries only sand.',
+    'A spice merchant has set up stall. The smell of cardamom cuts through the heat.',
+    'Sacred waters have seeped up from the rock. The Holy Well draws weary travelers.',
+    'Oasis Camp — a crossroads of the eastern trade routes. Voices, lanterns, and commerce.',
+  ];
+  document.getElementById('bld-popup-sub').textContent =
+    campDescs[Math.min(getDesertProgress(), campDescs.length - 1)];
+  document.getElementById('bld-popup-actions').innerHTML = `
+    <button class="bld-action-btn" onclick="healAtHolyWell()">🏺 Holy Well — Restore HP &amp; MP</button>
+    <button class="bld-action-btn" onclick="closeBldPopup();openBlacksmith()">🛍 Sand Bazaar — Buy / Sell Gear</button>
+    <button class="bld-action-btn" onclick="closeBldPopup();closeDesert()">🐪 Return to Town</button>
+  `;
+  document.getElementById('bld-popup').classList.add('show');
+}
+
+async function healAtHolyWell() {
+  const res = await api('POST', '/api/me/heal').catch(() => null);
+  if (res?.ok) {
+    if (charCache) { charCache.curHp = res.curHp; charCache.curMp = res.curMp; }
+    showToast(`🏺 The holy waters restore you! HP & MP fully restored! (${res.curHp} HP / ${res.curMp} MP)`);
+    closeBldPopup();
+  } else {
+    showToast('❌ The well ran dry. Try again.');
+  }
+}
+
+const DESERT_BOSS_INTRO_LINES = [
+  "You dare disturb my eternal rest? Ten thousand years I have waited.",
+  "My kingdom crumbled. My people turned to dust. But I endure — bound to this curse.",
+  "The Eye of the Forgotten Sun does not belong to the living. You will join my servants.",
+];
+
+function showDesertBossIntro(onDone) {
+  if (localStorage.getItem('rpg_desert_boss_intro_seen')) { onDone(); return; }
+
+  const overlay  = document.getElementById('desert-boss-intro-overlay');
+  const textEl   = document.getElementById('desert-boss-intro-text');
+  const promptEl = document.getElementById('desert-boss-intro-prompt');
+  const fightBtn = document.getElementById('desert-boss-intro-fight-btn');
+  const pharaohEl = document.getElementById('desert-boss-intro-pharaoh');
+
+  const lines = DESERT_BOSS_INTRO_LINES;
+
+  pharaohEl.innerHTML = MONSTER_SVGS['pharaoh_wrath'] || '';
+  overlay.style.display = 'flex';
+  pharaohEl.style.animation = 'boss-intro-appear .8s ease-out forwards, boss-intro-float 3s ease-in-out 0.8s infinite';
+
+  let lineIdx = 0;
+  let typing  = false;
+  let ticker  = null;
+
+  function showFull() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    typing = false;
+    textEl.textContent = lines[lineIdx];
+    const isLast = lineIdx >= lines.length - 1;
+    promptEl.style.display = isLast ? 'none' : 'block';
+    fightBtn.style.display  = isLast ? 'block' : 'none';
+  }
+
+  function typeLine(idx) {
+    promptEl.style.display = 'none';
+    fightBtn.style.display = 'none';
+    textEl.textContent = '';
+    typing = true;
+    let i = 0;
+    ticker = setInterval(() => {
+      textEl.textContent += lines[idx][i++];
+      if (i >= lines[idx].length) { clearInterval(ticker); ticker = null; showFull(); }
+    }, 38);
+  }
+
+  function advance() {
+    if (typing) { showFull(); return; }
+    if (lineIdx < lines.length - 1) { lineIdx++; typeLine(lineIdx); }
+  }
+
+  function closeDesertBossIntro() {
+    overlay.style.display = 'none';
+    overlay.removeEventListener('click', advance);
+    fightBtn.onclick = null;
+    localStorage.setItem('rpg_desert_boss_intro_seen', '1');
+    onDone();
+  }
+
+  overlay.addEventListener('click', advance);
+  fightBtn.onclick = (e) => { e.stopPropagation(); closeDesertBossIntro(); };
+
+  typeLine(0);
+}
+
+async function desertBossSummonMinion() {
+  const base = MONSTER_DEFS['cursed_servant'];
+  const lv   = base.level;
+  const hp   = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
+  const atk  = Math.round(base.atk * (1 + (lv - 1) * 0.10));
+  const def  = Math.round(base.def * (1 + (lv - 1) * 0.10));
+  const servant = { ...base, monsterId: 'cursed_servant', level: lv, hp, atk, def, xp: 0, curHp: hp };
+  combatState.monsters.push(servant);
+
+  const area = document.getElementById('cb-monsters-area');
+  area.classList.add('summon-flashing');
+  setTimeout(() => area.classList.remove('summon-flashing'), 600);
+
+  renderMonsterCards();
+  renderCombatBars();
+
+  const newIdx = combatState.monsters.length - 1;
+  const newCard = document.getElementById(`cb-mon-card-${newIdx}`);
+  if (newCard) newCard.classList.add('imp-spawning');
+
+  addCombatLog(`🔴 The Pharaoh's Wrath raises his hand — a Cursed Servant rises from the sand!`);
+  await new Promise(r => setTimeout(r, 700));
+}
+
+// ── End Desert Saharrrra ──────────────────────────────────────────────────────
 
 const BOSS_INTRO_LINES = [
   "A lone {cls}… how disappointing.",
@@ -1879,8 +2717,10 @@ async function monsterTurn() {
 
   if (isSummonRound) {
     const aliveMinions = combatState.monsters.filter(m => m.isMinion && m.curHp > 0).length;
+    const isDesertBoss = combatState.zoneId === 'pharaoh_tomb';
     if (aliveMinions < 3) {
-      await bossSummonMinion();
+      if (isDesertBoss) await desertBossSummonMinion();
+      else              await bossSummonMinion();
     } else {
       await bossEnrage(bossIdx);
     }
@@ -1893,6 +2733,35 @@ async function monsterTurn() {
 
     const mSkills = mon.skills.map(id => MONSTER_SKILLS[id]).filter(Boolean);
     const skill   = mSkills[randInt(0, mSkills.length - 1)];
+
+    // Target a party member: always if leader is KO'd, 40% chance otherwise
+    const alivePartyMembers = combatState.isParty
+      ? combatState.partyMembers.filter(m => m.curHp > 0)
+      : [];
+    const targetsMember = alivePartyMembers.length > 0 &&
+      (combatState.player.ko || Math.random() < 0.4);
+
+    if (targetsMember) {
+      await doAnimation(skill.type, false, i);
+      const member = alivePartyMembers[randInt(0, alivePartyMembers.length - 1)];
+      const memberIdx = combatState.partyMembers.indexOf(member);
+      const mfig = partyMemberFig(memberIdx);
+      const raw  = Math.floor(mon.atk * skill.dmgMult) - Math.floor((member.stats?.def || 10) * 0.5) + randInt(-2, 2);
+      const dmg  = Math.max(1, raw);
+      member.curHp = Math.max(0, member.curHp - dmg);
+      addCombatLog(`${mon.name} uses ${skill.name} on ${member.username}: −${dmg}`);
+      spawnFxText(`-${dmg}`, '#ff4444', mfig);
+      addAnim(mfig, 'anim-hit', 400); addAnim(mfig, 'anim-shake', 450);
+      renderCombatBars();
+      await new Promise(r => setTimeout(r, 280));
+      continue;
+    }
+
+    // Don't attack an already KO'd leader
+    if (combatState.player.ko) {
+      await new Promise(r => setTimeout(r, 200));
+      continue;
+    }
 
     await doAnimation(skill.type, false, i);
 
@@ -1924,13 +2793,58 @@ async function monsterTurn() {
     spawnFxText(`-${dmg}`, '#ff4444', pfig);
     renderCombatBars();
 
-    if (combatState.player.curHp <= 0) { await handleCombatLose(); return; }
+    if (combatState.player.curHp <= 0 && !combatState.player.ko) {
+      combatState.player.curHp = 0;
+      if (combatState.isParty && combatState.partyMembers.some(m => m.curHp > 0)) {
+        // KO the leader — allies fight on
+        combatState.player.ko = true;
+        if (pfig) pfig.classList.add('anim-death');
+        addCombatLog(`💀 ${me.username} has fallen! Allies fight on...`);
+        api('POST', '/api/me/die').catch(() => {});
+        if (charCache) charCache.curHp = 1;
+        renderCombatBars();
+      } else {
+        await handleCombatLose(); return;
+      }
+    }
     await new Promise(r => setTimeout(r, 280));
   }
+
+  // Wipe check: leader KO'd and all party members also down
+  if (combatState.player.ko && combatState.partyMembers.every(m => m.curHp <= 0)) {
+    await handleCombatLose(); return;
+  }
+
+  // Sync state to all party members after monsters' attacks
+  emitPartySync();
 
   combatState.phase = 'player';
   combatState.busy  = false;
   renderSkillButtons();
+
+  // If leader is KO'd but allies are still standing, give them interactive turns
+  if (combatState.player.ko && combatState.partyMembers.some(m => m.curHp > 0)) {
+    await new Promise(r => setTimeout(r, 1000));
+    await doAllyAutoTurn();
+  }
+}
+
+// Called each round when the leader is KO'd but party members are still alive
+async function doAllyAutoTurn() {
+  if (!combatState || combatState.phase === 'win' || combatState.phase === 'lose') return;
+  combatState.busy = true;
+
+  // Give each alive member an interactive turn
+  await doPartyMemberTurns();
+  if (!combatState || combatState.phase === 'win' || combatState.phase === 'lose') return;
+
+  renderCombatBars();
+  if (combatState.monsters.every(m => m.curHp <= 0)) { await handleCombatWin(); return; }
+
+  // Monster counter-attack
+  combatState.phase = 'enemy';
+  await new Promise(r => setTimeout(r, 400));
+  await monsterTurn();
 }
 
 async function handleCombatWin() {
@@ -1949,11 +2863,35 @@ async function handleCombatWin() {
   addCombatLog(`🏆 All enemies defeated! +${totalXp} XP`);
 
   // Save XP, then save loot — both must complete before we fetch fresh stats
-  const xpRes = await api('POST', '/api/me/xp', { xp: totalXp }).catch(() => null);
-  const leveledUp   = xpRes?.newSkillPoints > 0;
-
   const monsterList = combatState.monsters.map(m => ({ monsterId: m.monsterId, tier: m.tier, level: m.level }));
-  const lootRes     = await api('POST', '/api/me/loot', { monsters: monsterList }).catch(() => null);
+
+  let xpRes, lootRes, leveledUp;
+  if (combatState.isParty && partyState?.partyId) {
+    if (partyState.isLeader) {
+      // Only the leader calls the reward endpoint — it awards XP + loot to all members
+      const partyMembers = partyState.members || [me.username];
+      const partyReward  = await api('POST', '/api/party/reward', { partyMembers, xp: totalXp, monsters: monsterList }).catch(() => null);
+      const myResult     = partyReward?.results?.[me.username];
+      xpRes     = myResult;
+      lootRes   = { items: myResult?.items || [], gold: myResult?.gold || 0 };
+      leveledUp = (myResult?.levelGain || 0) > 0;
+      socket.emit('party:end', { partyId: partyState.partyId });
+    } else {
+      // Member clients: wait up to 8s for leader to call party:end (which triggers reward)
+      await new Promise(resolve => {
+        const cleanup = () => { socket.off('party:ended', handler); clearTimeout(timer); resolve(); };
+        const handler = () => cleanup();
+        const timer   = setTimeout(cleanup, 8000);
+        socket.once('party:ended', handler);
+      });
+      xpRes = null; lootRes = null; leveledUp = false;
+    }
+    partyState = null;
+  } else {
+    xpRes     = await api('POST', '/api/me/xp',   { xp: totalXp }).catch(() => null);
+    lootRes   = await api('POST', '/api/me/loot',  { monsters: monsterList }).catch(() => null);
+    leveledUp = xpRes?.newSkillPoints > 0;
+  }
 
   // Fetch fresh stats NOW — items are already in the DB, this is guaranteed correct
   const [freshStats, freshSkills] = await Promise.all([
@@ -1967,10 +2905,20 @@ async function handleCombatWin() {
   }
 
   if (leveledUp) {
-    showToast(`🎉 Level up! +${xpRes.newSkillPoints} skill point${xpRes.newSkillPoints > 1 ? 's' : ''}, +${xpRes.newAttrPoints ?? 5} attribute points!`);
+    const sp = xpRes?.newSkillPoints ?? xpRes?.levelGain ?? 1;
+    const ap = xpRes?.newAttrPoints ?? 5;
+    showToast(`🎉 Level up! +${sp} skill point${sp > 1 ? 's' : ''}, +${ap} attribute points!`);
   }
 
-  combatState._pendingZoneIdx = combatState.zoneIdx;
+  // For party member clients: derive new items from fresh inventory
+  if (lootRes === null) {
+    const preIds = combatState._preInvIds || new Set();
+    const newItems = (charCache?.inventory || []).filter(i => !preIds.has(i.inv_id));
+    lootRes = { items: newItems, gold: 0 };
+  }
+
+  combatState._pendingZoneIdx       = combatState.zoneIdx >= 0 ? combatState.zoneIdx : undefined;
+  combatState._pendingDesertZoneIdx = combatState.desertZoneIdx >= 0 ? combatState.desertZoneIdx : undefined;
 
   // If inventory is over 100, make player drop items before seeing loot
   const inv = charCache?.inventory || [];
@@ -2100,17 +3048,114 @@ function showLootPanel(lootRes) {
   </div>`;
 }
 
+function showDemonLordDeathScene() {
+  return new Promise(resolve => {
+    const overlay  = document.getElementById('travel-east-overlay');
+    const caravan  = document.getElementById('te-caravan');
+    const textEl   = document.getElementById('te-text');
+    const promptEl = document.getElementById('te-prompt');
+    const journBtn = document.getElementById('te-journey-btn');
+    const speaker  = document.getElementById('te-speaker');
+
+    const deathLines = [
+      '...The Demon Lord collapses. The dark forest falls silent for the first time in a hundred years.',
+      'As the last ember of its fire dies, the creature lets out a rattling whisper...',
+      '"The Eye... sleeps in Saharrrra... when it wakes... all light dies..."',
+      'The words hang in the cold air. Something stirs far to the east. The journey is not over.',
+    ];
+
+    caravan.textContent = '👹';
+    caravan.style.animation = 'none';
+    caravan.style.opacity = '0.4';
+    caravan.style.filter = 'grayscale(1) drop-shadow(0 0 20px rgba(255,50,0,.4))';
+    speaker.textContent = '— THE DEMON LORD —';
+    overlay.style.display = 'flex';
+
+    let lineIdx = 0, typing = false, ticker = null;
+
+    function showFull() {
+      if (ticker) { clearInterval(ticker); ticker = null; }
+      typing = false;
+      textEl.textContent = deathLines[lineIdx];
+      const isLast = lineIdx >= deathLines.length - 1;
+      promptEl.style.display = isLast ? 'none' : 'block';
+      journBtn.style.display  = isLast ? 'block' : 'none';
+      if (isLast) {
+        journBtn.textContent = '↩ Return to Town';
+        journBtn.style.display = 'block';
+      }
+    }
+
+    function typeLine(idx) {
+      promptEl.style.display = 'none';
+      journBtn.style.display = 'none';
+      textEl.textContent = '';
+      typing = true;
+      let i = 0;
+      ticker = setInterval(() => {
+        textEl.textContent += deathLines[idx][i++];
+        if (i >= deathLines[idx].length) { clearInterval(ticker); ticker = null; showFull(); }
+      }, 36);
+    }
+
+    function advance() {
+      if (typing) { showFull(); return; }
+      if (lineIdx < deathLines.length - 1) { lineIdx++; typeLine(lineIdx); }
+    }
+
+    function close() {
+      overlay.style.display = 'none';
+      overlay.removeEventListener('click', advance);
+      journBtn.onclick = null;
+      // Reset caravan icon for next use
+      caravan.textContent = '🐪';
+      caravan.style.animation = '';
+      caravan.style.opacity = '';
+      caravan.style.filter = '';
+      speaker.textContent = '— CARAVAN MASTER RASHID —';
+      resolve();
+    }
+
+    overlay.addEventListener('click', advance);
+    journBtn.onclick = (e) => { e.stopPropagation(); close(); };
+    typeLine(0);
+  });
+}
+
 async function collectLoot() {
-  const zoneIdx = combatState?._pendingZoneIdx;
+  const zoneIdx       = combatState?._pendingZoneIdx;
+  const desertZoneIdx = combatState?._pendingDesertZoneIdx;
   closeCombat();
+
+  // Forest progress
   if (zoneIdx !== undefined && zoneIdx === getForestProgress()) await setForestProgress(zoneIdx + 1);
   renderForestMap();
   if (zoneIdx !== undefined) {
     const next = FOREST_ZONES[zoneIdx + 1];
-    showToast(next
-      ? `✅ ${FOREST_ZONES[zoneIdx].name} cleared! ${next.name} unlocked!`
-      : `🏆 The Dark Forest has been conquered!`);
+    updateEasternGate();
+    if (!next) {
+      // Dark Forest fully conquered — show dying Demon Lord scene, then quest complete
+      await showDemonLordDeathScene();
+      const res = await api('POST', '/api/me/quests/gatehouse/complete').catch(() => null);
+      if (res?.ok && !res.alreadyDone) {
+        await loadQuestLog();
+      }
+      showToast('🏆 Quest complete: Into the Dark Forest! The TRAVEL EAST gate is now open.');
+    } else {
+      showToast(`✅ ${FOREST_ZONES[zoneIdx].name} cleared! ${next.name} unlocked!`);
+    }
   }
+
+  // Desert progress
+  if (desertZoneIdx !== undefined && desertZoneIdx === getDesertProgress()) {
+    await setDesertProgress(desertZoneIdx + 1);
+    renderDesertMap();
+    const next = DESERT_ZONES[desertZoneIdx + 1];
+    showToast(next
+      ? `✅ ${DESERT_ZONES[desertZoneIdx].name} cleared! ${next.name} unlocked!`
+      : `🏆 The Desert Saharrrra has been conquered! The Eye of the Forgotten Sun rests in peace.`);
+  }
+
   // charCache was already refreshed in handleCombatWin after loot was saved —
   // re-render the panel if it's open so new items are visible immediately.
   if (document.getElementById('char-panel').classList.contains('show')) {
@@ -2130,9 +3175,14 @@ async function handleCombatLose() {
   api('POST', '/api/me/die').then(() => {
     if (charCache) charCache.curHp = 1;
   }).catch(() => {});
+  // Notify party members if this was a party wipe (leader lost)
+  if (combatState.isParty && combatState.partyRole === 'leader' && partyState?.partyId) {
+    socket.emit('party:end', { partyId: partyState.partyId, result: 'lose' });
+    partyState = null;
+  }
   await new Promise(r => setTimeout(r, 1500));
   closeCombat();
-  showToast('💀 You were defeated. Visit the Royal Keep to restore your HP!');
+  showToast('💀 You were defeated. Visit the Chapel to receive a blessing!');
 }
 
 function fleeCombat() {
@@ -2141,20 +3191,25 @@ function fleeCombat() {
   showToast('🏃 You fled from battle!');
 }
 
-async function healAtRoyalKeep() {
+async function healAtChapel() {
   const res = await api('POST', '/api/me/heal').catch(() => null);
   if (res?.ok) {
     if (charCache) { charCache.curHp = res.curHp; charCache.curMp = res.curMp; }
-    showToast(`🩹 HP & MP fully restored! (${res.curHp} HP / ${res.curMp} MP)`);
+    showToast(`🙏 Blessed! HP & MP fully restored! (${res.curHp} HP / ${res.curMp} MP)`);
     closeBldPopup();
   } else {
-    showToast('❌ Could not restore HP.');
+    showToast('❌ Could not receive blessing.');
   }
 }
 
 function closeCombat() {
   combatState = null;
   document.getElementById('combat-overlay').style.display = 'none';
+  document.getElementById('cb-party-members').innerHTML = '';
+  // Return to forest or desert music if overlay is open, else town
+  const forestOpen = document.getElementById('forest-overlay')?.style.display !== 'none';
+  const desertOpen = document.getElementById('desert-overlay')?.style.display !== 'none';
+  try { SoundEngine.play(forestOpen ? 'forest' : desertOpen ? 'desert' : 'town'); } catch(e) {}
 }
 
 // ── Blacksmith Shop ───────────────────────────────────────────────────────────

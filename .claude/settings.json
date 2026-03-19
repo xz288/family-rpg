@@ -13,7 +13,14 @@
       "Bash(lsof -ti:3000)",
       "Bash(taskkill //PID 11384 //F)",
       "Bash(kill -9 11384)",
-      "Bash(node -e \"require\\(''''./database''''\\)\")"
+      "Bash(node -e \"require\\(''''./database''''\\)\")",
+      "Bash(sed \"s/onclick=openPanel\\(''''church''''\\)/onclick=onBuildingClick\\(''''The Chapel'''',''''\\\\&#x26EA;'''',''''A place of solemnity and worship. The priests offer blessings to weary adventurers.'''',''''Holy Shrine''''\\)/g\")",
+      "Read(//tmp/**)",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const code=fs.readFileSync\\(''c:/workspace/family-rpg/public/game.js'',''utf8''\\);const funcs=[''openDesert'',''closeDesert'',''renderDesertMap'',''onDesertZoneClick'',''openEasternGate'',''openDesertCamp'',''healAtHolyWell'',''showDesertBossIntro'',''desertBossSummonMinion'',''updateEasternGate'',''getDesertProgress'',''setDesertProgress''];funcs.forEach\\(f=>{console.log\\(code.includes\\(''function ''+f\\)?''OK'':''MISSING'',f\\);}\\);console.log\\(''lines:'',code.split\\(''\\\\n''\\).length\\);\")",
+      "Bash(timeout 5 node server.js)",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const code=fs.readFileSync\\(''c:/workspace/family-rpg/public/game.js'',''utf8''\\);console.log\\(''lines:'',code.split\\(''\\\\n''\\).length\\);[''showDemonLordDeathScene'',''openEasternGate'',''RASHID_LINES'',''travel-east-overlay''].forEach\\(f=>console.log\\(code.includes\\(f\\)?''OK'':''MISSING'',f\\)\\);\")",
+      "Bash(node --check c:/workspace/family-rpg/public/game.js)",
+      "Bash(node --check c:/workspace/family-rpg/public/sound.js)"
     ]
   }
 }

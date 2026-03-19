@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Scorched Wastes — Desert Ambience</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#100c04;
+  font-family:'Crimson Text',serif;
+  min-height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:24px 16px;
+  color:#d4a84a;
+}
+h1 {
+  font-family:'UnifrakturMaguntia',cursive;
+  font-size:clamp(1.5rem,4vw,2.5rem); color:#e8a030;
+  letter-spacing:.08em;
+  text-shadow:0 0 50px rgba(240,140,10,.55),0 0 100px rgba(180,80,0,.3),0 3px 8px rgba(0,0,0,1);
+  margin-bottom:4px; text-align:center;
+}
+.subtitle {
+  font-family:'Crimson Text',serif; font-style:italic;
+  color:#6a4010; font-size:.82rem; letter-spacing:.2em;
+  text-transform:uppercase; margin-bottom:24px; text-align:center;
+}
+.card {
+  width:min(96vw,580px);
+  background:linear-gradient(160deg,#140e04 0%,#0c0802 100%);
+  border:1px solid #3a2408;
+  clip-path:polygon(0 10px,10px 0,calc(100% - 10px) 0,100% 10px,100% calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,0 calc(100% - 10px));
+  padding:24px 26px 22px; position:relative;
+}
+.card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent 5%,#7a3a08 25%,#d48010 50%,#7a3a08 75%,transparent 95%);
+}
+.card::after {
+  content:'☀'; position:absolute; top:-11px; left:50%; transform:translateX(-50%);
+  font-size:15px; color:#9a5010; background:#100c04; padding:0 8px;
+}
+
+#viz-canvas {
+  width:100%; height:90px; background:#08060000;
+  border:1px solid #1e1408; border-radius:2px;
+  margin-bottom:18px; display:block;
+}
+
+.play-btn {
+  width:100%; padding:14px;
+  font-family:'Cinzel Decorative',serif; font-size:.72rem; letter-spacing:.15em;
+  cursor:pointer; border:1px solid #4a2808; color:#c87010; background:transparent;
+  clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,7px 100%,0 calc(100% - 7px));
+  transition:all .22s; margin-bottom:20px;
+}
+.play-btn:hover   { border-color:#c87010; background:rgba(200,112,16,.07); color:#e89020; }
+.play-btn.playing { border-color:#2a5080; color:#4080b0; background:rgba(40,80,128,.07); }
+
+.section-title {
+  font-family:'Cinzel Decorative',serif; font-size:.58rem; letter-spacing:.18em; color:#4a2a08;
+  text-transform:uppercase; margin-bottom:10px; margin-top:16px;
+}
+.section-title:first-of-type { margin-top:0; }
+
+.time-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+.time-btn {
+  font-family:'Cinzel Decorative',serif; font-size:.57rem;
+  letter-spacing:.1em; padding:7px 12px; cursor:pointer;
+  border:1px solid #201408; color:#4a2c10; background:transparent; transition:all .2s;
+  clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,4px 100%,0 calc(100% - 4px));
+}
+.time-btn:hover  { border-color:#7a4010; color:#b06020; }
+.time-btn.active { border-color:#d08010; color:#e8a020; background:rgba(200,128,16,.09); }
+
+.layer-row {
+  display:grid; grid-template-columns:156px 1fr 42px;
+  align-items:center; gap:10px; margin-bottom:9px;
+}
+.layer-name {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.9rem; color:#6a4020;
+}
+input[type=range] {
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:3px; background:#1e1008; border-radius:2px; outline:none; cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:13px; height:13px;
+  border-radius:50%; background:#7a4010;
+  border:1px solid #d08010; cursor:pointer; transition:background .15s;
+}
+input[type=range]:hover::-webkit-slider-thumb { background:#d08010; }
+.vol-val { font-family:'Crimson Text',serif; font-size:.78rem; color:#5a3010; text-align:right; }
+
+.event-row { display:flex; gap:7px; flex-wrap:wrap; margin-top:4px; }
+.event-btn {
+  font-family:'Cinzel Decorative',serif; font-size:.56rem;
+  letter-spacing:.08em; padding:7px 11px; cursor:pointer;
+  border:1px solid #2a1a08; color:#4a2c10; background:transparent; transition:all .18s;
+  clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,4px 100%,0 calc(100% - 4px));
+}
+.event-btn:hover  { border-color:#9a5010; color:#c07020; }
+.event-btn:active { transform:scale(.97); }
+
+.divider {
+  height:1px;
+  background:repeating-linear-gradient(90deg,transparent,transparent 4px,#1e1008 4px,#1e1008 8px);
+  margin:14px 0;
+}
+
+/* beat indicator */
+.beat-row { display:flex; gap:4px; align-items:flex-end; margin-bottom:12px; height:20px; }
+.beat-pip {
+  flex:1; border-radius:1px 1px 0 0; background:#1a1004;
+  transition:background .05s, height .05s; min-height:3px; height:3px;
+}
+.beat-pip.dum   { background:#d08010; height:18px !important; }
+.beat-pip.tek   { background:#9a6010; height:10px !important; }
+.beat-pip.ka    { background:#6a4010; height:7px  !important; }
+
+/* shimmer dots */
+.shimmer-row { display:flex; gap:5px; align-items:center; margin-top:8px; }
+.shimmer-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:#1a1004; transition:background .08s, box-shadow .08s;
+}
+.shimmer-dot.lit { background:#e09010; box-shadow:0 0 6px rgba(220,120,10,.8); }
+.shimmer-label {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.75rem; color:#3a2008; margin-left:4px;
+}
+
+/* heat intensity */
+.heat-wrap { margin-bottom:14px; }
+.heat-label {
+  font-family:'Cinzel Decorative',serif; font-size:.54rem;
+  letter-spacing:.15em; color:#3a2008; margin-bottom:5px;
+  display:flex; justify-content:space-between;
+}
+.heat-bg {
+  height:5px; background:#100800; border-radius:1px;
+  border:1px solid #201008; overflow:hidden;
+}
+#heat-fill {
+  height:100%; width:60%;
+  background:linear-gradient(90deg,#7a2008,#d06010,#f0c020);
+  border-radius:1px; transition:width .5s ease;
+}
+
+#status-line {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.78rem; color:#3a2008; text-align:center;
+  margin-top:12px; min-height:1.1em; letter-spacing:.05em;
+}
+</style>
+</head>
+<body>
+
+<h1>☀ The Scorched Wastes ☀</h1>
+<p class="subtitle">― the sun takes everything ―</p>
+
+<div class="card">
+  <canvas id="viz-canvas"></canvas>
+
+  <button class="play-btn" id="play-btn" onclick="togglePlay()">
+    ▶ &nbsp; Enter the Wastes
+  </button>
+
+  <!-- heat meter -->
+  <div class="heat-wrap">
+    <div class="heat-label"><span>Heat Intensity</span><span id="heat-pct">60%</span></div>
+    <div class="heat-bg"><div id="heat-fill"></div></div>
+  </div>
+
+  <!-- TIME OF DAY -->
+  <div class="section-title">Time of Day</div>
+  <div class="time-row">
+    <button class="time-btn"        id="time-dawn"   onclick="setTimeOfDay('dawn')">Dawn</button>
+    <button class="time-btn active" id="time-midday" onclick="setTimeOfDay('midday')">High Noon</button>
+    <button class="time-btn"        id="time-dusk"   onclick="setTimeOfDay('dusk')">Dusk</button>
+    <button class="time-btn"        id="time-night"  onclick="setTimeOfDay('night')">Desert Night</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- BEAT GRID (tabla pattern) -->
+  <div class="section-title">Tabla Rhythm &nbsp;<span id="tempo-label" style="color:#5a3010;font-family:'Crimson Text',serif;font-style:italic;font-weight:400;font-size:.7rem;letter-spacing:.05em;text-transform:none;">72 bpm</span></div>
+  <div class="beat-row" id="beat-row"></div>
+
+  <!-- LAYERS -->
+  <div class="section-title">Layers</div>
+
+  <div class="layer-row">
+    <span class="layer-name">Heat Shimmer</span>
+    <input type="range" id="vol-shimmer" min="0" max="100" value="70" oninput="setVol('shimmer',this.value)"/>
+    <span class="vol-val" id="lbl-shimmer">70</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Oud Melody</span>
+    <input type="range" id="vol-oud" min="0" max="100" value="65" oninput="setVol('oud',this.value)"/>
+    <span class="vol-val" id="lbl-oud">65</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Sandy Wind</span>
+    <input type="range" id="vol-wind" min="0" max="100" value="75" oninput="setVol('wind',this.value)"/>
+    <span class="vol-val" id="lbl-wind">75</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Tabla / Doumbek</span>
+    <input type="range" id="vol-tabla" min="0" max="100" value="60" oninput="setVol('tabla',this.value)"/>
+    <span class="vol-val" id="lbl-tabla">60</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Desert Drone</span>
+    <input type="range" id="vol-drone" min="0" max="100" value="55" oninput="setVol('drone',this.value)"/>
+    <span class="vol-val" id="lbl-drone">55</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Throat Hum</span>
+    <input type="range" id="vol-hum" min="0" max="100" value="40" oninput="setVol('hum',this.value)"/>
+    <span class="vol-val" id="lbl-hum">40</span>
+  </div>
+
+  <!-- shimmer indicators -->
+  <div class="shimmer-row">
+    <div class="shimmer-dot" id="sh-0"></div>
+    <div class="shimmer-dot" id="sh-1"></div>
+    <div class="shimmer-dot" id="sh-2"></div>
+    <div class="shimmer-dot" id="sh-3"></div>
+    <div class="shimmer-dot" id="sh-4"></div>
+    <div class="shimmer-dot" id="sh-5"></div>
+    <span class="shimmer-label">shimmer</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- EVENTS -->
+  <div class="section-title">Desert Events</div>
+  <div class="event-row">
+    <button class="event-btn" onclick="triggerGust()">🌪 Sand Gust</button>
+    <button class="event-btn" onclick="triggerMirage()">✨ Mirage</button>
+    <button class="event-btn" onclick="triggerOudStrike()">🎵 Oud Strike</button>
+    <button class="event-btn" onclick="triggerHawkCry()">🦅 Hawk Cry</button>
+    <button class="event-btn" onclick="triggerDryThunder()">⚡ Dry Thunder</button>
+  </div>
+
+  <div id="status-line">the horizon shimmers with impossible heat...</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   THE SCORCHED WASTES — Desert Ambient Composer
+   Hijaz / Phrygian Dominant scale · Tabla rhythm
+   Oud synthesis · Sandy wind · Heat shimmer
+   Web Audio API — pure synthesis
+   ══════════════════════════════════════════════════ */
+
+let ctx = null, isPlaying = false;
+let masterGain, analyser, compressor;
+const gains = {};
+const vols = { shimmer:.70, oud:.65, wind:.75, tabla:.60, drone:.55, hum:.40 };
+let liveNodes = [], scheduledTimers = [];
+let lookaheadTimer = null, vizFrame = null;
+
+/* ── Time of Day presets ── */
+const times = {
+  dawn:   { rootHz:146.8, heatPct:25, bpm:60, wispRate:14, statusLine:'The sun creeps over the dunes. A brief mercy.', name:'Dawn' },
+  midday: { rootHz:146.8, heatPct:100,bpm:72, wispRate:4,  statusLine:'The sky is white. The sand burns through your boots.', name:'High Noon' },
+  dusk:   { rootHz:130.8, heatPct:55, bpm:66, wispRate:8,  statusLine:'The dunes turn blood orange. The heat does not relent.', name:'Dusk' },
+  night:  { rootHz:110.0, heatPct:15, bpm:52, wispRate:18, statusLine:'Cold descends without mercy. The desert has two faces.', name:'Desert Night' },
+};
+let currentTime = 'midday';
+
+/* ── Hijaz (Phrygian Dominant) scale ──
+   Degrees in semitones from root: 0,1,4,5,7,8,10
+   The b2 and #3 give the characteristic Middle Eastern tension  */
+const HIJAZ = [0, 1, 4, 5, 7, 8, 10];
+
+function semToHz(base, semi) { return base * Math.pow(2, semi / 12); }
+function getTimeObj()        { return times[currentTime]; }
+
+/* ── Tabla pattern (16 steps) ──
+   Doumbek pattern: Dum Tek Ka Tek  Dum Ka Tek Dum  Tek Ka Dum Tek  Ka Dum Tek Ka
+   0=rest 1=dum(deep) 2=tek(mid) 3=ka(high)  */
+const TABLA_PATTERNS = {
+  dawn:   [1,0,0,2, 0,3,0,0, 1,0,2,0, 0,0,3,0],
+  midday: [1,0,2,0, 3,0,1,0, 0,2,0,3, 1,0,2,3],
+  dusk:   [1,0,0,2, 3,0,1,2, 0,0,3,0, 1,2,0,3],
+  night:  [1,0,0,0, 0,0,2,0, 0,0,1,0, 0,3,0,0],
+};
+
+/* ── Build 16 beat pips ── */
+function buildBeatRow() {
+  const row = document.getElementById('beat-row');
+  row.innerHTML = '';
+  for (let i = 0; i < 16; i++) {
+    const d = document.createElement('div');
+    d.className = 'beat-pip'; d.id = 'pip-' + i;
+    row.appendChild(d);
+  }
+}
+buildBeatRow();
+
+/* ── Init Audio Context ── */
+function initCtx() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -16;
+  compressor.ratio.value = 4;
+  compressor.attack.value = 0.005;
+  compressor.release.value = 0.3;
+
+  masterGain = ctx.createGain(); masterGain.gain.value = 0.82;
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.88;
+
+  masterGain.connect(compressor);
+  compressor.connect(analyser);
+  analyser.connect(ctx.destination);
+
+  ['shimmer','oud','wind','tabla','drone','hum'].forEach(k => {
+    gains[k] = ctx.createGain();
+    gains[k].gain.value = vols[k] * 0.88;
+    gains[k].connect(masterGain);
+  });
+}
+
+/* ── Reverb ── */
+function makeReverb(dur = 3, decay = 1.8) {
+  const len = ctx.sampleRate * dur;
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  const cv = ctx.createConvolver(); cv.buffer = buf; return cv;
+}
+
+let sharedRev = null;
+function getRev() { if (!sharedRev) sharedRev = makeReverb(3.5, 1.6); return sharedRev; }
+
+/* ══════════════════════════
+   LAYER 1: HEAT SHIMMER
+   High-frequency resonant overtone — thin, dizzying, relentless
+   ══════════════════════════ */
+function startShimmer(tod) {
+  const rev = makeReverb(2, 2.5); rev.connect(gains.shimmer);
+
+  /* Multiple high partial sines — very close in frequency = beating / shimmer */
+  const baseF = tod.rootHz * 8; /* 4 octaves up — very high */
+  const offsets = [0, 0.7, -0.5, 1.1, -0.9, 0.3];
+
+  offsets.forEach((offset, i) => {
+    const osc = ctx.createOscillator();
+    const gn  = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = baseF + offset;
+
+    /* slow drift to create organic shimmer beating */
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.03 + i * 0.007 + Math.random() * 0.01;
+    const lg = ctx.createGain(); lg.gain.value = 0.6 + Math.random() * 0.4;
+    lfo.connect(lg); lg.connect(osc.frequency); lfo.start();
+    liveNodes.push(lfo);
+
+    gn.gain.setValueAtTime(0, ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(0.12 / (i + 1), ctx.currentTime + 3 + i);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(); liveNodes.push(osc);
+  });
+
+  /* shimmer indicator flicker */
+  scheduleShimmerFlicker();
+}
+
+function scheduleShimmerFlicker() {
+  if (!isPlaying) return;
+  const delay = 200 + Math.random() * 600;
+  const t = setTimeout(() => {
+    if (!isPlaying) return;
+    const idx = Math.floor(Math.random() * 6);
+    const dot = document.getElementById('sh-' + idx);
+    if (dot) {
+      dot.classList.add('lit');
+      setTimeout(() => dot.classList.remove('lit'), 80 + Math.random() * 200);
+    }
+    scheduleShimmerFlicker();
+  }, delay);
+  scheduledTimers.push(t);
+}
+
+/* ══════════════════════════
+   LAYER 2: OUD MELODY
+   Hijaz scale plucked string synthesis
+   Oud = sharp attack + exponential decay + body resonance + sympathetic buzz
+   ══════════════════════════ */
+let oudTimer = null;
+
+function scheduleOud() {
+  if (!isPlaying) return;
+  const tod = getTimeObj();
+  const rev = getRev(); rev.connect(gains.oud);
+
+  /* Pick a phrase: 3–5 notes from Hijaz scale, sparse and meditative */
+  const phraseLen = 3 + Math.floor(Math.random() * 3);
+  const phrase = [];
+  for (let i = 0; i < phraseLen; i++) {
+    const degree = HIJAZ[Math.floor(Math.random() * HIJAZ.length)];
+    /* occasionally jump octave */
+    const oct = Math.random() > 0.75 ? 2 : 1;
+    phrase.push(semToHz(tod.rootHz * oct, degree));
+  }
+
+  const noteDur  = 0.18 + Math.random() * 0.12; /* plucked — short */
+  const noteGap  = 0.28 + Math.random() * 0.55;  /* breathing space between */
+
+  phrase.forEach((freq, i) => {
+    const on = ctx.currentTime + 0.05 + i * (noteDur + noteGap);
+
+    /* ── Body resonance (low, warm) ── */
+    const body = ctx.createOscillator();
+    const bodyGn = ctx.createGain();
+    body.type = 'triangle';
+    body.frequency.value = freq;
+    bodyGn.gain.setValueAtTime(0, on);
+    bodyGn.gain.linearRampToValueAtTime(0.55, on + 0.006);
+    bodyGn.gain.exponentialRampToValueAtTime(0.001, on + noteDur * 3.5);
+    body.connect(bodyGn); bodyGn.connect(rev);
+    body.start(on); body.stop(on + noteDur * 4); liveNodes.push(body);
+
+    /* ── Pluck attack layer (higher harmonic burst) ── */
+    const pluck = ctx.createOscillator();
+    const pluckGn = ctx.createGain();
+    const pluckFilt = ctx.createBiquadFilter();
+    pluckFilt.type = 'bandpass'; pluckFilt.frequency.value = freq * 3.5; pluckFilt.Q.value = 3;
+    pluck.type = 'sawtooth';
+    pluck.frequency.value = freq;
+    pluckGn.gain.setValueAtTime(0.4, on);
+    pluckGn.gain.exponentialRampToValueAtTime(0.001, on + 0.04);
+    pluck.connect(pluckFilt); pluckFilt.connect(pluckGn); pluckGn.connect(rev);
+    pluck.start(on); pluck.stop(on + 0.05); liveNodes.push(pluck);
+
+    /* ── Sympathetic string buzz (slight detune) ── */
+    const buzz = ctx.createOscillator();
+    const buzzGn = ctx.createGain();
+    buzz.type = 'sine';
+    buzz.frequency.value = freq * 2.003; /* slightly sharp 2nd harmonic */
+    buzzGn.gain.setValueAtTime(0, on);
+    buzzGn.gain.linearRampToValueAtTime(0.12, on + 0.008);
+    buzzGn.gain.exponentialRampToValueAtTime(0.001, on + noteDur * 2.5);
+    buzz.connect(buzzGn); buzzGn.connect(rev);
+    buzz.start(on); buzz.stop(on + noteDur * 3); liveNodes.push(buzz);
+  });
+
+  /* rest then replays — sparse, meditative */
+  const totalMs = (phrase.length * (noteDur + noteGap)) * 1000;
+  const restMs  = (2.5 + Math.random() * 5) * 1000;
+  oudTimer = setTimeout(scheduleOud, totalMs + restMs);
+  scheduledTimers.push(oudTimer);
+}
+
+/* ══════════════════════════
+   LAYER 3: SANDY WIND
+   Airy, lighter than forest wind — two filtered noise bands
+   Slow LFO gusts — feel like sand sweeping across dunes
+   ══════════════════════════ */
+function startSandyWind() {
+  const makeSand = (dur) => {
+    const len = ctx.sampleRate * dur;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d   = buf.getChannelData(0);
+    /* white noise — airier than pink, feels lighter */
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  };
+
+  /* High sweep — the whistle of sand over rock */
+  const src1 = ctx.createBufferSource();
+  src1.buffer = makeSand(5); src1.loop = true;
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2800;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 4200; bp.Q.value = 0.7;
+  const gn1 = ctx.createGain(); gn1.gain.value = 0.35;
+
+  /* gust LFO — irregular, organic */
+  const lfo1 = ctx.createOscillator(); lfo1.frequency.value = 0.07;
+  const lg1  = ctx.createGain(); lg1.gain.value = 0.22;
+  lfo1.connect(lg1); lg1.connect(gn1.gain); lfo1.start();
+  liveNodes.push(lfo1);
+
+  /* secondary slower gust */
+  const lfo2 = ctx.createOscillator(); lfo2.frequency.value = 0.13;
+  const lg2  = ctx.createGain(); lg2.gain.value = 0.12;
+  lfo2.connect(lg2); lg2.connect(gn1.gain); lfo2.start();
+  liveNodes.push(lfo2);
+
+  src1.connect(hp); hp.connect(bp); bp.connect(gn1); gn1.connect(gains.wind);
+  src1.start(); liveNodes.push(src1);
+
+  /* Low rumble sweep — the base beneath the wind */
+  const src2 = ctx.createBufferSource();
+  src2.buffer = makeSand(4); src2.loop = true;
+  const lp2 = ctx.createBiquadFilter(); lp2.type = 'bandpass'; lp2.frequency.value = 380; lp2.Q.value = 0.5;
+  const gn2 = ctx.createGain(); gn2.gain.value = 0.28;
+  const lfo3 = ctx.createOscillator(); lfo3.frequency.value = 0.05;
+  const lg3  = ctx.createGain(); lg3.gain.value = 0.18;
+  lfo3.connect(lg3); lg3.connect(gn2.gain); lfo3.start();
+  liveNodes.push(lfo3);
+  src2.connect(lp2); lp2.connect(gn2); gn2.connect(gains.wind);
+  src2.start(); liveNodes.push(src2);
+}
+
+/* ══════════════════════════
+   LAYER 4: TABLA / DOUMBEK
+   Lookahead scheduler — precise timing
+   Dum (deep bass) · Tek (mid snap) · Ka (high rim)
+   ══════════════════════════ */
+const LOOKAHEAD   = 0.10;
+const SCHEDULE_MS = 30;
+let tablaStep = 0, nextTablaTime = 0;
+
+function scheduleTablaNote(time, type, tod) {
+  const rev = makeReverb(0.8, 3); rev.connect(gains.tabla);
+
+  if (type === 1) {
+    /* DUM — deep resonant bass stroke */
+    const osc = ctx.createOscillator();
+    const gn  = ctx.createGain();
+    const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 280;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(tod.rootHz * 1.5, time);
+    osc.frequency.exponentialRampToValueAtTime(tod.rootHz * 0.8, time + 0.12);
+    gn.gain.setValueAtTime(0, time);
+    gn.gain.linearRampToValueAtTime(0.85, time + 0.008);
+    gn.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(time); osc.stop(time + 0.55); liveNodes.push(osc);
+
+  } else if (type === 2) {
+    /* TEK — mid open tone snap */
+    const osc = ctx.createOscillator();
+    const gn  = ctx.createGain();
+    const filt = ctx.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 800; filt.Q.value = 2.5;
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(tod.rootHz * 4, time);
+    osc.frequency.exponentialRampToValueAtTime(tod.rootHz * 3, time + 0.08);
+    gn.gain.setValueAtTime(0, time);
+    gn.gain.linearRampToValueAtTime(0.6, time + 0.005);
+    gn.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(time); osc.stop(time + 0.28); liveNodes.push(osc);
+
+    /* finger click transient */
+    const click = ctx.createOscillator(); const cg = ctx.createGain();
+    click.type = 'square'; click.frequency.value = 1200;
+    cg.gain.setValueAtTime(0.3, time); cg.gain.exponentialRampToValueAtTime(0.001, time + 0.025);
+    click.connect(cg); cg.connect(gains.tabla);
+    click.start(time); click.stop(time + 0.03); liveNodes.push(click);
+
+  } else if (type === 3) {
+    /* KA — high rim knock */
+    const len = Math.floor(ctx.sampleRate * 0.06);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d   = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const filt = ctx.createBiquadFilter(); filt.type = 'highpass'; filt.frequency.value = 3500;
+    const gn = ctx.createGain(); gn.gain.setValueAtTime(0.55, time); gn.gain.exponentialRampToValueAtTime(0.001, time + 0.07);
+    src.connect(filt); filt.connect(gn); gn.connect(gains.tabla);
+    src.start(time); liveNodes.push(src);
+
+    /* rim tone */
+    const rim = ctx.createOscillator(); const rg = ctx.createGain();
+    rim.type = 'sine'; rim.frequency.value = tod.rootHz * 8;
+    rg.gain.setValueAtTime(0.2, time); rg.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
+    rim.connect(rg); rg.connect(gains.tabla);
+    rim.start(time); rim.stop(time + 0.08); liveNodes.push(rim);
+  }
+}
+
+function tablaScheduler() {
+  if (!isPlaying) return;
+  const tod = getTimeObj();
+  const stepDur = (60 / tod.bpm) / 4; /* 16th note */
+  const pat = TABLA_PATTERNS[currentTime];
+
+  while (nextTablaTime < ctx.currentTime + LOOKAHEAD) {
+    const type = pat[tablaStep % 16];
+    if (type > 0) {
+      scheduleTablaNote(nextTablaTime, type, tod);
+    }
+
+    /* flash beat pip */
+    const step = tablaStep % 16;
+    const delayMs = Math.max(0, (nextTablaTime - ctx.currentTime) * 1000);
+    setTimeout(() => {
+      document.querySelectorAll('.beat-pip').forEach(p => p.className = 'beat-pip');
+      const pip = document.getElementById('pip-' + step);
+      if (pip && type > 0) {
+        pip.classList.add(type === 1 ? 'dum' : type === 2 ? 'tek' : 'ka');
+      }
+    }, delayMs);
+
+    tablaStep++;
+    nextTablaTime += stepDur;
+  }
+  lookaheadTimer = setTimeout(tablaScheduler, SCHEDULE_MS);
+}
+
+/* ══════════════════════════
+   LAYER 5: DESERT DRONE
+   Sustained tonic + 5th — warm, dry, slightly nasal
+   ══════════════════════════ */
+function startDrone(tod) {
+  const rev = makeReverb(4, 1.4); rev.connect(gains.drone);
+
+  [1, 1.5, 2, 3].forEach((ratio, i) => {
+    const osc  = ctx.createOscillator();
+    const gn   = ctx.createGain();
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = tod.rootHz * ratio * 1.5; filt.Q.value = 1.5;
+    osc.type = i < 2 ? 'sawtooth' : 'triangle';
+    osc.frequency.value = tod.rootHz * ratio;
+    osc.detune.value = (Math.random() - 0.5) * 6;
+
+    /* Slow pitch wander — the drone breathes */
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.05 + i * 0.02;
+    const lg  = ctx.createGain(); lg.gain.value = tod.rootHz * ratio * 0.003;
+    lfo.connect(lg); lg.connect(osc.frequency); lfo.start(); liveNodes.push(lfo);
+
+    gn.gain.setValueAtTime(0, ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(i === 0 ? 0.35 : 0.12 / i, ctx.currentTime + 4 + i);
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(); liveNodes.push(osc);
+  });
+}
+
+/* ══════════════════════════
+   LAYER 6: THROAT HUM
+   A single human-like sustained tone — a traveller humming to stay sane
+   Formant filtered to sound vocal
+   ══════════════════════════ */
+function startThroatHum(tod) {
+  const rev = makeReverb(3, 1.2); rev.connect(gains.hum);
+
+  const osc = ctx.createOscillator();
+  const gn  = ctx.createGain();
+  /* formant filters for nasal hum vowel */
+  const f1 = ctx.createBiquadFilter(); f1.type = 'peaking'; f1.frequency.value = 500;  f1.Q.value = 4; f1.gain.value = 8;
+  const f2 = ctx.createBiquadFilter(); f2.type = 'peaking'; f2.frequency.value = 1600; f2.Q.value = 5; f2.gain.value = 5;
+  osc.type = 'sawtooth';
+  osc.frequency.value = tod.rootHz;
+
+  /* vibrato */
+  const vib = ctx.createOscillator(); vib.frequency.value = 5;
+  const vg  = ctx.createGain(); vg.gain.value = tod.rootHz * 0.008;
+  vib.connect(vg); vg.connect(osc.frequency); vib.start(); liveNodes.push(vib);
+
+  /* slow volume swell — the hum fades in and out */
+  const swellLfo = ctx.createOscillator(); swellLfo.frequency.value = 0.04;
+  const sl = ctx.createGain(); sl.gain.value = 0.15;
+  swellLfo.connect(sl); sl.connect(gn.gain); swellLfo.start(); liveNodes.push(swellLfo);
+
+  gn.gain.setValueAtTime(0, ctx.currentTime);
+  gn.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 5);
+  osc.connect(f1); f1.connect(f2); f2.connect(gn); gn.connect(rev);
+  osc.start(); liveNodes.push(osc);
+}
+
+/* ══════════════════════════
+   ONE-SHOT DESERT EVENTS
+   ══════════════════════════ */
+function triggerGust() {
+  if (!ctx) return;
+  const rev = makeReverb(2.5, 2); rev.connect(masterGain);
+  const len = ctx.sampleRate * 3;
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const hp  = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+  const gn  = ctx.createGain();
+  gn.gain.setValueAtTime(0, ctx.currentTime);
+  gn.gain.linearRampToValueAtTime(0.9, ctx.currentTime + 0.3);
+  gn.gain.setTargetAtTime(0, ctx.currentTime + 1.8, 0.4);
+  src.connect(hp); hp.connect(gn); gn.connect(rev);
+  src.start(); src.stop(ctx.currentTime + 3.5);
+  setStatus('A wall of sand sweeps across the dunes. Cover your eyes.');
+  setTimeout(() => setStatus(statusIdle()), 4000);
+}
+
+function triggerMirage() {
+  if (!ctx) return;
+  const rev = makeReverb(5, 1); rev.connect(masterGain);
+  const tod = getTimeObj();
+  /* shimmering high chord — sounds like hallucination */
+  HIJAZ.slice(0, 5).forEach((semi, i) => {
+    const freq = semToHz(tod.rootHz * 8, semi);
+    const osc = ctx.createOscillator(); const gn = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = freq;
+    osc.detune.value = (Math.random() - 0.5) * 20;
+    gn.gain.setValueAtTime(0, ctx.currentTime + i * 0.08);
+    gn.gain.linearRampToValueAtTime(0.2, ctx.currentTime + i * 0.08 + 0.15);
+    gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.08 + 3.5);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(ctx.currentTime + i * 0.08); osc.stop(ctx.currentTime + 4);
+  });
+  /* light all shimmer dots */
+  for (let i = 0; i < 6; i++) {
+    const dot = document.getElementById('sh-' + i);
+    dot.classList.add('lit');
+    setTimeout(() => dot.classList.remove('lit'), 2000 + i * 300);
+  }
+  setStatus('Is that water on the horizon? The desert lies. It always lies.');
+  setTimeout(() => setStatus(statusIdle()), 4500);
+}
+
+function triggerOudStrike() {
+  if (!ctx) return;
+  const rev = getRev(); rev.connect(masterGain);
+  const tod = getTimeObj();
+  /* single dramatic oud note on the root */
+  const freq = tod.rootHz * 2;
+  const on = ctx.currentTime;
+  const body = ctx.createOscillator(); const bg = ctx.createGain();
+  body.type = 'triangle'; body.frequency.value = freq;
+  bg.gain.setValueAtTime(0.8, on); bg.gain.exponentialRampToValueAtTime(0.001, on + 2.2);
+  body.connect(bg); bg.connect(rev); body.start(on); body.stop(on + 2.5);
+  /* harmonics */
+  [2, 3, 4].forEach((h, i) => {
+    const ho = ctx.createOscillator(); const hg = ctx.createGain();
+    ho.type = 'sine'; ho.frequency.value = freq * h;
+    hg.gain.setValueAtTime(0.3 / (i + 1), on); hg.gain.exponentialRampToValueAtTime(0.001, on + 1.5 - i * 0.3);
+    ho.connect(hg); hg.connect(rev); ho.start(on); ho.stop(on + 2);
+  });
+  setStatus('A single plucked string speaks what words cannot.');
+  setTimeout(() => setStatus(statusIdle()), 3500);
+}
+
+function triggerHawkCry() {
+  if (!ctx) return;
+  const rev = makeReverb(4, 1.3); rev.connect(masterGain);
+  const osc = ctx.createOscillator(); const gn = ctx.createGain();
+  const filt = ctx.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 2200; filt.Q.value = 3;
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(1200, ctx.currentTime);
+  osc.frequency.linearRampToValueAtTime(1800, ctx.currentTime + 0.15);
+  osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.55);
+  gn.gain.setValueAtTime(0, ctx.currentTime);
+  gn.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.04);
+  gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+  osc.connect(filt); filt.connect(gn); gn.connect(rev);
+  osc.start(); osc.stop(ctx.currentTime + 0.8);
+  setStatus('A hawk circles overhead. Patient. Eternal.');
+  setTimeout(() => setStatus(statusIdle()), 3000);
+}
+
+function triggerDryThunder() {
+  if (!ctx) return;
+  const rev = makeReverb(5, 0.8); rev.connect(masterGain);
+  const len = ctx.sampleRate * 2.5;
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(Math.max(0, 1 - i / len), 0.6);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const lp  = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 400;
+  const gn  = ctx.createGain();
+  gn.gain.setValueAtTime(1.0, ctx.currentTime);
+  gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.8);
+  src.connect(lp); lp.connect(gn); gn.connect(rev);
+  src.start();
+  setStatus('Thunder without rain. The sky taunts the parched earth.');
+  setTimeout(() => setStatus(statusIdle()), 4000);
+}
+
+/* ── TIME OF DAY ── */
+function setTimeOfDay(t) {
+  currentTime = t;
+  document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('time-' + t).classList.add('active');
+  const tod = times[t];
+  document.getElementById('tempo-label').textContent = tod.bpm + ' bpm';
+  setHeat(tod.heatPct);
+  setStatus(tod.statusLine);
+  if (isPlaying) {
+    stopLayers();
+    setTimeout(startLayers, 400);
+  }
+}
+
+/* ── VOLUME ── */
+function setVol(layer, val) {
+  vols[layer] = val / 100;
+  document.getElementById('lbl-' + layer).textContent = val;
+  if (gains[layer]) gains[layer].gain.setTargetAtTime(vols[layer] * 0.88, ctx.currentTime, 0.15);
+}
+
+/* ── HEAT ── */
+function setHeat(v) {
+  document.getElementById('heat-fill').style.width = v + '%';
+  document.getElementById('heat-pct').textContent = v + '%';
+}
+
+/* ── START / STOP ── */
+function startLayers() {
+  const tod = getTimeObj();
+  document.getElementById('tempo-label').textContent = tod.bpm + ' bpm';
+  startShimmer(tod);
+  startSandyWind();
+  startDrone(tod);
+  startThroatHum(tod);
+  scheduleOud();
+  tablaStep = 0; nextTablaTime = ctx.currentTime + 0.1;
+  tablaScheduler();
+}
+
+function stopLayers() {
+  clearTimeout(lookaheadTimer);
+  clearTimeout(oudTimer);
+  scheduledTimers.forEach(t => clearTimeout(t)); scheduledTimers = [];
+  liveNodes.forEach(n => { try { n.stop(ctx.currentTime + 0.4); } catch (e) {} });
+  liveNodes = [];
+  sharedRev = null;
+  document.querySelectorAll('.beat-pip').forEach(p => p.className = 'beat-pip');
+  for (let i = 0; i < 6; i++) document.getElementById('sh-' + i).classList.remove('lit');
+}
+
+function togglePlay() {
+  initCtx();
+  if (ctx.state === 'suspended') ctx.resume();
+  if (!isPlaying) {
+    isPlaying = true;
+    setHeat(times[currentTime].heatPct);
+    startLayers();
+    document.getElementById('play-btn').textContent = '◼  Flee the Wastes';
+    document.getElementById('play-btn').classList.add('playing');
+    setStatus(times[currentTime].statusLine);
+    startViz();
+  } else {
+    isPlaying = false;
+    stopLayers();
+    document.getElementById('play-btn').textContent = '▶  Enter the Wastes';
+    document.getElementById('play-btn').classList.remove('playing');
+    setStatus('the horizon shimmers with impossible heat...');
+    cancelAnimationFrame(vizFrame);
+  }
+}
+
+/* ── VISUALISER — amber/gold palette ── */
+function startViz() {
+  const canvas = document.getElementById('viz-canvas');
+  const W = canvas.width  = canvas.offsetWidth;
+  const H = canvas.height = canvas.offsetHeight;
+  const c = canvas.getContext('2d');
+  const bufLen = analyser.frequencyBinCount;
+  const data = new Uint8Array(bufLen);
+  function draw() {
+    vizFrame = requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+    c.fillStyle = '#08060200'; c.clearRect(0, 0, W, H);
+    c.fillStyle = '#08060210'; c.fillRect(0, 0, W, H);
+    const bw = W / bufLen * 2.2; let x = 0;
+    for (let i = 0; i < bufLen; i++) {
+      const v = data[i] / 255; const bh = v * H * 0.9;
+      /* black → deep red → amber → pale gold */
+      const r = Math.round(60  + v * 195);
+      const g = Math.round(v * v * 140);
+      const b = Math.round(v * 10);
+      c.fillStyle = `rgb(${r},${g},${b})`;
+      c.fillRect(x, H - bh, bw - 0.8, bh); x += bw;
+    }
+    const peak = Math.max(...data) / 255;
+    if (peak > 0.05) {
+      const ly = H - peak * H * 0.9;
+      const grad = c.createLinearGradient(0, 0, W, 0);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(0.3, `rgba(200,100,10,${peak * 0.5})`);
+      grad.addColorStop(0.5, `rgba(240,160,20,${peak * 0.65})`);
+      grad.addColorStop(0.7, `rgba(200,100,10,${peak * 0.5})`);
+      grad.addColorStop(1, 'transparent');
+      c.strokeStyle = grad; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(0, ly); c.lineTo(W, ly); c.stroke();
+    }
+  }
+  draw();
+}
+
+/* ── STATUS ── */
+const idleLines = [
+  'the horizon shimmers with impossible heat...',
+  'your tongue has forgotten what water tastes like...',
+  'the sand holds the memory of everyone who crossed it...',
+  'the sun does not care. the sun never cared.',
+  'somewhere ahead, water. probably not.',
+  'the dunes shift. the path you came from is gone.',
+  'even the wind is hot. there is no relief.',
+];
+function statusIdle() { return idleLines[Math.floor(Math.random() * idleLines.length)]; }
+function setStatus(msg) { document.getElementById('status-line').textContent = msg; }
+</script>
+</body>
+</html>

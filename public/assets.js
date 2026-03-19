@@ -374,4 +374,427 @@ const MONSTER_SVGS = {
     <!-- Tail tip -->
     <path d="M44,81 Q48,86 52,82 L46,78 Z" fill="#8b0000"/>
   </svg>`,
+
+  // ── Desert Saharrrra monsters ────────────────────────────────────────────────
+
+  sand_scorpion: `<svg viewBox="0 0 90 70" xmlns="http://www.w3.org/2000/svg">
+    <!-- Shadow -->
+    <ellipse cx="45" cy="67" rx="32" ry="4" fill="#a06820" opacity=".35"/>
+    <!-- Tail segments -->
+    <circle cx="72" cy="28" r="5" fill="#c8902a"/>
+    <circle cx="78" cy="18" r="4.5" fill="#c8902a"/>
+    <circle cx="82" cy="9"  r="4" fill="#c8902a"/>
+    <!-- Stinger -->
+    <path d="M82,9 Q90,4 88,14" fill="#e8a030" stroke="#b87820" stroke-width="1"/>
+    <!-- Body -->
+    <ellipse cx="44" cy="44" rx="22" ry="14" fill="#d4993a"/>
+    <ellipse cx="44" cy="44" rx="16" ry="9"  fill="#e8b048"/>
+    <!-- Head/carapace -->
+    <ellipse cx="22" cy="40" rx="14" ry="10" fill="#c8882a"/>
+    <!-- Eyes -->
+    <circle cx="16" cy="36" r="3" fill="#ff4400"/>
+    <circle cx="16" cy="36" r="1.5" fill="#ff8800"/>
+    <circle cx="22" cy="34" r="2.5" fill="#ff4400"/>
+    <circle cx="22" cy="34" r="1.2" fill="#ff8800"/>
+    <!-- Claws (pincers) -->
+    <path d="M10,42 Q2,36 4,28 Q6,22 12,26 Q8,30 10,36 L16,40" fill="#b87820" stroke="#906010" stroke-width="1"/>
+    <path d="M10,42 Q0,44 2,36" fill="#c8902a"/>
+    <path d="M14,46 Q4,52 6,44 Q6,38 12,40 Q8,44 10,48 L16,46" fill="#b87820" stroke="#906010" stroke-width="1"/>
+    <!-- Legs -->
+    <line x1="30" y1="52" x2="20" y2="62" stroke="#b07020" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="38" y1="55" x2="30" y2="66" stroke="#b07020" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="46" y1="56" x2="40" y2="67" stroke="#b07020" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="54" y1="55" x2="52" y2="66" stroke="#b07020" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="60" y1="52" x2="62" y2="62" stroke="#b07020" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="64" y1="48" x2="70" y2="57" stroke="#b07020" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Tail connection to body -->
+    <path d="M62,40 Q68,34 72,28" stroke="#c8902a" stroke-width="6" fill="none" stroke-linecap="round"/>
+  </svg>`,
+
+  desert_jackal: `<svg viewBox="0 0 75 85" xmlns="http://www.w3.org/2000/svg">
+    <!-- Shadow -->
+    <ellipse cx="38" cy="82" rx="22" ry="4" fill="#a06820" opacity=".3"/>
+    <!-- Body -->
+    <ellipse cx="38" cy="54" rx="20" ry="13" fill="#c8882a"/>
+    <ellipse cx="38" cy="52" rx="14" ry="9"  fill="#daa040"/>
+    <!-- Tail -->
+    <path d="M56,52 Q68,44 66,34 Q64,28 60,30 Q62,36 58,42 Q54,48 56,52" fill="#b87828" stroke="#a06820" stroke-width="1"/>
+    <!-- Neck + head -->
+    <ellipse cx="20" cy="46" rx="10" ry="8" fill="#c8882a"/>
+    <ellipse cx="12" cy="36" rx="14" ry="12" fill="#b87828"/>
+    <!-- Snout -->
+    <path d="M2,34 Q0,38 4,40 Q8,42 12,40" fill="#a06820"/>
+    <!-- Nose -->
+    <ellipse cx="3" cy="37" rx="2" ry="1.5" fill="#222"/>
+    <!-- Eye -->
+    <ellipse cx="8" cy="30" rx="3" ry="2.5" fill="#ff8800"/>
+    <ellipse cx="8" cy="30" rx="1.5" ry="1.5" fill="#cc5500"/>
+    <circle  cx="8" cy="30" r=".8"  fill="#000"/>
+    <!-- Ears (pointed) -->
+    <path d="M8,24 Q4,12 8,8 Q12,12 14,22 Z" fill="#a06820"/>
+    <path d="M18,22 Q16,10 20,6 Q24,10 24,20 Z" fill="#a06820"/>
+    <!-- Legs -->
+    <rect x="22" y="64" width="8" height="16" rx="3" fill="#b07028"/>
+    <rect x="34" y="66" width="8" height="14" rx="3" fill="#b07028"/>
+    <rect x="44" y="64" width="7" height="16" rx="3" fill="#b07028"/>
+    <!-- Paws -->
+    <ellipse cx="26" cy="79" rx="5" ry="3" fill="#986018"/>
+    <ellipse cx="38" cy="79" rx="5" ry="3" fill="#986018"/>
+    <ellipse cx="47" cy="79" rx="4" ry="3" fill="#986018"/>
+    <!-- Desert markings on back -->
+    <path d="M30,45 Q38,42 46,45" stroke="#986018" stroke-width="1.5" fill="none" opacity=".6"/>
+    <path d="M28,50 Q38,47 48,50" stroke="#986018" stroke-width="1" fill="none" opacity=".4"/>
+  </svg>`,
+
+  sandstorm_wraith: `<svg viewBox="0 0 70 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Wispy sand particles -->
+    <ellipse cx="35" cy="90" rx="20" ry="5" fill="#c8a050" opacity=".3"/>
+    <!-- Swirling cloak/body -->
+    <path d="M20,50 Q10,70 14,90 Q25,95 35,90 Q45,95 56,90 Q60,70 50,50 Q42,38 35,35 Q28,38 20,50 Z" fill="#d4a040" opacity=".75"/>
+    <path d="M22,52 Q14,68 18,86 Q28,90 35,88 Q42,90 52,86 Q56,68 48,52 Q41,42 35,38 Q29,42 22,52 Z" fill="#e8c060" opacity=".5"/>
+    <!-- Torn lower hem (wispy) -->
+    <path d="M18,82 Q22,90 18,98" stroke="#c8a050" stroke-width="2" fill="none" opacity=".6"/>
+    <path d="M26,86 Q28,92 24,100" stroke="#d4b060" stroke-width="1.5" fill="none" opacity=".5"/>
+    <path d="M35,88 Q35,94 32,102" stroke="#c8a050" stroke-width="1.5" fill="none" opacity=".5"/>
+    <path d="M44,86 Q46,92 44,100" stroke="#d4b060" stroke-width="1.5" fill="none" opacity=".5"/>
+    <path d="M52,82 Q54,90 52,98" stroke="#c8a050" stroke-width="2" fill="none" opacity=".6"/>
+    <!-- Upper body / torso -->
+    <ellipse cx="35" cy="52" rx="16" ry="18" fill="#c89030" opacity=".85"/>
+    <!-- Arms (wispy) -->
+    <path d="M20,46 Q8,38 6,28 Q4,20 10,18 Q14,16 16,22" stroke="#c8a050" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M50,46 Q62,38 64,28 Q66,20 60,18 Q56,16 54,22" stroke="#c8a050" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <!-- Clawed hand wisps -->
+    <path d="M16,22 L10,16 M18,20 L14,13 M20,18 L18,11" stroke="#e8d080" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M54,22 L60,16 M52,20 L56,13 M50,18 L52,11" stroke="#e8d080" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Head (hooded void) -->
+    <ellipse cx="35" cy="26" rx="16" ry="14" fill="#1a1000" opacity=".9"/>
+    <path d="M20,20 Q22,8 35,6 Q48,8 50,20 L48,28 Q35,24 22,28 Z" fill="#2a1a00" opacity=".95"/>
+    <!-- Glowing eyes -->
+    <ellipse cx="28" cy="24" rx="4" ry="3" fill="#ff8800" opacity=".9"/>
+    <ellipse cx="42" cy="24" rx="4" ry="3" fill="#ff8800" opacity=".9"/>
+    <ellipse cx="28" cy="24" rx="2" ry="1.5" fill="#ffcc00"/>
+    <ellipse cx="42" cy="24" rx="2" ry="1.5" fill="#ffcc00"/>
+    <!-- Sand swirl particles around body -->
+    <path d="M12,54 Q6,58 8,64" stroke="#e8c060" stroke-width="1" fill="none" opacity=".5"/>
+    <path d="M58,54 Q64,58 62,64" stroke="#e8c060" stroke-width="1" fill="none" opacity=".5"/>
+  </svg>`,
+
+  bone_crawler: `<svg viewBox="0 0 90 65" xmlns="http://www.w3.org/2000/svg">
+    <!-- Shadow -->
+    <ellipse cx="45" cy="62" rx="34" ry="4" fill="#888" opacity=".3"/>
+    <!-- Main shell / carapace -->
+    <ellipse cx="45" cy="38" rx="28" ry="18" fill="#e8e0d0"/>
+    <ellipse cx="45" cy="36" rx="22" ry="13" fill="#f0ece0"/>
+    <!-- Bone texture lines on shell -->
+    <path d="M28,32 Q45,28 62,32" stroke="#ccc8b8" stroke-width="1.5" fill="none"/>
+    <path d="M26,38 Q45,34 64,38" stroke="#ccc8b8" stroke-width="1.5" fill="none"/>
+    <path d="M28,44 Q45,40 62,44" stroke="#ccc8b8" stroke-width="1.5" fill="none"/>
+    <!-- Head (skull-like) -->
+    <ellipse cx="18" cy="36" rx="14" ry="12" fill="#e8e0d0"/>
+    <!-- Eye sockets (dark hollows) -->
+    <ellipse cx="12" cy="32" rx="3.5" ry="3" fill="#333" opacity=".8"/>
+    <ellipse cx="20" cy="31" rx="3" ry="2.5" fill="#333" opacity=".8"/>
+    <!-- Glowing eyes -->
+    <ellipse cx="12" cy="32" rx="2" ry="1.8" fill="#ffcc00" opacity=".8"/>
+    <ellipse cx="20" cy="31" rx="1.8" ry="1.5" fill="#ffcc00" opacity=".8"/>
+    <!-- Mandibles -->
+    <path d="M6,38 Q2,44 6,48 Q10,44 12,40" fill="#d0c8b8" stroke="#bbb0a0" stroke-width="1"/>
+    <path d="M8,40 Q4,46 8,50 Q12,46 14,42" fill="#e0d8c8" stroke="#bbb0a0" stroke-width="1"/>
+    <!-- Legs (bone-white, segmented) -->
+    <line x1="28" y1="52" x2="16" y2="64" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="36" y1="54" x2="26" y2="65" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="45" y1="55" x2="38" y2="65" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="54" y1="54" x2="52" y2="65" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="62" y1="52" x2="64" y2="64" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="68" y1="48" x2="74" y2="60" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <!-- Upper legs -->
+    <line x1="28" y1="24" x2="18" y2="14" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="38" y1="22" x2="30" y2="12" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="52" y1="22" x2="50" y2="12" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+    <line x1="62" y1="24" x2="68" y2="14" stroke="#d0c8b8" stroke-width="3" stroke-linecap="round"/>
+  </svg>`,
+
+  canyon_serpent: `<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Coiled body -->
+    <path d="M60,72 Q72,64 70,50 Q68,38 56,36 Q44,34 38,44 Q32,54 38,64 Q44,74 54,72 Q64,70 66,60 Q68,50 60,46 Q52,42 46,48 Q40,54 44,60 Q48,66 54,64" stroke="#c05020" stroke-width="10" fill="none" stroke-linecap="round"/>
+    <path d="M60,72 Q72,64 70,50 Q68,38 56,36 Q44,34 38,44 Q32,54 38,64 Q44,74 54,72 Q64,70 66,60 Q68,50 60,46 Q52,42 46,48 Q40,54 44,60 Q48,66 54,64" stroke="#e07030" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <!-- Scale pattern overlay -->
+    <path d="M60,72 Q72,64 70,50 Q68,38 56,36 Q44,34 38,44 Q32,54 38,64" stroke="#d06028" stroke-width="1.5" fill="none" opacity=".5" stroke-dasharray="4,3"/>
+    <!-- Head -->
+    <ellipse cx="44" cy="60" rx="10" ry="7" fill="#c05020" transform="rotate(-20 44 60)"/>
+    <ellipse cx="44" cy="60" rx="7"  ry="5" fill="#d86030" transform="rotate(-20 44 60)"/>
+    <!-- Eyes -->
+    <ellipse cx="38" cy="55" rx="3" ry="2.5" fill="#ff8800"/>
+    <ellipse cx="38" cy="55" rx="1.5" ry="2" fill="#000"/>
+    <!-- Forked tongue -->
+    <path d="M34,60 L28,58 M34,60 L28,62" stroke="#ff2020" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Tail tip -->
+    <path d="M54,64 Q52,70 48,72 Q44,74 46,78" stroke="#c05020" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <!-- Rattle -->
+    <ellipse cx="46" cy="79" rx="4" ry="3" fill="#b04018" stroke="#803010" stroke-width="1"/>
+    <ellipse cx="46" cy="79" rx="2" ry="1.5" fill="#c05020"/>
+    <!-- Desert pattern on scales -->
+    <path d="M50,44 Q56,40 62,44" stroke="#e07030" stroke-width="1" fill="none" opacity=".6"/>
+    <path d="M42,52 Q48,48 54,52" stroke="#e07030" stroke-width="1" fill="none" opacity=".6"/>
+  </svg>`,
+
+  dune_sorcerer: `<svg viewBox="0 0 65 105" xmlns="http://www.w3.org/2000/svg">
+    <!-- Robe bottom -->
+    <path d="M16,56 L14,105 L50,105 L49,56 Z" fill="#8a5a1a"/>
+    <path d="M20,58 L18,105 L46,105 L45,58 Z" fill="#a06e28"/>
+    <!-- Staff -->
+    <line x1="60" y1="10" x2="58" y2="100" stroke="#6a4010" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="60" cy="10" r="7" fill="#c8a030" stroke="#e8c040" stroke-width="1.5"/>
+    <circle cx="60" cy="10" r="4" fill="#ffcc00" opacity=".8"/>
+    <!-- Arms -->
+    <path d="M16,40 Q6,50 8,66" stroke="#a06e28" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M49,40 Q58,46 58,58" stroke="#a06e28" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <!-- Torso -->
+    <rect x="18" y="30" width="30" height="30" rx="4" fill="#8a5a1a"/>
+    <rect x="22" y="32" width="22" height="24" rx="3" fill="#a06e28"/>
+    <!-- Chest amulet (Eye of Ra) -->
+    <ellipse cx="33" cy="44" rx="7" ry="5" fill="#c89020"/>
+    <ellipse cx="33" cy="44" rx="4" ry="3" fill="#ffaa00"/>
+    <ellipse cx="33" cy="44" rx="2" ry="1.5" fill="#ff6600"/>
+    <!-- Headdress (wrapped turban) -->
+    <ellipse cx="33" cy="20" rx="14" ry="12" fill="#6a3a08"/>
+    <path d="M20,18 Q22,8 33,6 Q44,8 46,18 L44,24 Q33,20 22,24 Z" fill="#8a5020"/>
+    <!-- Turban wrap lines -->
+    <path d="M22,16 Q33,12 44,16" stroke="#6a3a08" stroke-width="1.5" fill="none"/>
+    <path d="M20,20 Q33,16 46,20" stroke="#6a3a08" stroke-width="1" fill="none"/>
+    <!-- Face -->
+    <ellipse cx="33" cy="22" rx="10" ry="9" fill="#c09050"/>
+    <!-- Eyes (glowing gold) -->
+    <ellipse cx="27" cy="20" rx="3" ry="2.5" fill="#cc8800"/>
+    <ellipse cx="39" cy="20" rx="3" ry="2.5" fill="#cc8800"/>
+    <ellipse cx="27" cy="20" rx="1.5" ry="1.5" fill="#ffcc00"/>
+    <ellipse cx="39" cy="20" rx="1.5" ry="1.5" fill="#ffcc00"/>
+    <circle cx="27" cy="20" r=".8" fill="#000"/>
+    <circle cx="39" cy="20" r=".8" fill="#000"/>
+    <!-- Beard -->
+    <path d="M26,26 Q33,30 40,26 L39,30 Q33,34 27,30 Z" fill="#6a3a08"/>
+    <!-- Sand magic wisps -->
+    <path d="M6,62 Q2,66 4,72" stroke="#e8c060" stroke-width="1.5" fill="none" opacity=".6"/>
+    <path d="M4,68 Q0,70 2,76" stroke="#e8c060" stroke-width="1" fill="none" opacity=".4"/>
+  </svg>`,
+
+  mirage_stalker: `<svg viewBox="0 0 65 95" xmlns="http://www.w3.org/2000/svg">
+    <!-- Translucent shadow (mirage effect) -->
+    <ellipse cx="48" cy="82" rx="14" ry="6" fill="#8888ff" opacity=".15"/>
+    <ellipse cx="48" cy="88" rx="10" ry="4" fill="#8888ff" opacity=".1"/>
+    <!-- Ghost duplicate (offset, translucent) -->
+    <rect x="30" y="44" width="26" height="35" rx="4" fill="#4060cc" opacity=".18"/>
+    <ellipse cx="43" cy="34" rx="13" ry="11" fill="#4060cc" opacity=".18"/>
+    <!-- Main body (dark, shifting) -->
+    <rect x="18" y="50" width="26" height="38" rx="4" fill="#1a1a3a"/>
+    <rect x="22" y="52" width="18" height="30" rx="3" fill="#2a2a50"/>
+    <!-- Legs -->
+    <rect x="20" y="84" width="10" height="10" rx="3" fill="#141430"/>
+    <rect x="32" y="84" width="10" height="10" rx="3" fill="#141430"/>
+    <!-- Arms -->
+    <path d="M18,54 Q8,60 6,72" stroke="#1a1a3a" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M44,54 Q54,60 56,72" stroke="#1a1a3a" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <!-- Clawed hands -->
+    <path d="M6,70 L2,76 M8,73 L5,80 M11,74 L10,81" stroke="#6060cc" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M56,70 L60,76 M54,73 L57,80 M51,74 L52,81" stroke="#6060cc" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Head -->
+    <ellipse cx="31" cy="36" rx="14" ry="12" fill="#1a1a3a"/>
+    <!-- Mirage shimmer on face -->
+    <ellipse cx="31" cy="36" rx="10" ry="8"  fill="#2a2a54" opacity=".7"/>
+    <!-- Eyes (piercing blue/violet) -->
+    <ellipse cx="24" cy="33" rx="4" ry="3.5" fill="#4040ff"/>
+    <ellipse cx="38" cy="33" rx="4" ry="3.5" fill="#4040ff"/>
+    <ellipse cx="24" cy="33" rx="2.5" ry="2.5" fill="#8888ff"/>
+    <ellipse cx="38" cy="33" rx="2.5" ry="2.5" fill="#8888ff"/>
+    <circle cx="24" cy="33" r="1.2" fill="#fff" opacity=".8"/>
+    <circle cx="38" cy="33" r="1.2" fill="#fff" opacity=".8"/>
+    <!-- Mouth (thin line) -->
+    <path d="M25,42 Q31,46 37,42" stroke="#6060cc" stroke-width="1.2" fill="none"/>
+    <!-- Mirage effect trails -->
+    <path d="M18,58 Q10,60 8,68" stroke="#6060cc" stroke-width="1" fill="none" opacity=".4"/>
+    <path d="M44,58 Q52,60 54,68" stroke="#6060cc" stroke-width="1" fill="none" opacity=".4"/>
+  </svg>`,
+
+  sandglass_golem: `<svg viewBox="0 0 85 110" xmlns="http://www.w3.org/2000/svg">
+    <!-- Ground sand pool -->
+    <ellipse cx="42" cy="107" rx="30" ry="5" fill="#c8a050" opacity=".4"/>
+    <!-- Legs (stone columns) -->
+    <rect x="18" y="78" width="18" height="28" rx="4" fill="#8a6828"/>
+    <rect x="48" y="78" width="18" height="28" rx="4" fill="#8a6828"/>
+    <!-- Stone texture on legs -->
+    <line x1="20" y1="86" x2="34" y2="86" stroke="#6a4a18" stroke-width="1.5" opacity=".5"/>
+    <line x1="20" y1="94" x2="34" y2="94" stroke="#6a4a18" stroke-width="1.5" opacity=".5"/>
+    <line x1="50" y1="86" x2="64" y2="86" stroke="#6a4a18" stroke-width="1.5" opacity=".5"/>
+    <line x1="50" y1="94" x2="64" y2="94" stroke="#6a4a18" stroke-width="1.5" opacity=".5"/>
+    <!-- Body (hourglass/sandglass shape) -->
+    <path d="M22,40 L24,78 L60,78 L62,40 Q52,58 42,60 Q32,58 22,40 Z" fill="#a07838"/>
+    <path d="M24,42 L26,76 L58,76 L60,42 Q50,56 42,58 Q34,56 24,42 Z" fill="#c09848"/>
+    <!-- Sand cascade (hourglass center) -->
+    <path d="M38,56 Q42,60 46,56 L48,70 Q42,68 36,70 Z" fill="#e8c060" opacity=".8"/>
+    <!-- Upper body bulge -->
+    <ellipse cx="42" cy="34" rx="22" ry="16" fill="#b08838"/>
+    <ellipse cx="42" cy="32" rx="17" ry="12" fill="#c8a048"/>
+    <!-- Stone cracks -->
+    <path d="M34,26 Q38,32 36,38" stroke="#806020" stroke-width="1.5" fill="none" opacity=".5"/>
+    <path d="M48,28 Q52,34 50,40" stroke="#806020" stroke-width="1.5" fill="none" opacity=".5"/>
+    <!-- Arms (huge stone fists) -->
+    <rect x="2"  y="36" width="20" height="14" rx="5" fill="#8a6828"/>
+    <rect x="62" y="36" width="20" height="14" rx="5" fill="#8a6828"/>
+    <!-- Knuckle lines -->
+    <line x1="6"  y1="40" x2="20" y2="40" stroke="#6a4a18" stroke-width="1" opacity=".5"/>
+    <line x1="64" y1="40" x2="78" y2="40" stroke="#6a4a18" stroke-width="1" opacity=".5"/>
+    <!-- Head (stone block) -->
+    <rect x="28" y="10" width="28" height="24" rx="5" fill="#b08838"/>
+    <rect x="30" y="12" width="24" height="20" rx="4" fill="#c8a048"/>
+    <!-- Eye glow (sand-energy) -->
+    <ellipse cx="36" cy="22" rx="5" ry="4" fill="#ff8800"/>
+    <ellipse cx="48" cy="22" rx="5" ry="4" fill="#ff8800"/>
+    <ellipse cx="36" cy="22" rx="3" ry="2.5" fill="#ffcc00"/>
+    <ellipse cx="48" cy="22" rx="3" ry="2.5" fill="#ffcc00"/>
+    <ellipse cx="36" cy="22" rx="1.5" ry="1.5" fill="#fff" opacity=".7"/>
+    <ellipse cx="48" cy="22" rx="1.5" ry="1.5" fill="#fff" opacity=".7"/>
+    <!-- Rune on forehead -->
+    <path d="M40,13 L42,17 L44,13 M42,13 L42,17" stroke="#ffcc00" stroke-width="1" fill="none" opacity=".7"/>
+    <!-- Sand leaking from joints -->
+    <path d="M24,50 Q18,54 16,62" stroke="#e8c060" stroke-width="2" fill="none" opacity=".5"/>
+    <path d="M60,50 Q66,54 68,62" stroke="#e8c060" stroke-width="2" fill="none" opacity=".5"/>
+  </svg>`,
+
+  cursed_servant: `<svg viewBox="0 0 65 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Shadow -->
+    <ellipse cx="32" cy="97" rx="18" ry="4" fill="#888" opacity=".3"/>
+    <!-- Legs (wrapped in bandages) -->
+    <rect x="18" y="74" width="12" height="22" rx="3" fill="#c4a050"/>
+    <rect x="33" y="74" width="12" height="22" rx="3" fill="#c4a050"/>
+    <!-- Bandage wraps on legs -->
+    <line x1="17" y1="78" x2="31" y2="78" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="17" y1="84" x2="31" y2="84" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="17" y1="90" x2="31" y2="90" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="32" y1="78" x2="46" y2="78" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="32" y1="84" x2="46" y2="84" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="32" y1="90" x2="46" y2="90" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <!-- Body (wrapped mummy) -->
+    <rect x="16" y="42" width="34" height="34" rx="4" fill="#c4a050"/>
+    <!-- Body wrappings -->
+    <line x1="15" y1="48" x2="51" y2="48" stroke="#a88030" stroke-width="1.5" opacity=".7"/>
+    <line x1="15" y1="54" x2="51" y2="54" stroke="#a88030" stroke-width="1.5" opacity=".7"/>
+    <line x1="15" y1="60" x2="51" y2="60" stroke="#a88030" stroke-width="1.5" opacity=".7"/>
+    <line x1="15" y1="66" x2="51" y2="66" stroke="#a88030" stroke-width="1.5" opacity=".7"/>
+    <!-- Collar / pectoral -->
+    <path d="M18,44 Q33,40 48,44 L46,50 Q33,46 20,50 Z" fill="#d4a020"/>
+    <!-- Arms -->
+    <path d="M16,50 Q6,58 8,70" stroke="#c4a050" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M50,50 Q60,58 58,70" stroke="#c4a050" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <!-- Arm bandages -->
+    <line x1="11" y1="56" x2="17" y2="52" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="9"  y1="62" x2="15" y2="58" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="55" y1="56" x2="49" y2="52" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <line x1="57" y1="62" x2="51" y2="58" stroke="#a88030" stroke-width="1.5" opacity=".6"/>
+    <!-- Clawed hands (bandage-wrapped) -->
+    <path d="M8,68 L4,74 M10,71 L6,78 M13,72 L10,78" stroke="#c4a050" stroke-width="2" stroke-linecap="round"/>
+    <path d="M58,68 L62,74 M56,71 L60,78 M53,72 L56,78" stroke="#c4a050" stroke-width="2" stroke-linecap="round"/>
+    <!-- Head (mummy-wrapped) -->
+    <ellipse cx="33" cy="26" rx="15" ry="16" fill="#c4a050"/>
+    <!-- Head bandage layers -->
+    <path d="M19,22 Q33,16 47,22" stroke="#a88030" stroke-width="2" fill="none"/>
+    <path d="M18,28 Q33,22 48,28" stroke="#a88030" stroke-width="2" fill="none"/>
+    <path d="M19,34 Q33,28 47,34" stroke="#a88030" stroke-width="2" fill="none"/>
+    <!-- Diagonal wrap -->
+    <path d="M20,18 Q28,30 24,40" stroke="#a88030" stroke-width="2" fill="none" opacity=".5"/>
+    <!-- Eyes (glowing amber through wrappings) -->
+    <ellipse cx="26" cy="26" rx="4" ry="3" fill="#ff8800" opacity=".9"/>
+    <ellipse cx="40" cy="25" rx="4" ry="3" fill="#ff8800" opacity=".9"/>
+    <ellipse cx="26" cy="26" rx="2.2" ry="1.8" fill="#ffcc00"/>
+    <ellipse cx="40" cy="25" rx="2.2" ry="1.8" fill="#ffcc00"/>
+    <!-- Curse mark on chest -->
+    <path d="M30,56 L33,52 L36,56 M33,52 L33,62" stroke="#8800cc" stroke-width="1.5" fill="none" opacity=".7"/>
+  </svg>`,
+
+  pharaoh_wrath: `<svg viewBox="0 0 140 185" xmlns="http://www.w3.org/2000/svg">
+    <!-- Ground glow -->
+    <ellipse cx="70" cy="181" rx="48" ry="7" fill="#ffaa00" opacity=".25"/>
+    <!-- Legs (gold-wrapped stone) -->
+    <rect x="40" y="130" width="22" height="45" rx="5" fill="#b89030"/>
+    <rect x="78" y="130" width="22" height="45" rx="5" fill="#b89030"/>
+    <!-- Leg gold banding -->
+    <rect x="38" y="134" width="26" height="4" rx="2" fill="#e8c040"/>
+    <rect x="38" y="144" width="26" height="4" rx="2" fill="#e8c040"/>
+    <rect x="38" y="154" width="26" height="4" rx="2" fill="#e8c040"/>
+    <rect x="76" y="134" width="26" height="4" rx="2" fill="#e8c040"/>
+    <rect x="76" y="144" width="26" height="4" rx="2" fill="#e8c040"/>
+    <rect x="76" y="154" width="26" height="4" rx="2" fill="#e8c040"/>
+    <!-- Sandstone feet -->
+    <path d="M36,172 L64,172 L66,183 L34,183 Z" fill="#a08020"/>
+    <path d="M76,172 L104,172 L106,183 L74,183 Z" fill="#a08020"/>
+    <!-- Torso / ceremonial kilt -->
+    <path d="M42,76 L98,76 L104,136 L36,136 Z" fill="#b89030"/>
+    <!-- Kilt banding and apron -->
+    <path d="M50,80 L90,80 L92,130 L48,130 Z" fill="#c8a040"/>
+    <path d="M58,80 Q70,96 82,80 L84,130 L56,130 Z" fill="#e8c050"/>
+    <!-- Gold chest pectoral collar -->
+    <path d="M38,72 Q70,62 102,72 L100,82 Q70,74 40,82 Z" fill="#d4a820" stroke="#f0c840" stroke-width="1.5"/>
+    <!-- Lapis lazuli gems in collar -->
+    <circle cx="56" cy="74" r="4" fill="#1a4aaa"/>
+    <circle cx="70" cy="70" r="4" fill="#1a4aaa"/>
+    <circle cx="84" cy="74" r="4" fill="#1a4aaa"/>
+    <circle cx="56" cy="74" r="2" fill="#2a5acc"/>
+    <circle cx="70" cy="70" r="2" fill="#2a5acc"/>
+    <circle cx="84" cy="74" r="2" fill="#2a5acc"/>
+    <!-- Arms -->
+    <path d="M42,80 L18,92 L10,120 L32,128 L44,108 Z" fill="#b89030"/>
+    <path d="M98,80 L122,92 L130,120 L108,128 L96,108 Z" fill="#b89030"/>
+    <!-- Gold armbands -->
+    <ellipse cx="24" cy="104" rx="8" ry="4" fill="#e8c040" transform="rotate(-20 24 104)"/>
+    <ellipse cx="118" cy="104" rx="8" ry="4" fill="#e8c040" transform="rotate(20 118 104)"/>
+    <!-- Left hand: Crook scepter -->
+    <path d="M14,118 L10,82" stroke="#d4a020" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M10,82 Q4,72 4,62 Q4,54 10,52 Q18,50 20,60 L18,68" stroke="#d4a020" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- Right hand: Flail -->
+    <line x1="126" y1="118" x2="130" y2="82" stroke="#d4a020" stroke-width="3" stroke-linecap="round"/>
+    <line x1="130" y1="82" x2="134" y2="62" stroke="#e8c040" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="134" cy="60" r="5" fill="#e8c040" stroke="#c8a020" stroke-width="1"/>
+    <line x1="134" y1="55" x2="138" y2="44" stroke="#e8c040" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="138" cy="42" r="4" fill="#c8a020"/>
+    <!-- Neck / base of head -->
+    <rect x="60" y="60" width="20" height="18" rx="4" fill="#b89030"/>
+    <!-- Nemes headdress (the gold-striped cloth) -->
+    <path d="M30,50 Q32,28 70,24 Q108,28 110,50 L106,68 L70,72 L34,68 Z" fill="#e8c040"/>
+    <!-- Headdress blue stripes -->
+    <rect x="36" y="36" width="6" height="30" rx="2" fill="#1a4aaa" opacity=".75"/>
+    <rect x="44" y="32" width="6" height="34" rx="2" fill="#1a4aaa" opacity=".75"/>
+    <rect x="90" y="32" width="6" height="34" rx="2" fill="#1a4aaa" opacity=".75"/>
+    <rect x="98" y="36" width="6" height="30" rx="2" fill="#1a4aaa" opacity=".75"/>
+    <!-- Headdress side lappets (hang beside face) -->
+    <rect x="22" y="46" width="12" height="38" rx="5" fill="#d4a820"/>
+    <rect x="106" y="46" width="12" height="38" rx="5" fill="#d4a820"/>
+    <!-- Gold face mask -->
+    <ellipse cx="70" cy="46" rx="24" ry="22" fill="#c8a040"/>
+    <ellipse cx="70" cy="46" rx="19" ry="17" fill="#d4ac50"/>
+    <!-- Eye of Horus left -->
+    <path d="M46,40 L54,42 L48,46 L44,44 Z" fill="#1a4aaa" opacity=".85"/>
+    <path d="M52,46 L54,52 L50,54 L46,46 Z" fill="#1a4aaa" opacity=".5"/>
+    <!-- Eye of Horus right -->
+    <path d="M94,40 L86,42 L92,46 L96,44 Z" fill="#1a4aaa" opacity=".85"/>
+    <path d="M88,46 L86,52 L90,54 L94,46 Z" fill="#1a4aaa" opacity=".5"/>
+    <!-- Burning amber eyes -->
+    <ellipse cx="56" cy="43" rx="6" ry="5" fill="#cc6600"/>
+    <ellipse cx="84" cy="43" rx="6" ry="5" fill="#cc6600"/>
+    <ellipse cx="56" cy="43" rx="4" ry="3" fill="#ff9900"/>
+    <ellipse cx="84" cy="43" rx="4" ry="3" fill="#ff9900"/>
+    <ellipse cx="56" cy="43" rx="2" ry="2" fill="#ffcc00"/>
+    <ellipse cx="84" cy="43" rx="2" ry="2" fill="#ffcc00"/>
+    <circle  cx="56" cy="43" r="1" fill="#000"/>
+    <circle  cx="84" cy="43" r="1" fill="#000"/>
+    <!-- Nose bridge -->
+    <rect x="67" y="46" width="6" height="8" rx="3" fill="#b89040"/>
+    <!-- Stern mouth -->
+    <rect x="58" y="57" width="24" height="2.5" rx="1.5" fill="#8a6020"/>
+    <!-- Uraeus cobra (crown serpent) -->
+    <path d="M66,24 Q66,14 60,9 Q56,4 60,1 Q65,-2 70,0 Q75,-2 80,1 Q84,4 80,9 Q74,14 74,24" fill="#4aaa20" stroke="#2a8010" stroke-width="1"/>
+    <ellipse cx="70" cy="0" rx="5" ry="3" fill="#ff4400"/>
+    <circle  cx="70" cy="2" r="2" fill="#cc3300"/>
+    <!-- Aura of ancient power -->
+    <ellipse cx="70" cy="90" rx="58" ry="55" fill="none" stroke="#ffaa00" stroke-width="1.5" opacity=".15"/>
+    <ellipse cx="70" cy="90" rx="65" ry="62" fill="none" stroke="#ff8800" stroke-width="1"   opacity=".1"/>
+  </svg>`,
 };

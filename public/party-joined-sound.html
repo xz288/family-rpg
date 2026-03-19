@@ -1,0 +1,20 @@
+function playPartyJoined(ctx) {
+  const t = ctx.currentTime;
+  const master = ctx.createGain();
+  master.gain.value = 1.00;
+  master.connect(ctx.destination);
+
+  // tonal body
+  const osc = ctx.createOscillator();
+  const gn  = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(583, t);
+  osc.frequency.exponentialRampToValueAtTime(
+    332, t + 0.165
+  );
+  gn.gain.setValueAtTime(0, t);
+  gn.gain.linearRampToValueAtTime(0.85, t + 0.030);
+  gn.gain.exponentialRampToValueAtTime(0.001, t + 0.165);
+  osc.connect(gn); gn.connect(master);
+  osc.start(t); osc.stop(t + 0.215);
+}

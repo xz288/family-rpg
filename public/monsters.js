@@ -46,6 +46,17 @@ const MONSTER_DEFS = {
   forest_shaman: { name:'Forest Shaman', tier:'B', level:8, hp:140, atk:42, def:15, skills:['m_hex','m_curse'] },
   demon_lord:    { name:'Demon Lord',    tier:'S', level:12, hp:900, atk:90, def:38, skills:['m_inferno','m_hellfire','m_cleave'], isBoss:true },
   demon_imp:     { name:'Demon Imp',     tier:'B', level:10, hp:140, atk:40, def:12, skills:['m_imp_scratch','m_imp_bite'], isMinion:true },
+  // ── Desert Saharrrra monsters ────────────────────────────────────────────────
+  sand_scorpion:    { name:'Sand Scorpion',     tier:'C', level:13, hp:200, atk:48, def:20, skills:['m_sting','m_claw_snap'] },
+  desert_jackal:    { name:'Desert Jackal',     tier:'C', level:15, hp:170, atk:52, def:16, skills:['m_jackal_bite','m_pack_howl'] },
+  sandstorm_wraith: { name:'Sandstorm Wraith',  tier:'B', level:18, hp:270, atk:62, def:24, skills:['m_wail','m_sandblast'] },
+  bone_crawler:     { name:'Bone Crawler',      tier:'B', level:20, hp:310, atk:60, def:32, skills:['m_rattle','m_crush'] },
+  canyon_serpent:   { name:'Canyon Serpent',    tier:'B', level:23, hp:340, atk:70, def:28, skills:['m_fang','m_coil'] },
+  dune_sorcerer:    { name:'Dune Sorcerer',     tier:'A', level:25, hp:280, atk:85, def:34, skills:['m_sand_curse','m_mirage_blast'] },
+  mirage_stalker:   { name:'Mirage Stalker',    tier:'A', level:28, hp:380, atk:90, def:38, skills:['m_phase_strike','m_sandblast'] },
+  sandglass_golem:  { name:'Sandglass Golem',   tier:'A', level:30, hp:480, atk:88, def:50, skills:['m_sandstorm','m_crush'] },
+  pharaoh_wrath:    { name:"The Pharaoh's Wrath", tier:'S', level:35, hp:3000, atk:155, def:70, skills:['m_pharaoh_curse','m_solar_beam','m_ancient_wrath'], isBoss:true },
+  cursed_servant:   { name:'Cursed Servant',    tier:'A', level:33, hp:400, atk:98, def:42, skills:['m_servant_slash','m_sandblast'], isMinion:true },
 };
 
 // ── Monster skills ────────────────────────────────────────────────────────────
@@ -63,14 +74,40 @@ const MONSTER_SKILLS = {
   m_cleave:      { name:'Cleave',         dmgMult:1.5, type:'melee'  },
   m_imp_scratch: { name:'Scratch',        dmgMult:0.9, type:'melee'  },
   m_imp_bite:    { name:'Bite',           dmgMult:1.2, type:'melee'  },
+  // ── Desert Saharrrra skills ──────────────────────────────────────────────────
+  m_sting:         { name:'Venomous Sting',  dmgMult:1.0, type:'pierce' },
+  m_claw_snap:     { name:'Claw Snap',        dmgMult:1.4, type:'melee'  },
+  m_jackal_bite:   { name:'Jackal Bite',      dmgMult:1.1, type:'melee'  },
+  m_pack_howl:     { name:'Pack Howl',        dmgMult:0.7, type:'magic'  },
+  m_wail:          { name:'Desert Wail',      dmgMult:1.1, type:'magic'  },
+  m_sandblast:     { name:'Sandblast',        dmgMult:1.4, type:'magic'  },
+  m_rattle:        { name:'Bone Rattle',      dmgMult:1.0, type:'melee'  },
+  m_crush:         { name:'Crushing Slam',    dmgMult:1.7, type:'melee'  },
+  m_fang:          { name:'Serpent Fang',     dmgMult:1.2, type:'pierce' },
+  m_coil:          { name:'Constrict',        dmgMult:0.9, type:'melee'  },
+  m_sand_curse:    { name:'Sand Curse',       dmgMult:1.5, type:'curse'  },
+  m_mirage_blast:  { name:'Mirage Blast',     dmgMult:1.8, type:'magic'  },
+  m_phase_strike:  { name:'Phase Strike',     dmgMult:1.8, type:'melee'  },
+  m_sandstorm:     { name:'Sandstorm',        dmgMult:1.3, type:'magic'  },
+  m_pharaoh_curse: { name:"Pharaoh's Curse",  dmgMult:1.8, type:'curse'  },
+  m_solar_beam:    { name:'Solar Beam',       dmgMult:2.5, type:'fire'   },
+  m_ancient_wrath: { name:'Ancient Wrath',    dmgMult:3.0, type:'melee'  },
+  m_servant_slash: { name:'Servant Slash',    dmgMult:1.4, type:'melee'  },
 };
 
 // ── Zone → monster pool (up to 3 will spawn) ─────────────────────────────────
 const ZONE_MONSTER_POOL = {
+  // Dark Forest (Act 1)
   entry: ['green_slime', 'blue_slime'],
   mid:   ['goblin', 'forest_archer'],
   deep:  ['forest_shaman'],
   demon: ['demon_lord'],
+  // Desert Saharrrra (Act 2)
+  dunes:        ['sand_scorpion', 'desert_jackal'],
+  bone_wastes:  ['sandstorm_wraith', 'bone_crawler'],
+  canyons:      ['canyon_serpent', 'dune_sorcerer'],
+  mirror_oasis: ['mirage_stalker', 'sandglass_golem'],
+  pharaoh_tomb: ['pharaoh_wrath'],
 };
 
 const TIER_COLORS = {

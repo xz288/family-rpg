@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Darkwood — Forest Ambience</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#04060a;
+  font-family:'Crimson Text',serif;
+  min-height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:24px 16px;
+  color:#8aaa78;
+}
+h1 {
+  font-family:'UnifrakturMaguntia',cursive;
+  font-size:clamp(1.6rem,4vw,2.6rem);
+  color:#7aaa60;
+  letter-spacing:.08em;
+  text-shadow:0 0 40px rgba(40,120,30,.5), 0 0 80px rgba(10,40,10,.6), 0 3px 8px rgba(0,0,0,1);
+  margin-bottom:4px; text-align:center;
+}
+.subtitle {
+  font-family:'Crimson Text',serif; font-style:italic;
+  color:#2a4820; font-size:.82rem; letter-spacing:.2em;
+  text-transform:uppercase; margin-bottom:28px; text-align:center;
+}
+
+.card {
+  width:min(96vw,560px);
+  background:linear-gradient(160deg,#060e08 0%,#030608 100%);
+  border:1px solid #142010;
+  clip-path:polygon(0 10px,10px 0,calc(100% - 10px) 0,100% 10px,100% calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,0 calc(100% - 10px));
+  padding:28px 28px 24px;
+  position:relative;
+}
+.card::before {
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent 5%,#1a4010 30%,#3a8020 50%,#1a4010 70%,transparent 95%);
+}
+.card::after {
+  content:'🌲';
+  position:absolute; top:-11px; left:50%; transform:translateX(-50%);
+  font-size:14px; background:#04060a; padding:0 8px;
+  filter:grayscale(.6) brightness(.5);
+}
+
+/* Visualiser */
+#viz-canvas {
+  width:100%; height:90px;
+  background:#020408;
+  border:1px solid #0e1810;
+  border-radius:2px;
+  margin-bottom:20px;
+  display:block;
+}
+
+/* Play button */
+.play-btn {
+  width:100%; padding:13px;
+  font-family:'Cinzel Decorative',serif;
+  font-size:.72rem; letter-spacing:.15em;
+  cursor:pointer; border:1px solid #1a3810;
+  color:#3a8020; background:transparent;
+  clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,7px 100%,0 calc(100% - 7px));
+  transition:all .22s; margin-bottom:22px;
+}
+.play-btn:hover  { border-color:#3a8020; background:rgba(40,120,20,.06); color:#5ab030; }
+.play-btn.playing { border-color:#6a1808; color:#c03010; background:rgba(100,24,8,.07); }
+
+/* Section labels */
+.section-title {
+  font-family:'Cinzel Decorative',serif;
+  font-size:.6rem; letter-spacing:.18em; color:#1a3810;
+  text-transform:uppercase; margin-bottom:10px; margin-top:18px;
+}
+.section-title:first-of-type { margin-top:0; }
+
+/* Sliders */
+.layer-row {
+  display:grid;
+  grid-template-columns:140px 1fr 42px;
+  align-items:center; gap:10px; margin-bottom:10px;
+}
+.layer-name {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.9rem; color:#3a5828;
+}
+input[type=range] {
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:3px;
+  background:#0e1a0a; border-radius:2px; outline:none; cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:13px; height:13px;
+  border-radius:50%; background:#1a5010;
+  border:1px solid #3a8020; cursor:pointer; transition:background .15s;
+}
+input[type=range]:hover::-webkit-slider-thumb { background:#3a8020; }
+.vol-val {
+  font-family:'Crimson Text',serif; font-size:.78rem;
+  color:#2a4018; text-align:right; min-width:32px;
+}
+
+/* Depth selector */
+.depth-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+.depth-btn {
+  font-family:'Cinzel Decorative',serif; font-size:.58rem;
+  letter-spacing:.1em; padding:6px 12px; cursor:pointer;
+  border:1px solid #0e1c08; color:#2a4818; background:transparent;
+  transition:all .18s;
+  clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,4px 100%,0 calc(100% - 4px));
+}
+.depth-btn:hover  { border-color:#2a5010; color:#4a7828; }
+.depth-btn.active { border-color:#3a8020; color:#7ac040; background:rgba(40,120,20,.08); }
+
+/* Event buttons */
+.event-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
+.event-btn {
+  font-family:'Cinzel Decorative',serif; font-size:.58rem;
+  letter-spacing:.08em; padding:7px 13px; cursor:pointer;
+  border:1px solid #1a1a08; color:#3a3818; background:transparent;
+  transition:all .18s;
+  clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,4px 100%,0 calc(100% - 4px));
+}
+.event-btn:hover { border-color:#5a4010; color:#8a6820; }
+.event-btn:active { transform:scale(.97); }
+
+.divider {
+  height:1px;
+  background:repeating-linear-gradient(90deg,transparent,transparent 4px,#0e180a 4px,#0e180a 8px);
+  margin:16px 0;
+}
+
+/* Wisp indicators */
+.wisp-row { display:flex; gap:6px; align-items:center; margin-top:6px; }
+.wisp-dot {
+  width:7px; height:7px; border-radius:50%;
+  background:#0a1808; transition:background .15s, box-shadow .15s;
+}
+.wisp-dot.lit {
+  background:#40b040;
+  box-shadow:0 0 6px rgba(40,160,40,.7);
+}
+.wisp-label {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.75rem; color:#1a3010; margin-left:4px;
+}
+
+#status-line {
+  font-family:'Crimson Text',serif; font-style:italic;
+  font-size:.78rem; color:#1a3010; text-align:center;
+  margin-top:14px; min-height:1.1em; letter-spacing:.05em;
+}
+</style>
+</head>
+<body>
+
+<h1>⸸ The Darkwood ⸸</h1>
+<p class="subtitle">― those who enter do not return ―</p>
+
+<div class="card">
+  <canvas id="viz-canvas"></canvas>
+
+  <button class="play-btn" id="play-btn" onclick="togglePlay()">
+    ▶ &nbsp; Enter the Wood
+  </button>
+
+  <!-- DEPTH -->
+  <div class="section-title">Depth</div>
+  <div class="depth-row">
+    <button class="depth-btn active" id="depth-edge"   onclick="setDepth('edge')">Forest Edge</button>
+    <button class="depth-btn"        id="depth-deep"   onclick="setDepth('deep')">Deep Wood</button>
+    <button class="depth-btn"        id="depth-heart"  onclick="setDepth('heart')">The Heart</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- LAYERS -->
+  <div class="section-title">Layers</div>
+
+  <div class="layer-row">
+    <span class="layer-name">Sub Rumble</span>
+    <input type="range" id="vol-rumble" min="0" max="100" value="75"
+           oninput="setVol('rumble',this.value)"/>
+    <span class="vol-val" id="lbl-rumble">75</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Forest Drone</span>
+    <input type="range" id="vol-fdrone" min="0" max="100" value="65"
+           oninput="setVol('fdrone',this.value)"/>
+    <span class="vol-val" id="lbl-fdrone">65</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Wind Through Trees</span>
+    <input type="range" id="vol-fwind" min="0" max="100" value="70"
+           oninput="setVol('fwind',this.value)"/>
+    <span class="vol-val" id="lbl-fwind">70</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Creature Calls</span>
+    <input type="range" id="vol-creature" min="0" max="100" value="55"
+           oninput="setVol('creature',this.value)"/>
+    <span class="vol-val" id="lbl-creature">55</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Whispers</span>
+    <input type="range" id="vol-whisper" min="0" max="100" value="50"
+           oninput="setVol('whisper',this.value)"/>
+    <span class="vol-val" id="lbl-whisper">50</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Will-o-Wisp Tone</span>
+    <input type="range" id="vol-wisp" min="0" max="100" value="45"
+           oninput="setVol('wisp',this.value)"/>
+    <span class="vol-val" id="lbl-wisp">45</span>
+  </div>
+  <div class="layer-row">
+    <span class="layer-name">Distant Howl</span>
+    <input type="range" id="vol-howl" min="0" max="100" value="40"
+           oninput="setVol('howl',this.value)"/>
+    <span class="vol-val" id="lbl-howl">40</span>
+  </div>
+
+  <!-- Wisp activity indicators -->
+  <div class="wisp-row">
+    <div class="wisp-dot" id="wisp-0"></div>
+    <div class="wisp-dot" id="wisp-1"></div>
+    <div class="wisp-dot" id="wisp-2"></div>
+    <div class="wisp-dot" id="wisp-3"></div>
+    <div class="wisp-dot" id="wisp-4"></div>
+    <span class="wisp-label">will-o-wisps</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- SOUND EVENTS -->
+  <div class="section-title">Sound Events</div>
+  <div class="event-row">
+    <button class="event-btn" onclick="triggerBranchSnap()">🌿 Branch Snap</button>
+    <button class="event-btn" onclick="triggerOwl()">🦉 Owl Cry</button>
+    <button class="event-btn" onclick="triggerWispFlare()">✨ Wisp Flare</button>
+    <button class="event-btn" onclick="triggerGrowl()">👁 Deep Growl</button>
+    <button class="event-btn" onclick="triggerHeartbeat()">💀 Dread Pulse</button>
+  </div>
+
+  <div id="status-line">the trees stand silent, watching...</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   THE DARKWOOD — FOREST AMBIENT COMPOSER
+   Web Audio API — procedural synthesis only
+   ══════════════════════════════════════════════════ */
+
+let ctx = null;
+let isPlaying = false;
+let masterGain = null;
+let analyser = null;
+let vizFrame = null;
+const gains = {};
+const vols = { rumble:.75, fdrone:.65, fwind:.70, creature:.55, whisper:.50, wisp:.45, howl:.40 };
+let liveNodes = [];
+let scheduledTimers = [];
+
+/* ── Depth presets ── */
+const depths = {
+  edge:  { rootHz:36.7, atonality:0.2, creatureRate:8,  wispRate:12, howlRate:20, name:'Forest Edge' },
+  deep:  { rootHz:29.1, atonality:0.5, creatureRate:5,  wispRate:7,  howlRate:14, name:'Deep Wood'   },
+  heart: { rootHz:20.6, atonality:0.9, creatureRate:3,  wispRate:4,  howlRate:9,  name:'The Heart'   },
+};
+let currentDepth = 'edge';
+
+function getDepth() { return depths[currentDepth]; }
+
+/* ── init ── */
+function initCtx() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(0.78, ctx.currentTime);
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.92;
+  masterGain.connect(analyser);
+  analyser.connect(ctx.destination);
+  ['rumble','fdrone','fwind','creature','whisper','wisp','howl'].forEach(k => {
+    gains[k] = ctx.createGain();
+    gains[k].gain.setValueAtTime(vols[k] * 0.9, ctx.currentTime);
+    gains[k].connect(masterGain);
+  });
+}
+
+/* ── reverb factory ── */
+function makeReverb(dur=4, decay=1.6) {
+  const len = ctx.sampleRate * dur;
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c=0;c<2;c++){
+    const d = buf.getChannelData(c);
+    for (let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+  }
+  const cv = ctx.createConvolver(); cv.buffer=buf; return cv;
+}
+
+/* ── noise buffer ── */
+function makePinkNoise(seconds=3) {
+  const len = ctx.sampleRate * seconds;
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d   = buf.getChannelData(0);
+  let b0=0,b1=0,b2=0,b3=0,b4=0;
+  for (let i=0;i<len;i++){
+    const w=Math.random()*2-1;
+    b0=.99886*b0+w*.0555179; b1=.99332*b1+w*.0750759;
+    b2=.96900*b2+w*.1538520; b3=.86650*b3+w*.3104856;
+    b4=.55000*b4+w*.5329522;
+    d[i]=(b0+b1+b2+b3+b4+w*.0168980)*0.1;
+  }
+  return buf;
+}
+
+/* ══ LAYER 1: SUB RUMBLE ══ */
+/* Deep earth-shaking subsonic bass with tremolo */
+function startRumble(depth) {
+  const rev = makeReverb(5,2);
+  rev.connect(gains.rumble);
+
+  /* Two detuned sine subs */
+  [1, 1.33].forEach((ratio,i) => {
+    const osc  = ctx.createOscillator();
+    const gn   = ctx.createGain();
+    const filt = ctx.createBiquadFilter();
+    filt.type='lowpass'; filt.frequency.value=90;
+    osc.type='sine';
+    osc.frequency.value = depth.rootHz * ratio;
+    /* slow pitch wander */
+    osc.frequency.setTargetAtTime(depth.rootHz*ratio*1.002, ctx.currentTime+4, 6);
+    osc.frequency.setTargetAtTime(depth.rootHz*ratio*0.998, ctx.currentTime+10, 6);
+    gn.gain.setValueAtTime(0,ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(i===0?.55:.28, ctx.currentTime+3);
+
+    /* tremolo */
+    const lfo=ctx.createOscillator(); lfo.frequency.value=0.12+i*.05;
+    const lg=ctx.createGain(); lg.gain.value=0.12;
+    lfo.connect(lg); lg.connect(gn.gain); lfo.start();
+    liveNodes.push(lfo);
+
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(); liveNodes.push(osc);
+  });
+}
+
+/* ══ LAYER 2: FOREST DRONE ══ */
+/* Eerie mid-range drone — atonal, slightly out-of-tune, unsettling */
+function startForestDrone(depth) {
+  const rev = makeReverb(6,1.4);
+  rev.connect(gains.fdrone);
+
+  /* Root + intervals chosen for maximum eeriness based on depth.atonality */
+  const baseFreqs = [
+    depth.rootHz * 4,
+    depth.rootHz * 4 * Math.pow(2, (7 + depth.atonality*4) / 12),   /* 5th + drift */
+    depth.rootHz * 4 * Math.pow(2, (10 + depth.atonality*2) / 12),  /* b7 */
+    depth.rootHz * 4 * Math.pow(2, (3) / 12),                        /* b3 */
+  ];
+
+  baseFreqs.forEach((f,i) => {
+    const osc  = ctx.createOscillator();
+    const gn   = ctx.createGain();
+    const filt = ctx.createBiquadFilter();
+    filt.type='bandpass'; filt.frequency.value=f*1.2; filt.Q.value=0.8;
+    osc.type = i%2===0 ? 'sawtooth' : 'triangle';
+    osc.frequency.value = f;
+    osc.detune.value = (Math.random()-0.5) * depth.atonality * 40;
+    gn.gain.setValueAtTime(0,ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(0.18/(i+1), ctx.currentTime+4+i);
+
+    /* slow freq waver — the forest breathes */
+    const lfo=ctx.createOscillator();
+    lfo.frequency.value=0.04 + i*0.02 + Math.random()*0.03;
+    const lg=ctx.createGain(); lg.gain.value=f*0.004;
+    lfo.connect(lg); lg.connect(osc.frequency); lfo.start();
+    liveNodes.push(lfo);
+
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(); liveNodes.push(osc);
+  });
+}
+
+/* ══ LAYER 3: WIND THROUGH TREES ══ */
+/* Multi-band noise — distinct from town wind, more turbulent */
+function startForestWind() {
+  const noiseBuf = makePinkNoise(5);
+
+  /* Three noise sources — different bands = low moan, mid rustle, high sibilance */
+  const bands = [
+    { freq:180, Q:0.5, gain:0.55 },
+    { freq:600, Q:0.7, gain:0.38 },
+    { freq:2200,Q:1.2, gain:0.22 },
+  ];
+
+  bands.forEach((b,i) => {
+    const src  = ctx.createBufferSource();
+    src.buffer = noiseBuf; src.loop = true;
+    const filt = ctx.createBiquadFilter();
+    filt.type='bandpass'; filt.frequency.value=b.freq; filt.Q.value=b.Q;
+    const gn   = ctx.createGain();
+    gn.gain.setValueAtTime(b.gain, ctx.currentTime);
+
+    /* gust LFO — irregular gusts */
+    const lfo  = ctx.createOscillator();
+    lfo.frequency.value = 0.06+i*0.04;
+    const lg   = ctx.createGain(); lg.gain.value = b.gain * 0.5;
+    lfo.connect(lg); lg.connect(gn.gain); lfo.start();
+    liveNodes.push(lfo);
+
+    src.connect(filt); filt.connect(gn); gn.connect(gains.fwind);
+    src.start(); liveNodes.push(src);
+  });
+}
+
+/* ══ LAYER 4: CREATURE CALLS ══ */
+/* Random procedural creature sounds — chirps, clicks, low moans */
+function scheduleCreature(depth) {
+  if (!isPlaying) return;
+  const delay = (depth.creatureRate * 0.5 + Math.random() * depth.creatureRate) * 1000;
+
+  const t = setTimeout(() => {
+    if (!isPlaying) return;
+    const type = Math.floor(Math.random() * 4);
+    const rev  = makeReverb(3, 1.8);
+    rev.connect(gains.creature);
+
+    if (type === 0) {
+      /* chirp burst */
+      for (let i=0;i<3;i++){
+        const osc=ctx.createOscillator(); const gn=ctx.createGain();
+        osc.type='sine';
+        osc.frequency.value=800+Math.random()*1200;
+        const on=ctx.currentTime+i*0.12;
+        gn.gain.setValueAtTime(0,on);
+        gn.gain.linearRampToValueAtTime(0.4,on+.01);
+        gn.gain.exponentialRampToValueAtTime(.001,on+.08);
+        osc.connect(gn); gn.connect(rev);
+        osc.start(on); osc.stop(on+.1); liveNodes.push(osc);
+      }
+      setStatus('Something stirs in the undergrowth...');
+
+    } else if (type === 1) {
+      /* low moan */
+      const osc=ctx.createOscillator(); const gn=ctx.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(180+Math.random()*80, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(90+Math.random()*40, ctx.currentTime+1.2);
+      gn.gain.setValueAtTime(0,ctx.currentTime);
+      gn.gain.linearRampToValueAtTime(.5,ctx.currentTime+.15);
+      gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+1.4);
+      osc.connect(gn); gn.connect(rev);
+      osc.start(); osc.stop(ctx.currentTime+1.5); liveNodes.push(osc);
+      setStatus('A low moan drifts between the trees...');
+
+    } else if (type === 2) {
+      /* clicking / wood knock */
+      const osc=ctx.createOscillator(); const gn=ctx.createGain();
+      osc.type='square';
+      osc.frequency.value=120+Math.random()*80;
+      gn.gain.setValueAtTime(.5,ctx.currentTime);
+      gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.06);
+      osc.connect(gn); gn.connect(rev);
+      osc.start(); osc.stop(ctx.currentTime+.1); liveNodes.push(osc);
+      setStatus('A knock. Deliberate. Close.');
+
+    } else {
+      /* distant shriek */
+      const osc=ctx.createOscillator(); const gn=ctx.createGain();
+      osc.type='sawtooth';
+      const filt=ctx.createBiquadFilter();
+      filt.type='bandpass'; filt.frequency.value=1800; filt.Q.value=2;
+      osc.frequency.setValueAtTime(900,ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1800,ctx.currentTime+.3);
+      osc.frequency.exponentialRampToValueAtTime(400,ctx.currentTime+.7);
+      gn.gain.setValueAtTime(0,ctx.currentTime);
+      gn.gain.linearRampToValueAtTime(.35,ctx.currentTime+.05);
+      gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.8);
+      osc.connect(filt); filt.connect(gn); gn.connect(rev);
+      osc.start(); osc.stop(ctx.currentTime+1); liveNodes.push(osc);
+      setStatus('Something screams far, far away...');
+    }
+
+    setTimeout(() => setStatus(statusIdle()), 3000);
+    scheduleCreature(getDepth());
+  }, delay);
+  scheduledTimers.push(t);
+}
+
+/* ══ LAYER 5: WHISPERS ══ */
+/* Filtered noise shaped into almost-speech */
+function scheduleWhisper(depth) {
+  if (!isPlaying) return;
+  const delay = (8 + Math.random() * 12) * 1000;
+  const t = setTimeout(() => {
+    if (!isPlaying) return;
+    const noiseBuf = makePinkNoise(2);
+    const src  = ctx.createBufferSource(); src.buffer=noiseBuf;
+    const rev  = makeReverb(4, 1.2);
+
+    /* formant filters — vowel-like shapes */
+    const f1=ctx.createBiquadFilter(); f1.type='bandpass'; f1.frequency.value=700;  f1.Q.value=8;
+    const f2=ctx.createBiquadFilter(); f2.type='bandpass'; f2.frequency.value=1200; f2.Q.value=6;
+    const f3=ctx.createBiquadFilter(); f3.type='bandpass'; f3.frequency.value=2500; f3.Q.value=5;
+    const gn=ctx.createGain();
+    gn.gain.setValueAtTime(0,ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(.6, ctx.currentTime+.4);
+    gn.gain.setTargetAtTime(0, ctx.currentTime+1.2, .4);
+
+    /* freq modulation to mimic speech rhythm */
+    const lfo=ctx.createOscillator(); lfo.frequency.value=3.5+Math.random()*2;
+    const lg=ctx.createGain(); lg.gain.value=300;
+    lfo.connect(lg); lg.connect(f1.frequency); lfo.start();
+    setTimeout(() => { try{lfo.stop();}catch(e){} }, 2000);
+    liveNodes.push(lfo);
+
+    rev.connect(gains.whisper);
+    src.connect(f1); src.connect(f2); src.connect(f3);
+    f1.connect(gn); f2.connect(gn); f3.connect(gn);
+    gn.connect(rev);
+    src.start(); src.stop(ctx.currentTime+2.5); liveNodes.push(src);
+
+    setStatus('...did something just speak your name?');
+    setTimeout(() => setStatus(statusIdle()), 3500);
+    scheduleWhisper(getDepth());
+  }, delay);
+  scheduledTimers.push(t);
+}
+
+/* ══ LAYER 6: WILL-O-WISP TONES ══ */
+/* Eerie high pure tones that appear and vanish */
+let wispActive = [false,false,false,false,false];
+
+function scheduleWisp(depth, idx) {
+  if (!isPlaying) return;
+  const delay = (depth.wispRate * 0.4 + Math.random() * depth.wispRate) * 1000;
+  const t = setTimeout(() => {
+    if (!isPlaying) return;
+    const rev=makeReverb(5,0.9); rev.connect(gains.wisp);
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='sine';
+    /* wisp frequencies — high, eerie, slightly dissonant */
+    const wispFreqs=[523,587,659,698,784,880,988,1047];
+    const baseF=wispFreqs[Math.floor(Math.random()*wispFreqs.length)];
+    osc.frequency.value=baseF;
+    /* shimmer */
+    const lfo=ctx.createOscillator(); lfo.frequency.value=5+Math.random()*3;
+    const lg=ctx.createGain(); lg.gain.value=baseF*0.003;
+    lfo.connect(lg); lg.connect(osc.frequency); lfo.start();
+
+    const dur=2+Math.random()*3;
+    gn.gain.setValueAtTime(0,ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(.3,ctx.currentTime+.5);
+    gn.gain.setTargetAtTime(0,ctx.currentTime+dur*.6,.5);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(); osc.stop(ctx.currentTime+dur+1);
+    liveNodes.push(osc); liveNodes.push(lfo);
+
+    /* light the indicator */
+    wispActive[idx]=true;
+    document.getElementById('wisp-'+idx).classList.add('lit');
+    setTimeout(()=>{
+      wispActive[idx]=false;
+      document.getElementById('wisp-'+idx).classList.remove('lit');
+      try{lfo.stop();}catch(e){}
+    }, (dur+0.5)*1000);
+
+    scheduleWisp(getDepth(), idx);
+  }, delay);
+  scheduledTimers.push(t);
+}
+
+/* ══ LAYER 7: DISTANT HOWL ══ */
+function scheduleHowl(depth) {
+  if (!isPlaying) return;
+  const delay = (depth.howlRate * 0.5 + Math.random() * depth.howlRate) * 1000;
+  const t = setTimeout(() => {
+    if (!isPlaying) return;
+    const rev=makeReverb(7,0.7); rev.connect(gains.howl);
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    const filt=ctx.createBiquadFilter();
+    filt.type='bandpass'; filt.frequency.value=380; filt.Q.value=2.5;
+    osc.type='sawtooth';
+    /* howl pitch contour: rise then fall */
+    const baseF=120+Math.random()*80;
+    osc.frequency.setValueAtTime(baseF,ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(baseF*1.6,ctx.currentTime+.8);
+    osc.frequency.exponentialRampToValueAtTime(baseF*.7,ctx.currentTime+2.4);
+    gn.gain.setValueAtTime(0,ctx.currentTime);
+    gn.gain.linearRampToValueAtTime(.45,ctx.currentTime+.3);
+    gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+2.8);
+    osc.connect(filt); filt.connect(gn); gn.connect(rev);
+    osc.start(); osc.stop(ctx.currentTime+3); liveNodes.push(osc);
+    setStatus('A howl rises... and is swallowed by the dark.');
+    setTimeout(()=>setStatus(statusIdle()),4000);
+    scheduleHowl(getDepth());
+  }, delay);
+  scheduledTimers.push(t);
+}
+
+/* ══ ONE-SHOT SOUND EVENTS ══ */
+function triggerBranchSnap() {
+  if (!ctx) return;
+  const rev=makeReverb(2,2.2); rev.connect(masterGain);
+  const osc=ctx.createOscillator(); const gn=ctx.createGain();
+  const filt=ctx.createBiquadFilter(); filt.type='highpass'; filt.frequency.value=200;
+  osc.type='square'; osc.frequency.value=90;
+  gn.gain.setValueAtTime(.8,ctx.currentTime);
+  gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.18);
+  osc.connect(filt); filt.connect(gn); gn.connect(rev);
+  osc.start(); osc.stop(ctx.currentTime+.2);
+  /* sharp transient click */
+  const click=ctx.createOscillator(); const cg=ctx.createGain();
+  click.type='sawtooth'; click.frequency.value=280;
+  cg.gain.setValueAtTime(.6,ctx.currentTime);
+  cg.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.04);
+  click.connect(cg); cg.connect(rev);
+  click.start(); click.stop(ctx.currentTime+.05);
+  setStatus('Snap. Something broke a branch behind you.');
+  setTimeout(()=>setStatus(statusIdle()),2500);
+}
+
+function triggerOwl() {
+  if (!ctx) return;
+  const rev=makeReverb(4,1.5); rev.connect(masterGain);
+  /* classic hoo-hoo pattern */
+  [[320,.08,.5],[280,.7,1.2],[320,1.4,1.9],[280,2.0,2.7]].forEach(([f,on,off])=>{
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='triangle';
+    osc.frequency.setValueAtTime(f,ctx.currentTime+on);
+    osc.frequency.setTargetAtTime(f*.92,ctx.currentTime+on+.1,.2);
+    gn.gain.setValueAtTime(0,ctx.currentTime+on);
+    gn.gain.linearRampToValueAtTime(.4,ctx.currentTime+on+.05);
+    gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+off);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(ctx.currentTime+on); osc.stop(ctx.currentTime+off+.2);
+  });
+  setStatus('An owl calls. Closer than it should be.');
+  setTimeout(()=>setStatus(statusIdle()),3500);
+}
+
+function triggerWispFlare() {
+  if (!ctx) return;
+  const rev=makeReverb(5,.8); rev.connect(masterGain);
+  /* chord of pure tones — otherworldly */
+  [523,659,784,1047,1319].forEach((f,i)=>{
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    osc.type='sine'; osc.frequency.value=f;
+    osc.detune.value=(Math.random()-.5)*15;
+    gn.gain.setValueAtTime(0,ctx.currentTime+i*.06);
+    gn.gain.linearRampToValueAtTime(.22,ctx.currentTime+i*.06+.1);
+    gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+i*.06+2.5);
+    osc.connect(gn); gn.connect(rev);
+    osc.start(ctx.currentTime+i*.06); osc.stop(ctx.currentTime+3);
+  });
+  /* light all wisps */
+  for(let i=0;i<5;i++){
+    document.getElementById('wisp-'+i).classList.add('lit');
+    setTimeout(()=>document.getElementById('wisp-'+i).classList.remove('lit'),1800+i*200);
+  }
+  setStatus('The wisps flare. They beckon. Do not follow.');
+  setTimeout(()=>setStatus(statusIdle()),3500);
+}
+
+function triggerGrowl() {
+  if (!ctx) return;
+  const rev=makeReverb(4,1.8); rev.connect(masterGain);
+  const osc=ctx.createOscillator(); const gn=ctx.createGain();
+  const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=200;
+  osc.type='sawtooth'; osc.frequency.value=55;
+  /* tremolo growl */
+  const lfo=ctx.createOscillator(); lfo.frequency.value=22;
+  const lg=ctx.createGain(); lg.gain.value=.35;
+  lfo.connect(lg); lg.connect(gn.gain);
+  gn.gain.setValueAtTime(.6,ctx.currentTime);
+  gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+2.2);
+  osc.connect(filt); filt.connect(gn); gn.connect(rev);
+  osc.start(); lfo.start();
+  osc.stop(ctx.currentTime+2.5); lfo.stop(ctx.currentTime+2.5);
+  setStatus('Something very large breathes nearby. Do not run.');
+  setTimeout(()=>setStatus(statusIdle()),4000);
+}
+
+function triggerHeartbeat() {
+  if (!ctx) return;
+  /* dread heartbeat — faster than normal, slightly irregular */
+  [0, .38, .8, 1.14, 1.6, 1.92].forEach((t,i)=>{
+    const osc=ctx.createOscillator(); const gn=ctx.createGain();
+    const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=80;
+    osc.type='sine'; osc.frequency.value=55+(i%2)*18;
+    gn.gain.setValueAtTime(0,ctx.currentTime+t);
+    gn.gain.linearRampToValueAtTime(.8,ctx.currentTime+t+.015);
+    gn.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+t+.28);
+    osc.connect(filt); filt.connect(gn); gn.connect(masterGain);
+    osc.start(ctx.currentTime+t); osc.stop(ctx.currentTime+t+.3);
+  });
+  setStatus('Your heart pounds. The forest knows you are afraid.');
+  setTimeout(()=>setStatus(statusIdle()),4000);
+}
+
+/* ── DEPTH CHANGE ── */
+function setDepth(d) {
+  currentDepth = d;
+  document.querySelectorAll('.depth-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('depth-'+d).classList.add('active');
+  if (isPlaying) {
+    setStatus(`Moving ${depths[d].name}...`);
+    stopLayers();
+    setTimeout(startLayers, 500);
+  }
+}
+
+/* ── VOLUME ── */
+function setVol(layer, val) {
+  vols[layer] = val/100;
+  document.getElementById('lbl-'+layer).textContent = val;
+  if (gains[layer]) gains[layer].gain.setTargetAtTime(vols[layer]*.9, ctx.currentTime, .15);
+}
+
+/* ── START / STOP ── */
+function startLayers() {
+  const depth = getDepth();
+  startRumble(depth);
+  startForestDrone(depth);
+  startForestWind();
+  scheduleCreature(depth);
+  scheduleWhisper(depth);
+  for (let i=0;i<5;i++) scheduleWisp(depth, i);
+  scheduleHowl(depth);
+}
+
+function stopLayers() {
+  const now = ctx.currentTime;
+  liveNodes.forEach(n => {
+    try { if(n.stop) n.stop(now+.8); } catch(e){}
+  });
+  liveNodes = [];
+  scheduledTimers.forEach(t => clearTimeout(t));
+  scheduledTimers = [];
+  for(let i=0;i<5;i++) document.getElementById('wisp-'+i).classList.remove('lit');
+}
+
+function togglePlay() {
+  initCtx();
+  if (ctx.state==='suspended') ctx.resume();
+  if (!isPlaying) {
+    isPlaying = true;
+    startLayers();
+    document.getElementById('play-btn').textContent='◼  Flee the Wood';
+    document.getElementById('play-btn').classList.add('playing');
+    setStatus('The tree line swallows you whole...');
+    startViz();
+  } else {
+    isPlaying = false;
+    stopLayers();
+    document.getElementById('play-btn').textContent='▶  Enter the Wood';
+    document.getElementById('play-btn').classList.remove('playing');
+    setStatus('the trees stand silent, watching...');
+    cancelAnimationFrame(vizFrame);
+  }
+}
+
+/* ── VISUALISER — green palette ── */
+function startViz() {
+  const canvas=document.getElementById('viz-canvas');
+  const W=canvas.width=canvas.offsetWidth;
+  const H=canvas.height=canvas.offsetHeight;
+  const c=canvas.getContext('2d');
+  const bufLen=analyser.frequencyBinCount;
+  const data=new Uint8Array(bufLen);
+
+  function draw(){
+    vizFrame=requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+    c.fillStyle='#020408'; c.fillRect(0,0,W,H);
+    const bw=W/bufLen*2.2; let x=0;
+    for(let i=0;i<bufLen;i++){
+      const v=data[i]/255;
+      const bh=v*H*.92;
+      /* dark green → sickly yellow-green → pale ghost */
+      const r=Math.round(v*v*120);
+      const g=Math.round(40+v*160);
+      const b=Math.round(v*30);
+      c.fillStyle=`rgb(${r},${g},${b})`;
+      c.fillRect(x,H-bh,bw-1,bh); x+=bw;
+    }
+    /* glow line */
+    const peak=Math.max(...data)/255;
+    if(peak>.05){
+      const ly=H-peak*H*.92;
+      const grad=c.createLinearGradient(0,0,W,0);
+      grad.addColorStop(0,'transparent');
+      grad.addColorStop(.3,`rgba(20,120,20,${peak*.5})`);
+      grad.addColorStop(.5,`rgba(80,180,20,${peak*.6})`);
+      grad.addColorStop(.7,`rgba(20,120,20,${peak*.5})`);
+      grad.addColorStop(1,'transparent');
+      c.strokeStyle=grad; c.lineWidth=1;
+      c.beginPath(); c.moveTo(0,ly); c.lineTo(W,ly); c.stroke();
+    }
+  }
+  draw();
+}
+
+/* ── STATUS idle lines ── */
+const idleLines = [
+  'the trees stand silent, watching...',
+  'something moves between the roots...',
+  'the darkness here is alive...',
+  'no path leads out that led you in...',
+  'the wisps drift. do not follow them.',
+  'the air tastes of old, cold earth...',
+];
+function statusIdle(){ return idleLines[Math.floor(Math.random()*idleLines.length)]; }
+function setStatus(msg){ document.getElementById('status-line').textContent=msg; }
+</script>
+</body>
+</html>
