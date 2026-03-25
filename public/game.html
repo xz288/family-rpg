@@ -20,7 +20,7 @@
 body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
 /* ── Topbar ─────────────────────────────────────────────────────────────── */
-#topbar{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;height:56px;flex-shrink:0;gap:12px}
+#topbar{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;height:56px;flex-shrink:0;gap:12px;position:relative;z-index:400}
 .logo{font-family:'Cinzel Decorative',serif;font-size:14px;color:var(--gold);letter-spacing:.08em;white-space:nowrap}
 .logo span{opacity:.5;font-size:18px}
 #topbar .sep{flex:1}
@@ -42,12 +42,15 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   50%{text-shadow:0 0 14px rgba(78,255,145,1),0 0 36px rgba(78,255,145,.6)}}
 #btn-logout{background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s}
 #btn-logout:hover{border-color:var(--red);color:var(--red)}
+#btn-fullscreen{background:none;border:1px solid var(--border);color:var(--muted);font-size:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:2px;transition:all .2s;flex-shrink:0;line-height:1}
+#btn-fullscreen:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ── Main ────────────────────────────────────────────────────────────────── */
 #main{display:grid;grid-template-columns:220px 1fr 300px;flex:1;overflow:hidden}
 
 /* ── Left sidebar ────────────────────────────────────────────────────────── */
-.sidebar{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+/* position:relative + z-index keeps the sidebar above full-screen overlays (combat/forest/desert) */
+.sidebar{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--panel);position:relative;z-index:400}
 .sidebar-section{border-bottom:1px solid var(--border);flex-shrink:0}
 .sidebar-section-title{font-family:'Cinzel',serif;font-size:10px;letter-spacing:.2em;color:var(--muted);padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between}
 .dot-online{width:6px;height:6px;border-radius:50%;background:var(--online);display:inline-block;margin-right:5px;box-shadow:0 0 6px var(--online)}
@@ -224,7 +227,8 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 #game-clock-time{font-family:'Cinzel Decorative',serif;font-size:20px;color:#f0e8d0;line-height:1;letter-spacing:.04em;text-shadow:0 0 10px rgba(255,230,160,.3)}
 
 /* ── Right Chat Panel ────────────────────────────────────────────────────── */
-#chat-area{border-left:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+/* position:relative + z-index keeps the chat panel above full-screen overlays */
+#chat-area{border-left:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:400}
 #chat-header{background:var(--panel);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
 #chat-title{font-family:'Cinzel',serif;font-size:13px;color:var(--gold)}
 #chat-subtitle{font-size:11px;color:var(--muted);font-style:italic}
@@ -255,7 +259,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 /* ── Building Popup ──────────────────────────────────────────────────────── */
 .bld-popup{
   position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.88);
-  z-index:300;
+  z-index:500;
   background:linear-gradient(180deg,#1e180e,#160e08);
   border:1px solid var(--gold-d);
   border-radius:3px;
@@ -431,7 +435,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */
-#toast{position:fixed;bottom:24px;right:24px;z-index:200;background:var(--panel);border:1px solid var(--gold-d);color:var(--gold);padding:12px 20px;border-radius:2px;font-family:'Cinzel',serif;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5);transform:translateY(80px);opacity:0;transition:all .3s}
+#toast{position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--panel);border:1px solid var(--gold-d);color:var(--gold);padding:12px 20px;border-radius:2px;font-family:'Cinzel',serif;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5);transform:translateY(80px);opacity:0;transition:all .3s}
 #toast.show{transform:translateY(0);opacity:1}
 
 [hidden]{display:none!important}
@@ -504,14 +508,12 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 
 /* ── Character Bar ───────────────────────────────────────────────────────── */
 #char-bar{
-  position:absolute;bottom:0;left:0;right:0;z-index:30;
+  flex-shrink:0;position:relative;z-index:400;
   display:flex;justify-content:center;gap:10px;
-  padding:12px 16px 16px;
-  background:linear-gradient(0deg,rgba(5,3,1,.9) 0%,transparent 100%);
-  pointer-events:none;
+  padding:10px 16px 12px;
+  background:var(--panel);border-top:1px solid var(--border);
 }
 .char-btn{
-  pointer-events:all;
   background:linear-gradient(180deg,rgba(28,20,8,.94) 0%,rgba(14,10,4,.96) 100%);
   border:1px solid var(--gold-d);color:var(--gold);
   font-family:'Cinzel',serif;font-size:11px;letter-spacing:.12em;
@@ -525,7 +527,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 
 /* ── Character Panel ─────────────────────────────────────────────────────── */
 #char-panel{
-  position:fixed;inset:0;z-index:220;
+  position:fixed;inset:0;z-index:500;
   background:rgba(0,0,0,.72);backdrop-filter:blur(4px);
   display:none;align-items:center;justify-content:center;
   padding:20px;
@@ -651,7 +653,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 /* ── Item detail popup ───────────────────────────────────────────────────── */
 #item-detail {
   position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  z-index:400;width:min(340px,88vw);
+  z-index:600;width:min(340px,88vw);
   background:linear-gradient(180deg,#1e180e,#120d06);
   border:1px solid var(--gold-d);border-radius:4px;
   padding:22px 24px;
@@ -845,7 +847,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 
 /* ── Forest overlay ──────────────────────────────────────────────────────── */
 #forest-overlay{
-  display:none;position:fixed;inset:0;z-index:300;
+  display:none;position:absolute;inset:0;z-index:20;
   background:#060d04;
 }
 /* Loading screen */
@@ -985,7 +987,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 
 /* ── Desert Saharrrra overlay ─────────────────────────────────────────────── */
 #desert-overlay{
-  display:none;position:fixed;inset:0;z-index:300;
+  display:none;position:absolute;inset:0;z-index:20;
   background:#1a0e04;
 }
 /* Desert loading screen */
@@ -1001,7 +1003,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 /* Desert map */
 #desert-map{
   display:none;position:absolute;inset:0;overflow:hidden;
-  background:url('/desert-saharrrra.jpg') center center / cover no-repeat;
+  background:url('/desert-saharrrra-new.jpg') center center / cover no-repeat;
 }
 #desert-map::before{
   content:'';position:absolute;inset:0;
@@ -1115,6 +1117,79 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 }
 #desert-boss-intro-fight-btn:hover{background:rgba(180,100,0,.5);border-color:#d4a020;color:#fff}
 
+/* ── Abyssal Rift overlay ────────────────────────────────────────────────── */
+#rift-overlay{display:none;position:absolute;inset:0;z-index:20;background:#030006;}
+#rift-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;}
+#rift-loading .fld-title{color:#9040ff;}
+#rift-loading .fld-desc{color:#7030cc;}
+#rift-loading .fld-bar{background:linear-gradient(90deg,#4a10aa,#9040ff);}
+#rift-loading .fld-hint{color:#5a208a;}
+#rift-map{display:none;position:absolute;inset:0;overflow:hidden;background:url('/abyss-rift.jpg') center center / cover no-repeat;}
+#rift-map::before{content:'';position:absolute;inset:0;background:rgba(0,0,0,.28);pointer-events:none;z-index:0;}
+#btn-rift-back{position:absolute;top:18px;left:20px;z-index:2;background:rgba(0,0,0,.65);border:1px solid #5a20aa;color:#9040ff;font-family:'Cinzel',serif;font-size:11px;letter-spacing:.1em;padding:6px 14px;border-radius:2px;cursor:pointer;transition:border-color .15s,color .15s;backdrop-filter:blur(2px);}
+#btn-rift-back:hover{border-color:#9040ff;color:#c080ff}
+#rm-zones{position:relative;width:100%;height:100%;}
+.rm-zone{position:absolute;z-index:1;display:flex;flex-direction:column;align-items:center;cursor:pointer;transform:translateX(-50%);}
+.rm-zone-label{background:rgba(8,2,18,.92);backdrop-filter:blur(3px);border:1px solid #4a1a8a;border-radius:3px;padding:9px 16px;text-align:center;box-shadow:0 3px 16px rgba(0,0,0,.75),inset 0 1px 0 rgba(144,64,255,.08);transition:transform .18s,box-shadow .18s,border-color .18s;}
+.rm-zone:not(.locked):hover .rm-zone-label{transform:translateY(-3px) scale(1.04);border-color:#9040ff;box-shadow:0 6px 22px rgba(100,20,180,.5),0 0 0 1px rgba(144,64,255,.3),inset 0 1px 0 rgba(144,64,255,.14);}
+.rm-zone-name{font-family:'Cinzel',serif;font-size:12px;color:#9040ff;letter-spacing:.07em}
+.rm-zone-sub{font-family:'Crimson Pro',serif;font-size:10px;color:#5a208a;font-style:italic;margin-top:2px}
+.rm-zone-lvrange{font-family:'Cinzel',serif;font-size:9px;color:#7030cc;letter-spacing:.08em;margin-top:3px;opacity:.85}
+.rm-connector{width:1px;height:16px;background:#3a1060;margin-top:2px}
+.rm-zone.locked{cursor:not-allowed}.rm-zone.locked .rm-zone-label{border-color:#1a0a30;background:rgba(5,2,10,.9)}
+.rm-zone.locked .rm-zone-name{color:#2a1040}.rm-zone.locked .rm-zone-sub{color:#1a0830}.rm-zone.locked .rm-connector{background:#1a0a30}
+.rm-zone.done .rm-zone-label{border-color:#301060;background:rgba(8,4,14,.85);opacity:.8}.rm-zone.done .rm-zone-name{color:#6030a0}
+.rm-zone.danger:not(.locked) .rm-zone-label{border-color:#6a0a6a;background:rgba(14,2,14,.9)}
+.rm-zone.danger:not(.locked) .rm-zone-name{color:#e040e0}
+.rm-zone.danger:not(.locked) .rm-zone-sub{color:#7a2078}.rm-zone.danger:not(.locked) .rm-connector{background:#6a0a6a}
+.rm-zone.danger:not(.locked):hover .rm-zone-label{border-color:#d040d0;box-shadow:0 6px 22px rgba(180,20,180,.5),0 0 0 1px rgba(220,60,220,.35);}
+/* Rift Gate button on desert map */
+#rift-gate-btn{position:absolute;bottom:30px;right:30px;z-index:2;background:rgba(6,0,18,.85);border:2px solid #6020c0;border-radius:4px;padding:12px 20px;cursor:pointer;text-align:center;transition:all .2s;box-shadow:0 0 18px rgba(100,30,200,.4);}
+#rift-gate-btn:hover{border-color:#9040ff;box-shadow:0 0 30px rgba(144,64,255,.7);}
+#rift-gate-btn-name{font-family:'Cinzel',serif;font-size:13px;color:#9040ff;letter-spacing:.1em}
+#rift-gate-btn-sub{font-size:10px;color:#5a208a;margin-top:3px;font-style:italic}
+
+/* ── Act 3 Transition Cutscene ───────────────────────────────────────────── */
+#act3-transition-overlay{display:none;position:fixed;inset:0;z-index:500;flex-direction:column;align-items:center;justify-content:flex-end;background:#000;cursor:pointer;}
+#act3-void-glow{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,rgba(80,0,180,.5) 0%,rgba(0,0,0,0) 65%);pointer-events:none;animation:void-glow-pulse 3s ease-in-out infinite;}
+@keyframes void-glow-pulse{0%,100%{opacity:.7}50%{opacity:1}}
+#act3-rift-visual{position:absolute;top:8%;left:50%;transform:translateX(-50%);font-size:96px;filter:drop-shadow(0 0 40px rgba(130,0,255,.9));animation:rift-tear-float 4s ease-in-out infinite;}
+@keyframes rift-tear-float{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.06)}}
+#act3-dialogue{position:relative;z-index:1;width:100%;max-width:680px;background:linear-gradient(180deg,rgba(4,0,14,.9),rgba(8,0,20,.97));border-top:2px solid #5a10c0;padding:22px 32px 28px;}
+#act3-speaker{font-family:'Cinzel',serif;font-size:13px;letter-spacing:.2em;color:#9040ff;margin-bottom:12px;}
+#act3-text{font-size:16px;color:#d0c0f0;line-height:1.7;min-height:52px;font-style:italic;letter-spacing:.02em;}
+#act3-prompt{font-size:11px;color:#5a208a;margin-top:14px;letter-spacing:.1em;animation:prompt-blink 1.2s ease-in-out infinite;}
+#act3-enter-btn{display:none;margin-top:16px;background:linear-gradient(180deg,rgba(100,0,200,.3),rgba(60,0,120,.2));border:1px solid #6020c0;color:#b060ff;font-family:'Cinzel',serif;font-size:14px;letter-spacing:.15em;padding:10px 36px;cursor:pointer;border-radius:3px;transition:all .2s;}
+#act3-enter-btn:hover{background:rgba(120,0,220,.5);border-color:#9040ff;color:#fff}
+
+/* ── Abyssal God Boss Intro ──────────────────────────────────────────────── */
+#abyss-boss-intro-overlay{display:none;position:fixed;inset:0;z-index:500;flex-direction:column;align-items:center;justify-content:flex-end;background:#000;cursor:pointer;}
+#abyss-boss-intro-bg{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,rgba(60,0,140,.5) 0%,rgba(0,0,0,0) 70%);pointer-events:none;}
+#abyss-boss-intro-entity{position:absolute;top:0;left:50%;transform:translateX(-50%);width:360px;max-width:86vw;filter:drop-shadow(0 0 40px rgba(120,0,255,.7)) drop-shadow(0 0 80px rgba(80,0,180,.5));animation:boss-intro-float 4s ease-in-out infinite;}
+#abyss-boss-intro-entity svg{width:100%;height:auto;display:block}
+#abyss-boss-intro-dialogue{position:relative;z-index:1;width:100%;max-width:680px;background:linear-gradient(180deg,rgba(4,0,12,.9),rgba(8,0,18,.97));border-top:2px solid #5a00c0;padding:22px 32px 28px;}
+#abyss-boss-intro-speaker{font-family:'Cinzel',serif;font-size:13px;letter-spacing:.2em;color:#8020e0;margin-bottom:12px;}
+#abyss-boss-intro-text{font-size:16px;color:#d8c8f8;line-height:1.7;min-height:52px;font-style:italic;letter-spacing:.02em;}
+#abyss-boss-intro-prompt{font-size:11px;color:#5a1080;margin-top:14px;letter-spacing:.1em;animation:prompt-blink 1.2s ease-in-out infinite;}
+#abyss-boss-intro-fight-btn{display:none;margin-top:16px;background:linear-gradient(180deg,rgba(80,0,180,.3),rgba(40,0,100,.2));border:1px solid #5a00c0;color:#c060ff;font-family:'Cinzel',serif;font-size:14px;letter-spacing:.15em;padding:10px 36px;cursor:pointer;border-radius:3px;transition:all .2s;}
+#abyss-boss-intro-fight-btn:hover{background:rgba(100,0,220,.5);border-color:#9030ff;color:#fff}
+
+/* ── Crafting tab in Blacksmith ──────────────────────────────────────────── */
+#bsm-tabs{display:flex;gap:0;border-bottom:1px solid var(--border2);margin-bottom:0;}
+.bsm-tab{flex:1;padding:8px;font-family:'Cinzel',serif;font-size:10px;letter-spacing:.1em;color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .15s;}
+.bsm-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.bsm-tab:hover:not(.active){color:var(--text);}
+#bsm-craft-view{display:none;padding:10px;overflow-y:auto;max-height:380px;}
+.craft-recipe{background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:3px;padding:10px 12px;margin-bottom:8px;}
+.craft-recipe-name{font-family:'Cinzel',serif;font-size:11px;color:var(--gold);letter-spacing:.08em;margin-bottom:4px;}
+.craft-recipe-mats{font-size:10px;color:var(--muted);margin-bottom:6px;display:flex;flex-direction:row;align-items:center;gap:6px;flex-wrap:wrap;}
+.craft-mat{display:flex;align-items:center;gap:6px;}
+.craft-mat.have{color:#6aaa6a;}.craft-mat.missing{color:#cc4444;}
+.craft-recipe-cost{font-size:10px;color:var(--gold-d);margin-bottom:6px;}
+.craft-btn{padding:5px 14px;font-family:'Cinzel',serif;font-size:10px;background:rgba(201,168,76,.12);border:1px solid var(--gold-d);color:var(--gold);cursor:pointer;border-radius:2px;transition:background .15s;letter-spacing:.06em;}
+.craft-btn:hover:not(:disabled){background:rgba(201,168,76,.25);}
+.craft-btn:disabled{opacity:.35;cursor:not-allowed;}
+
 /* ── Boss Intro Cutscene ─────────────────────────────────────────────────── */
 #boss-intro-overlay{
   display:none;position:fixed;inset:0;z-index:500;
@@ -1205,23 +1280,26 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 /* Party heroes row — all characters side by side, same size */
 #cb-heroes-row{display:flex;flex-direction:row;gap:10px;align-items:flex-end}
 #cb-party-members{display:flex;flex-direction:row;gap:10px;}
-.cb-hero-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:88px;transition:opacity .3s}
+.cb-hero-card{display:flex;flex-direction:column;align-items:center;gap:4px;width:110px;transition:opacity .3s}
 .cb-hero-card.ko{opacity:.4}
 .cb-hero-bar-row{display:flex;align-items:center;gap:4px;width:100%}
 .cb-hero-bar-row .cb-bar-track{flex:1;height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
 .cb-hero-bar-row .cb-bar-num{font-family:'Cinzel',serif;font-size:8px;color:var(--muted);min-width:40px;text-align:right;flex-shrink:0}
-#cb-self-extra-bars{width:88px}
+#cb-self-extra-bars{width:110px}
+#cb-self-extra-bars .cb-bar-row{gap:4px}
+#cb-self-extra-bars .cb-bar-num{min-width:40px;font-size:8px}
 
 #combat-overlay{
-  display:none;position:fixed;inset:0;z-index:310;
+  display:none;position:absolute;inset:0;z-index:30;
   background:rgba(0,0,0,.9);backdrop-filter:blur(8px);
   align-items:center;justify-content:center;
+  overflow:hidden;
 }
 #combat-panel{
-  width:min(760px,96vw);max-height:92vh;
+  width:min(760px,96vw);max-height:96%;
   background:linear-gradient(180deg,#100d08,#0c0a06);
   border:1px solid var(--border2);border-radius:4px;
-  display:flex;flex-direction:column;overflow:hidden;
+  display:flex;flex-direction:column;overflow-y:auto;
   box-shadow:0 0 60px rgba(0,0,0,.9);
 }
 /* Header */
@@ -1318,6 +1396,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 #combat-skills{
   display:flex;gap:10px;padding:14px 16px;
   background:rgba(0,0,0,.25);flex-wrap:wrap;flex-shrink:0;
+  overflow-y:auto;
 }
 .skill-btn{
   flex:1;min-width:110px;
@@ -1364,6 +1443,22 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .anim-fire   {animation:cb-fir  .55s ease both}
 .anim-holy   {animation:cb-hol  .55s ease both}
 .anim-heal   {animation:cb-hea  .65s ease both}
+.anim-buff   {animation:cb-buf  .70s ease both}
+.your-turn-flash{animation:your-turn-pulse 1.2s ease forwards}
+@keyframes your-turn-pulse{0%,100%{box-shadow:none}20%,60%{box-shadow:0 0 0 3px #ffd700,0 0 18px 4px rgba(255,215,0,.5)}}
+/* ── Pitou summoned ally ─────────────────────────────────────────────────── */
+#pitou-figure{position:absolute;bottom:18px;left:-90px;width:60px;pointer-events:none;z-index:6;display:none;filter:drop-shadow(0 0 10px rgba(180,100,255,.8))}
+@keyframes pitou-enter{0%{left:-80px;opacity:0}60%{left:92px;opacity:1}75%{left:82px}100%{left:86px;opacity:1}}
+@keyframes pitou-cast{0%,100%{filter:drop-shadow(0 0 10px rgba(180,100,255,.8));transform:scaleY(1)}50%{filter:drop-shadow(0 0 28px rgba(230,170,255,1));transform:scaleY(1.04)}}
+@keyframes pitou-exit{0%{left:86px;opacity:1}100%{left:-80px;opacity:0}}
+.pitou-anim-enter{animation:pitou-enter .75s cubic-bezier(.34,1.56,.64,1) forwards}
+.pitou-anim-cast{animation:pitou-cast .6s ease-in-out infinite alternate}
+.pitou-anim-exit{animation:pitou-exit .45s ease-in forwards}
+@keyframes pitou-spell-fly{0%{left:88px;opacity:1;font-size:14px}50%{opacity:1;font-size:28px}100%{left:calc(100% - 50px);opacity:0;font-size:10px}}
+.pitou-spell-proj{position:absolute;bottom:80px;pointer-events:none;animation:pitou-spell-fly .56s ease-in forwards;z-index:10}
+.cb-monster-debuff{font-family:'Cinzel',serif;font-size:8px;letter-spacing:.03em;background:rgba(90,20,150,.9);color:#ddb8ff;border:1px solid rgba(160,80,240,.7);border-radius:3px;padding:2px 5px;text-align:center;white-space:nowrap;animation:debuff-pop .3s cubic-bezier(.34,1.56,.64,1)}
+@keyframes debuff-pop{from{opacity:0;transform:scaleY(0.3)}to{opacity:1;transform:scaleY(1)}}
+.anim-curse  {animation:cb-crs  .55s ease both}
 .anim-death  {animation:cb-die  .85s ease forwards}
 @keyframes atk-r {0%,100%{transform:translateX(0)}  40%,60%{transform:translateX(68px)}}
 @keyframes atk-l {0%,100%{transform:translateX(0)}  40%,60%{transform:translateX(-68px)}}
@@ -1373,6 +1468,8 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 @keyframes cb-fir{0%,100%{filter:brightness(1)} 50%{filter:brightness(2.2) drop-shadow(0 0 20px #f84) saturate(2)}}
 @keyframes cb-hol{0%,100%{filter:brightness(1)} 50%{filter:brightness(2) drop-shadow(0 0 18px #ffd588)}}
 @keyframes cb-hea{0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5) drop-shadow(0 0 16px #4ade80) saturate(1.5)}}
+@keyframes cb-buf{0%,100%{transform:scale(1);filter:brightness(1)} 35%{transform:scale(1.18);filter:brightness(2) drop-shadow(0 0 22px #ffd700) drop-shadow(0 0 10px #88ccff)} 70%{transform:scale(1.08);filter:brightness(1.4) drop-shadow(0 0 12px #ffd700)}}
+@keyframes cb-crs{0%,100%{filter:brightness(1)} 50%{filter:brightness(1.8) drop-shadow(0 0 18px #8b00ff) saturate(2)}}
 @keyframes cb-die{0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(50px) scale(.35)}}
 .anim-enraged{animation:enrage 1.1s ease forwards}
 @keyframes enrage{
@@ -1421,11 +1518,17 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .st-node{width:112px;padding:8px 6px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(20,16,12,.6);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:default;transition:border-color .15s,box-shadow .15s;position:relative}
 .st-node.skill-active{border-color:rgba(201,168,76,.35)}
 .st-node.skill-passive{border-color:rgba(100,150,210,.3)}
+.st-node.skill-buff{border-color:rgba(80,220,160,.35)}
+.st-node.skill-curse{border-color:rgba(160,80,220,.35)}
 .st-node.has-points{background:rgba(30,24,16,.8)}
 .st-node.has-points.skill-active{border-color:var(--gold-d);box-shadow:0 0 8px rgba(201,168,76,.25)}
 .st-node.has-points.skill-passive{border-color:#6496d2;box-shadow:0 0 8px rgba(100,150,210,.2)}
+.st-node.has-points.skill-buff{border-color:#50dc9f;box-shadow:0 0 8px rgba(80,220,160,.25)}
+.st-node.has-points.skill-curse{border-color:#a050dc;box-shadow:0 0 8px rgba(160,80,220,.25)}
 .st-node.maxed.skill-active{border-color:var(--gold);box-shadow:0 0 12px rgba(201,168,76,.45)}
 .st-node.maxed.skill-passive{border-color:#8ab4e8;box-shadow:0 0 12px rgba(138,180,232,.4)}
+.st-node.maxed.skill-buff{border-color:#7ef0bb;box-shadow:0 0 12px rgba(80,220,160,.45)}
+.st-node.maxed.skill-curse{border-color:#c07ef0;box-shadow:0 0 12px rgba(160,80,220,.45)}
 .st-node.locked{opacity:.35;filter:grayscale(.7)}
 .st-node.can-assign{cursor:pointer}
 .st-node.can-assign:hover{border-color:var(--gold)!important;box-shadow:0 0 14px rgba(201,168,76,.5)!important}
@@ -1437,6 +1540,8 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
 .st-dot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05)}
 .st-dot.filled.active-type{background:var(--gold-d);border-color:var(--gold)}
 .st-dot.filled.passive-type{background:#6496d2;border-color:#8ab4e8}
+.st-dot.filled.buff-type{background:#3dc98a;border-color:#7ef0bb}
+.st-dot.filled.curse-type{background:#9040cc;border-color:#c07ef0}
 /* Detail panel */
 .st-detail{flex-shrink:0;border-top:1px solid var(--border);padding:10px 14px;background:rgba(10,8,5,.5);min-height:90px}
 .st-detail-name{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);margin-bottom:4px}
@@ -1509,6 +1614,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   gap:16px;padding:20px 24px;flex-shrink:0;position:relative;min-height:200px;
 }
 .pvp-fighter-side{display:flex;flex-direction:column;align-items:center;gap:8px;width:160px;flex-shrink:0}
+.pvp-guard-badge{font-size:9px;font-family:'Cinzel',serif;color:#88ccff;min-height:14px;text-align:center;letter-spacing:.04em}
 .pvp-fighter-side .cb-player-figure{width:72px;height:auto;display:block}
 #pvp-fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 #pvp-log{
@@ -1540,6 +1646,8 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   <button id="btn-hof" style="display:none" onclick="openHallOfFame()">🏆 Hall of Fame</button>
   <button id="btn-admin" style="display:none" onclick="openAdmin()">👑 Admin</button>
   <button onclick="openPwModal()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Crimson Pro',serif;transition:all .2s" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🔑 Password</button>
+  <button id="btn-help" onclick="openHelp()" title="Knowledge Base" style="background:none;border:1px solid rgba(201,168,76,.4);color:var(--gold);font-size:12px;padding:6px 12px;cursor:pointer;border-radius:2px;font-family:'Cinzel',serif;letter-spacing:.06em;transition:all .2s" onmouseover="this.style.background='rgba(201,168,76,.12)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='none';this.style.borderColor='rgba(201,168,76,.4)'">📖 Help</button>
+  <button id="btn-fullscreen" title="Fullscreen" onclick="toggleFullscreen()">⛶</button>
   <button id="btn-logout">Logout</button>
 </div>
 
@@ -2374,13 +2482,6 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
         <div id="game-clock-time">12:00</div>
       </div>
 
-      <!-- Character action bar -->
-      <div id="char-bar">
-        <button class="char-btn" onclick="openCharPanel('equipment')">🛡️ Equipment</button>
-        <button class="char-btn" onclick="openCharPanel('skills')">⭐ Skills</button>
-        <button class="char-btn" onclick="openCharPanel('quests')">📜 Quests</button>
-      </div>
-
       <!-- Eastern Gate — unlocks after forest is cleared -->
       <div id="eastern-gate-btn" onclick="openEasternGate()">
         <div class="eg-label">🐪 TRAVEL EAST</div>
@@ -2388,6 +2489,115 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       </div>
 
     </div><!-- /ts-scene -->
+
+  <!-- Combat Overlay — inside town-square-area so sidebars/topbar/bottom-bar stay visible -->
+  <div id="combat-overlay">
+    <div id="combat-panel">
+      <div id="combat-header">
+        <button id="cb-flee" onclick="fleeCombat()">← Flee</button>
+        <div id="cb-zone-label"></div>
+        <div id="cb-tier-badge" class="cb-tier"></div>
+      </div>
+      <div id="combat-arena">
+        <div id="cb-player-side">
+          <div id="cb-heroes-row">
+            <div class="cb-hero-card" id="cb-hero-self">
+              <div id="cb-player-figure" class="cb-player-figure"></div>
+              <div id="cb-player-name" class="cb-name"></div>
+              <div id="cb-player-level" class="cb-player-level"></div>
+              <div class="cb-hero-bar-row">
+                <span class="cb-bar-lbl">HP</span>
+                <div class="cb-bar-track"><div id="cb-player-hp-fill" class="cb-bar-fill cb-hp-fill"></div></div>
+                <span id="cb-player-hp-num" class="cb-bar-num"></span>
+              </div>
+            </div>
+            <div id="cb-party-members"></div>
+          </div>
+          <div id="cb-self-extra-bars" class="cb-bars">
+            <div class="cb-bar-row">
+              <span class="cb-bar-lbl">MP</span>
+              <div class="cb-bar-track"><div id="cb-player-mp-fill" class="cb-bar-fill cb-mp-fill"></div></div>
+              <span id="cb-player-mp-num" class="cb-bar-num"></span>
+            </div>
+            <div class="cb-bar-row">
+              <span class="cb-bar-lbl">XP</span>
+              <div class="cb-bar-track"><div id="cb-player-xp-fill" class="cb-bar-fill cb-xp-fill" style="width:0%"></div></div>
+              <span id="cb-player-xp-num" class="cb-bar-num"></span>
+            </div>
+          </div>
+        </div>
+        <div id="cb-fx"></div>
+        <div id="pitou-figure"></div>
+        <div id="cb-monsters-area"><!-- monster cards injected by JS --></div>
+      </div>
+      <div id="combat-log"><div id="cb-log-inner"></div></div>
+      <div id="combat-skills"></div>
+    </div>
+  </div>
+
+  <!-- Desert Saharrrra overlay (loading screen + desert map) -->
+  <div id="desert-overlay">
+    <!-- Loading screen (reuses .fld-* classes, themed by #desert-loading overrides) -->
+    <div id="desert-loading">
+      <div class="fld-icon">🐪</div>
+      <div class="fld-title">DESERT SAHARRRRA</div>
+      <div class="fld-desc">
+        The caravan sets eastward at dawn, hooves on scorched stone and whispering sand.
+        The scholars say an artifact sleeps beneath these dunes — the Eye of the Forgotten Sun.
+        If it wakes, the world drowns in eternal night. The desert is vast, merciless,
+        and it has its own dead. Tread carefully, adventurer.
+      </div>
+      <div class="fld-bar-wrap"><div class="fld-bar" id="dld-bar"></div></div>
+      <div class="fld-hint">The caravan rides east...</div>
+    </div>
+    <!-- Desert map -->
+    <div id="desert-map">
+      <button id="btn-desert-back" onclick="closeDesert()">← Return to Town</button>
+      <div id="dm-zones"></div>
+    </div>
+  </div>
+
+  <!-- Dark Forest overlay (loading screen + forest map) -->
+  <div id="forest-overlay">
+    <!-- Loading screen -->
+    <div id="forest-loading">
+      <div class="fld-icon">🌲</div>
+      <div class="fld-title">ENTERING THE DARK FOREST</div>
+      <div class="fld-desc">
+        The trees press close here, ancient and twisted, their gnarled boughs blotting out the sky.
+        A cold wind carries the smell of damp earth and something older — something wrong.
+        Villagers call it the Whispering Dark. Those who venture in say the forest watches.
+        Those who return say little. Many do not return at all.
+      </div>
+      <div class="fld-bar-wrap"><div class="fld-bar" id="fld-bar"></div></div>
+      <div class="fld-hint">Treading carefully...</div>
+    </div>
+    <!-- Forest map -->
+    <div id="forest-map">
+      <button id="btn-forest-back" onclick="closeDarkForest()">← Return to Town</button>
+      <div id="fm-zones"></div>
+    </div>
+  </div>
+
+  <!-- Abyssal Rift overlay (loading screen + rift map) -->
+  <div id="rift-overlay">
+    <div id="rift-loading">
+      <div class="fld-icon">🌌</div>
+      <div class="fld-title">THE ABYSSAL RIFT</div>
+      <div class="fld-desc">
+        The crack in the sky widens. Beyond it lies no sky, no earth — only the void that existed
+        before creation and will endure after its end. The Abyssal God does not destroy worlds.
+        It erases them. Entirely. You have been found, adventurer. Tread where existence itself
+        refuses to go.
+      </div>
+      <div class="fld-bar-wrap"><div class="fld-bar" id="rld-bar"></div></div>
+      <div class="fld-hint">Descending into the void...</div>
+    </div>
+    <div id="rift-map">
+      <button id="btn-rift-back" onclick="closeRift()">← Return to Town</button>
+      <div id="rm-zones"></div>
+    </div>
+  </div>
 
   </div><!-- /town-square-area -->
 
@@ -2414,6 +2624,13 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   </div>
 
 </div><!-- /main -->
+
+<!-- Character action bar — always visible at bottom -->
+<div id="char-bar">
+  <button class="char-btn" onclick="openCharPanel('equipment')">🛡️ Equipment</button>
+  <button class="char-btn" onclick="openCharPanel('skills')">⭐ Skills</button>
+  <button class="char-btn" onclick="openCharPanel('quests')">📜 Quests</button>
+</div>
 
 <!-- Inn Stash Modal -->
 <div class="stash-overlay" id="stash-overlay" onclick="closeStash()"></div>
@@ -2471,6 +2688,10 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
     </div>
     <button onclick="closeBlacksmith()">✕</button>
   </div>
+  <div id="bsm-tabs">
+    <button class="bsm-tab active" id="bsm-tab-shop" onclick="switchBsmTab('shop')">🛍 Buy / Sell</button>
+    <button class="bsm-tab" id="bsm-tab-craft" onclick="switchBsmTab('craft')">⚒ Craft</button>
+  </div>
   <div class="bsm-body">
     <!-- Left: shop wares -->
     <div class="bsm-col" id="bsm-shop-col"
@@ -2491,6 +2712,10 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
       </div>
       <div class="bsm-drop-zone bsm-items" id="bsm-inv-items"></div>
     </div>
+  </div>
+  <!-- Craft tab view -->
+  <div id="bsm-craft-view">
+    <div id="bsm-craft-recipes"></div>
   </div>
 </div>
 
@@ -2676,6 +2901,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
             <span id="pvp-my-mp-num" class="cb-bar-num"></span>
           </div>
         </div>
+        <div id="pvp-my-guard" class="pvp-guard-badge"></div>
       </div>
       <div id="pvp-fx"></div>
       <!-- Opponent side -->
@@ -2695,6 +2921,7 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
             <span id="pvp-opp-mp-num" class="cb-bar-num"></span>
           </div>
         </div>
+        <div id="pvp-opp-guard" class="pvp-guard-badge"></div>
       </div>
     </div>
     <div id="pvp-log"><div id="pvp-log-inner"></div></div>
@@ -2745,50 +2972,6 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   </div>
 </div>
 
-<!-- Combat Overlay -->
-<div id="combat-overlay">
-  <div id="combat-panel">
-    <div id="combat-header">
-      <button id="cb-flee" onclick="fleeCombat()">← Flee</button>
-      <div id="cb-zone-label"></div>
-      <div id="cb-tier-badge" class="cb-tier"></div>
-    </div>
-    <div id="combat-arena">
-      <div id="cb-player-side">
-        <div id="cb-heroes-row">
-          <div class="cb-hero-card" id="cb-hero-self">
-            <div id="cb-player-figure" class="cb-player-figure"></div>
-            <div id="cb-player-name" class="cb-name"></div>
-            <div id="cb-player-level" class="cb-player-level"></div>
-            <div class="cb-hero-bar-row">
-              <span class="cb-bar-lbl">HP</span>
-              <div class="cb-bar-track"><div id="cb-player-hp-fill" class="cb-bar-fill cb-hp-fill"></div></div>
-              <span id="cb-player-hp-num" class="cb-bar-num"></span>
-            </div>
-          </div>
-          <div id="cb-party-members"></div>
-        </div>
-        <div id="cb-self-extra-bars" class="cb-bars">
-          <div class="cb-bar-row">
-            <span class="cb-bar-lbl">MP</span>
-            <div class="cb-bar-track"><div id="cb-player-mp-fill" class="cb-bar-fill cb-mp-fill"></div></div>
-            <span id="cb-player-mp-num" class="cb-bar-num"></span>
-          </div>
-          <div class="cb-bar-row">
-            <span class="cb-bar-lbl">XP</span>
-            <div class="cb-bar-track"><div id="cb-player-xp-fill" class="cb-bar-fill cb-xp-fill" style="width:0%"></div></div>
-            <span id="cb-player-xp-num" class="cb-bar-num"></span>
-          </div>
-        </div>
-      </div>
-      <div id="cb-fx"></div>
-      <div id="cb-monsters-area"><!-- monster cards injected by JS --></div>
-    </div>
-    <div id="combat-log"><div id="cb-log-inner"></div></div>
-    <div id="combat-skills"></div>
-  </div>
-</div>
-
 <!-- Travel East — Caravan Master Rashid narrative -->
 <div id="travel-east-overlay">
   <div id="te-caravan">🐪</div>
@@ -2800,29 +2983,28 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
   </div>
 </div>
 
-<!-- Desert Saharrrra overlay (loading screen + desert map) -->
-<div id="desert-overlay">
-
-  <!-- Loading screen (reuses .fld-* classes, themed by #desert-loading overrides) -->
-  <div id="desert-loading">
-    <div class="fld-icon">🐪</div>
-    <div class="fld-title">DESERT SAHARRRRA</div>
-    <div class="fld-desc">
-      The caravan sets eastward at dawn, hooves on scorched stone and whispering sand.
-      The scholars say an artifact sleeps beneath these dunes — the Eye of the Forgotten Sun.
-      If it wakes, the world drowns in eternal night. The desert is vast, merciless,
-      and it has its own dead. Tread carefully, adventurer.
-    </div>
-    <div class="fld-bar-wrap"><div class="fld-bar" id="dld-bar"></div></div>
-    <div class="fld-hint">The caravan rides east...</div>
+<!-- Act 3 Transition Cutscene (Void Scholar) -->
+<div id="act3-transition-overlay">
+  <div id="act3-void-glow"></div>
+  <div id="act3-rift-visual">🌌</div>
+  <div id="act3-dialogue">
+    <div id="act3-speaker">— THE VOID SCHOLAR —</div>
+    <div id="act3-text"></div>
+    <div id="act3-prompt">▼ click to continue</div>
+    <button id="act3-enter-btn">🌌 &nbsp;ENTER THE ABYSSAL RIFT</button>
   </div>
+</div>
 
-  <!-- Desert map -->
-  <div id="desert-map">
-    <button id="btn-desert-back" onclick="closeDesert()">← Return to Town</button>
-    <div id="dm-zones"></div>
+<!-- Abyssal God Boss Intro Cutscene -->
+<div id="abyss-boss-intro-overlay">
+  <div id="abyss-boss-intro-bg"></div>
+  <div id="abyss-boss-intro-entity"></div>
+  <div id="abyss-boss-intro-dialogue">
+    <div id="abyss-boss-intro-speaker">— THE ABYSSAL GOD —</div>
+    <div id="abyss-boss-intro-text"></div>
+    <div id="abyss-boss-intro-prompt">▼ click to continue</div>
+    <button id="abyss-boss-intro-fight-btn">⚔ &nbsp;FACE THE ABYSSAL GOD!</button>
   </div>
-
 </div>
 
 <!-- Desert Boss Intro Cutscene -->
@@ -2835,31 +3017,6 @@ body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;heig
     <div id="desert-boss-intro-prompt">▼ click to continue</div>
     <button id="desert-boss-intro-fight-btn">⚔ &nbsp;FACE THE PHARAOH!</button>
   </div>
-</div>
-
-<!-- Dark Forest overlay (loading screen + forest map) -->
-<div id="forest-overlay">
-
-  <!-- Loading screen -->
-  <div id="forest-loading">
-    <div class="fld-icon">🌲</div>
-    <div class="fld-title">ENTERING THE DARK FOREST</div>
-    <div class="fld-desc">
-      The trees press close here, ancient and twisted, their gnarled boughs blotting out the sky.
-      A cold wind carries the smell of damp earth and something older — something wrong.
-      Villagers call it the Whispering Dark. Those who venture in say the forest watches.
-      Those who return say little. Many do not return at all.
-    </div>
-    <div class="fld-bar-wrap"><div class="fld-bar" id="fld-bar"></div></div>
-    <div class="fld-hint">Treading carefully...</div>
-  </div>
-
-  <!-- Forest map -->
-  <div id="forest-map">
-    <button id="btn-forest-back" onclick="closeDarkForest()">← Return to Town</button>
-    <div id="fm-zones"></div>
-  </div>
-
 </div>
 
 <!-- Mobile nav -->
@@ -2888,8 +3045,10 @@ function onBuildingClick(name, icon, desc) {
 function openRoyalKeep() {
   document.getElementById('bld-popup-icon').textContent = '🏰';
   document.getElementById('bld-popup-name').textContent = 'The Royal Keep';
-  document.getElementById('bld-popup-sub').textContent  = 'Seat of power for the realm. Home to the Governor and the realm\'s council. Royal decrees are issued here, disputes are settled, and the laws of the land are upheld. Adventurers seeking audience must be of notable rank.';
-  document.getElementById('bld-popup-actions').innerHTML = '';
+  document.getElementById('bld-popup-sub').textContent  = 'The Royal Scribes can erase your training or innate talents and return those points to you — for a fee of 3,000 💰 per service.';
+  document.getElementById('bld-popup-actions').innerHTML = `
+    <button class="bld-action-btn" onclick="doSkillReset()">📚 Skill Reset — 3,000 💰</button>
+    <button class="bld-action-btn" onclick="doAttrReset()">✨ Attribute Reset — 3,000 💰</button>`;
   document.getElementById('bld-popup').classList.add('show');
 }
 function openChapel() {
@@ -3096,10 +3255,10 @@ document.addEventListener('click', e => {
     [ 5, 'rgba(80,28,8,0.32)'],
     [ 6, 'rgba(180,80,20,0.22)'],
     [ 7, 'rgba(220,150,50,0.20)'],
-    [ 8, 'rgba(180,210,255,0.28)'],
-    [ 9, 'rgba(155,200,255,0.38)'],
-    [12, 'rgba(145,195,255,0.42)'],
-    [16, 'rgba(155,200,255,0.38)'],
+    [ 8, 'rgba(180,210,255,0.12)'],
+    [ 9, 'rgba(155,200,255,0.18)'],
+    [12, 'rgba(145,195,255,0.20)'],
+    [16, 'rgba(155,200,255,0.18)'],
     [17, 'rgba(220,140,40,0.28)'],
     [18, 'rgba(160,55,10,0.32)'],
     [19, 'rgba(50,16,50,0.42)'],
@@ -3172,6 +3331,864 @@ document.addEventListener('click', e => {
   const now = new Date();
   setTimeout(() => { update(); setInterval(update, 60000); }, (60 - now.getSeconds()) * 1000);
 })();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HELP / KNOWLEDGE BASE OVERLAY
+     ═══════════════════════════════════════════════════════════════ -->
+<style>
+/* ── Help overlay shell ──────────────────────────────────────── */
+#help-overlay{
+  display:none;position:fixed;inset:0;z-index:8000;
+  background:rgba(5,3,1,.88);backdrop-filter:blur(3px);
+  align-items:center;justify-content:center;
+}
+#help-overlay.open{display:flex;}
+.help-panel{
+  background:linear-gradient(160deg,#120e08 0%,#0d0a06 100%);
+  border:1px solid var(--gold-d);border-radius:4px;
+  box-shadow:0 0 60px rgba(0,0,0,.8),0 0 20px rgba(201,168,76,.12);
+  width:min(960px,96vw);height:min(760px,92vh);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.help-hdr{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 20px;border-bottom:1px solid var(--border);
+  background:rgba(201,168,76,.05);flex-shrink:0;
+}
+.help-hdr h2{
+  font-family:'Cinzel Decorative',serif;font-size:15px;
+  color:var(--gold);letter-spacing:.1em;flex:1;
+}
+.help-hdr-sub{font-size:11px;color:var(--muted);margin-top:2px}
+#btn-close-help{
+  background:none;border:1px solid var(--border);color:var(--muted);
+  font-size:16px;width:32px;height:32px;border-radius:2px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;
+}
+#btn-close-help:hover{border-color:var(--red);color:var(--red);}
+.help-body{display:flex;flex:1;overflow:hidden;}
+
+/* ── Left nav ────────────────────────────────────────────────── */
+.help-nav{
+  width:148px;flex-shrink:0;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:2px;padding:10px 8px;overflow-y:auto;
+  background:rgba(0,0,0,.18);
+}
+.hn-btn{
+  display:flex;align-items:center;gap:9px;
+  background:none;border:1px solid transparent;border-radius:3px;
+  color:var(--muted);font-family:'Cinzel',serif;font-size:11px;letter-spacing:.04em;
+  padding:8px 10px;cursor:pointer;text-align:left;transition:all .15s;width:100%;
+}
+.hn-btn .hn-ico{font-size:16px;flex-shrink:0;}
+.hn-btn:hover{background:rgba(201,168,76,.07);color:var(--text);border-color:var(--border);}
+.hn-btn.active{background:rgba(201,168,76,.12);color:var(--gold);border-color:rgba(201,168,76,.3);}
+
+/* ── Content pane ────────────────────────────────────────────── */
+.help-content{flex:1;overflow-y:auto;padding:24px 28px;}
+.help-content::-webkit-scrollbar{width:6px;}
+.help-content::-webkit-scrollbar-track{background:transparent;}
+.help-content::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* ── Section headings ────────────────────────────────────────── */
+.hc-title{
+  font-family:'Cinzel Decorative',serif;font-size:17px;color:var(--gold);
+  letter-spacing:.08em;margin-bottom:6px;
+}
+.hc-lead{font-size:13px;color:var(--muted);font-style:italic;margin-bottom:20px;line-height:1.5}
+.hc-h2{
+  font-family:'Cinzel',serif;font-size:13px;color:var(--gold-l);letter-spacing:.08em;
+  margin:24px 0 10px;padding-bottom:5px;border-bottom:1px solid var(--border);
+}
+.hc-h3{font-family:'Cinzel',serif;font-size:11px;color:var(--muted);letter-spacing:.12em;margin:14px 0 6px;}
+
+/* ── Generic table ────────────────────────────────────────────── */
+.hc-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;}
+.hc-table th{
+  font-family:'Cinzel',serif;font-size:10px;letter-spacing:.1em;
+  color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border);
+  text-align:left;
+}
+.hc-table td{padding:5px 10px;border-bottom:1px solid rgba(46,36,22,.6);color:var(--text);vertical-align:top;}
+.hc-table tr:hover td{background:rgba(255,255,255,.025);}
+
+/* ── Tier badges ──────────────────────────────────────────────── */
+.tier-d{color:#aaa;background:rgba(170,170,170,.12);border:1px solid #555;}
+.tier-c{color:#6aaa6a;background:rgba(106,170,106,.12);border:1px solid #2a6a2a;}
+.tier-b{color:#6a8aff;background:rgba(106,138,255,.12);border:1px solid #2a4a8a;}
+.tier-a{color:#c060ff;background:rgba(192,96,255,.12);border:1px solid #6020a0;}
+.tier-s{color:#ff8c00;background:rgba(255,140,0,.12);border:1px solid #804000;}
+.tier-badge{font-family:'Cinzel',serif;font-size:10px;padding:2px 7px;border-radius:8px;letter-spacing:.06em;display:inline-block;}
+
+/* ── Rarity badges ────────────────────────────────────────────── */
+.rar-normal   {color:#aaa;   border:1px solid #555;background:rgba(170,170,170,.1);}
+.rar-magic    {color:#6090d0;border:1px solid #2060a0;background:rgba(96,144,208,.1);}
+.rar-rare     {color:#d0c040;border:1px solid #807020;background:rgba(208,192,64,.1);}
+.rar-legendary{color:#ff8000;border:1px solid #804000;background:rgba(255,128,0,.1);}
+.rar-godly    {color:#e04040;border:1px solid #802020;background:rgba(224,64,64,.1);}
+.rar-badge{font-family:'Cinzel',serif;font-size:10px;padding:2px 8px;border-radius:8px;letter-spacing:.04em;display:inline-block;}
+
+/* ── Info cards ────────────────────────────────────────────────── */
+.hc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;}
+.hc-card{
+  background:var(--panel2);border:1px solid var(--border);border-radius:3px;
+  padding:12px 14px;transition:border-color .15s;
+}
+.hc-card:hover{border-color:var(--border2);}
+.hc-card-title{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);margin-bottom:6px;}
+.hc-card-body{font-size:12px;color:var(--text);line-height:1.6;}
+
+/* ── Monster cards ────────────────────────────────────────────── */
+.mon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:20px;}
+.mon-card{background:var(--panel2);border:1px solid var(--border);border-radius:3px;padding:10px 12px;transition:border-color .15s;}
+.mon-card:hover{border-color:var(--border2);}
+.mon-card-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.mon-card-name{font-family:'Cinzel',serif;font-size:12px;color:var(--text);flex:1;}
+.mon-stats{display:flex;gap:8px;font-size:11px;margin-bottom:5px;}
+.mon-stat{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:2px;padding:1px 7px;color:var(--muted);}
+.mon-stat b{color:var(--text);}
+.mon-skills{font-size:11px;color:var(--muted);font-style:italic;}
+.mon-boss-badge{font-family:'Cinzel',serif;font-size:9px;color:#ff8c00;border:1px solid #804000;background:rgba(255,140,0,.1);padding:1px 6px;border-radius:8px;}
+
+/* ── Stat formula block ────────────────────────────────────────── */
+.hc-formula{
+  background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:3px;
+  padding:10px 14px;font-family:monospace;font-size:12px;color:#b0c8a0;
+  margin-bottom:12px;line-height:1.7;
+}
+.hc-formula .f-label{color:var(--gold-l);font-family:'Cinzel',serif;font-size:10px;letter-spacing:.08em;display:block;margin-bottom:4px;}
+
+/* ── XP table color rows ───────────────────────────────────────── */
+.xp-row-key{background:rgba(201,168,76,.06);}
+
+/* ── Class colour strip ────────────────────────────────────────── */
+.cls-warrior{border-left:3px solid #e08050;}
+.cls-paladin{border-left:3px solid #d0c040;}
+.cls-rogue  {border-left:3px solid #c060ff;}
+.cls-ranger {border-left:3px solid #4ade80;}
+.cls-mage   {border-left:3px solid #6a8aff;}
+.cls-healer {border-left:3px solid #60c080;}
+.cls-sage   {border-left:3px solid #ff80c0;}
+</style>
+
+<!-- ═══ OVERLAY ELEMENT ═══ -->
+<div id="help-overlay">
+  <div class="help-panel">
+    <div class="help-hdr">
+      <div>
+        <h2>📖 Knowledge Base</h2>
+        <div class="help-hdr-sub">Family Realm — Game Guide &amp; Reference</div>
+      </div>
+      <button id="btn-close-help" onclick="closeHelp()" title="Close">✕</button>
+    </div>
+    <div class="help-body">
+      <nav class="help-nav">
+        <button class="hn-btn active" onclick="showHelpTab('attrs')" data-tab="attrs"><span class="hn-ico">⚔️</span>Attributes</button>
+        <button class="hn-btn" onclick="showHelpTab('leveling')" data-tab="leveling"><span class="hn-ico">📈</span>Leveling</button>
+        <button class="hn-btn" onclick="showHelpTab('monsters')" data-tab="monsters"><span class="hn-ico">👹</span>Monsters</button>
+        <button class="hn-btn" onclick="showHelpTab('loot')" data-tab="loot"><span class="hn-ico">💎</span>Loot</button>
+        <button class="hn-btn" onclick="showHelpTab('gear')" data-tab="gear"><span class="hn-ico">🔨</span>Gear &amp; Crafting</button>
+        <button class="hn-btn" onclick="showHelpTab('classes')" data-tab="classes"><span class="hn-ico">🧙</span>Classes</button>
+        <button class="hn-btn" onclick="showHelpTab('skills')" data-tab="skills"><span class="hn-ico">🌟</span>Skill Trees</button>
+        <button class="hn-btn" onclick="showHelpTab('zones')" data-tab="zones"><span class="hn-ico">🗺️</span>Zones</button>
+      </nav>
+      <div class="help-content" id="help-content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Help overlay logic ────────────────────────────────────────────────────────
+function openHelp() {
+  document.getElementById('help-overlay').classList.add('open');
+  showHelpTab('attrs');
+}
+function closeHelp() {
+  document.getElementById('help-overlay').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+
+function showHelpTab(tab) {
+  document.querySelectorAll('.hn-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('help-content').innerHTML = HELP_TABS[tab] || '<p style="color:var(--muted)">Coming soon.</p>';
+  document.getElementById('help-content').scrollTop = 0;
+}
+
+// ── Shared helpers ─────────────────────────────────────────────────────────
+function _tb(h, d) {
+  const hdrs = h.map(x=>`<th>${x}</th>`).join('');
+  const rows = d.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
+  return `<table class="hc-table"><thead><tr>${hdrs}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+function _tier(t) { return `<span class="tier-badge tier-${t.toLowerCase()}">${t}</span>`; }
+function _rar(r) { return `<span class="rar-badge rar-${r.toLowerCase()}">${r.charAt(0).toUpperCase()+r.slice(1)}</span>`; }
+function _formula(label, code) { return `<div class="hc-formula"><span class="f-label">${label}</span>${code}</div>`; }
+function _card(title, body, extra='') { return `<div class="hc-card ${extra}"><div class="hc-card-title">${title}</div><div class="hc-card-body">${body}</div></div>`; }
+
+// ── Tab content ────────────────────────────────────────────────────────────
+const HELP_TABS = {};
+
+/* ─────────────────────────── ATTRIBUTES ─────────────────────────── */
+HELP_TABS.attrs = `
+<div class="hc-title">⚔️ Attributes &amp; Derived Stats</div>
+<div class="hc-lead">Every character is defined by four primary attributes. All combat stats flow directly from these numbers plus gear and skill tree bonuses.</div>
+
+<div class="hc-h2">Primary Attributes</div>
+<div class="hc-grid">
+${_card('💪 STR — Strength','Drives HP and ATK.<br>Every point = <b>+4 HP</b>.<br>Most classes: ATK = 2×STR + 0.5×DEX')}
+${_card('🏃 DEX — Dexterity','Drives DEF, Dodge, Crit, Block.<br>DEF = 2×DEX + 0.5×STR.<br>Rogue/Ranger get 1.5× DEX bonus to Dodge &amp; Crit.')}
+${_card('🔮 INT — Intelligence','Powers magic affixes on gear.<br>Crit and magic stat boosts from gear scale with INT-based affixes.')}
+${_card('✨ SPIRIT','Drives MP.<br>Every point = <b>+4 MP</b>.<br>Healer &amp; Sage heal scales with Spirit × multiplier.')}
+</div>
+
+<div class="hc-h2">Class Base Attributes</div>
+${_tb(
+  ['Class','STR','DEX','INT','SPIRIT','Role'],
+  [
+    ['⚔️ Warrior','<b>15</b>','10','5','7','Tanky melee, high HP'],
+    ['🛡️ Paladin','13','8','6','<b>12</b>','Holy damage, lifesteal'],
+    ['🗡️ Rogue','9','<b>20</b>','7','6','DEX burst, high crit/dodge'],
+    ['🏹 Ranger','10','<b>14</b>','7','8','Balanced ranged, multi-hit'],
+    ['🔮 Mage','5','7','<b>16</b>','12','High magic burst'],
+    ['💚 Healer','6','7','10','<b>16</b>','Spirit-scaling heals'],
+    ['🧙 Sage','5','5','<b>14</b>','14','Void/arcane, DEF-pierce'],
+  ]
+)}
+
+<div class="hc-h2">Derived Stats — Formulas</div>
+${_formula('HP',`HP = 4 × STR + gear hp_bonus  (+skill tree flat/% bonuses)`)}
+${_formula('MP',`MP = 4 × SPIRIT + gear mp_bonus`)}
+${_formula('ATK (all except Rogue)',`ATK = floor(2 × STR + 0.5 × DEX) + gear atk_bonus`)}
+${_formula('ATK (Rogue only)',`ATK = floor(0.5 × STR + 2 × DEX) + gear atk_bonus`)}
+${_formula('DEF',`DEF = floor(2 × DEX + 0.5 × STR) + gear def_bonus`)}
+
+<div class="hc-h2">Combat Rates (all capped at 75%)</div>
+${_formula('Dodge Rate',`DEX Bonus = floor(min(DEX,50)/5) + extras for DEX>50/100
+Dodge = base(10% Rogue/Ranger, 5% others) + dexBonus×(1.5 if agile else 1) + skill bonuses`)}
+${_formula('Crit Rate',`Crit = 5% + dexBonus×(1.5 if agile else 1) + crit_bonus(gear) + skill bonuses
+Critical hits deal 2× damage`)}
+${_formula('Block Rate',`Requires an equipped shield in offhand.
+Block = shield.block_rate + floor(DEX / 5)`)}
+${_formula('Incoming Damage',`raw = floor(monATK × skill.dmgMult) - floor(playerDEF × 0.5) ± 2
+dmg = max(1, raw × (1−defPct%) × (1−dmgReduction%) × (1−guardReduction%))`)}
+
+<div class="hc-h2">Shield Block Rate by Rarity</div>
+${_tb(
+  ['Rarity','Block Rate Range'],
+  [
+    [_rar('normal'),'5 – 8%'],
+    [_rar('magic'), '8 – 12%'],
+    [_rar('rare'),  '12 – 15%'],
+    [_rar('legendary'),'15 – 18%'],
+    [_rar('godly'), '18 – 20%'],
+  ]
+)}`;
+
+/* ─────────────────────────── LEVELING ───────────────────────────── */
+HELP_TABS.leveling = `
+<div class="hc-title">📈 Leveling &amp; XP System</div>
+<div class="hc-lead">Experience flows from combat. Every kill rewards XP, and each level unlocks new power through Skill Points and Attribute Points.</div>
+
+<div class="hc-h2">Level Formula</div>
+${_formula('Level from total XP',`Level = min(50,  floor( sqrt(XP / 100) ) + 1)
+
+XP needed to reach level N:  (N − 1)² × 100`)}
+
+<div class="hc-grid">
+${_card('🎯 Level Cap','Max level is <b>50</b>. The journey from level 1 to 50 requires <b>240,100 total XP</b>.')}
+${_card('⚡ Skill Points','<b>+1 per level</b> (starting level 2).<br>Spend in the Skill Shrine on active skills and passives.<br>Reset costs <b>3,000 gold</b>.')}
+${_card('💫 Attribute Points','<b>+5 per level</b> (starting level 2).<br>Assign to STR, DEX, INT, or SPIRIT.<br>Reset costs <b>3,000 gold</b>.')}
+${_card('💀 Death Penalty','HP drops to 1 on death. No XP or gold is lost. Heal at a safe location to recover.')}
+</div>
+
+<div class="hc-h2">Key Level Milestones</div>
+${_tb(
+  ['Level','Total XP Needed','XP to Next Level'],
+  [
+    ['<b>1</b>','0','100'],
+    ['<b>5</b>','1,600','900'],
+    ['<b>10</b>','8,100','1,900'],
+    ['<b>15</b>','19,600','2,900'],
+    ['<b>20</b>','36,100','3,900'],
+    ['<b>25</b>','57,600','4,900'],
+    ['<b>30</b>','84,100','5,900'],
+    ['<b>35</b>','115,600','6,900'],
+    ['<b>40</b>','152,100','7,900'],
+    ['<b>50</b> 🏆','240,100','— MAX —'],
+  ]
+)}
+
+<div class="hc-h2">Monster XP Formula</div>
+${_formula('XP per Monster',`XP = TIER_BASE_XP[tier] × (1 + (monsterLevel − 1) × 0.2)`)}
+${_tb(
+  ['Tier','Base XP (Lv 1)','Example: Boss XP'],
+  [
+    [_tier('D'),'5','–'],
+    [_tier('C'),'10','~34 (Sand Scorpion Lv 13)'],
+    [_tier('B'),'15','~66 (Sandstorm Wraith Lv 18)'],
+    [_tier('A'),'30','~174 (Dune Sorcerer Lv 25)'],
+    [_tier('S'),'100','320 (Demon Lord Lv 12) · 788 (Pharaoh Lv 35) · 1,080 (Abyssal God Lv 50)'],
+  ]
+)}
+<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:-8px;margin-bottom:20px">💡 In party combat every member receives the <b>full XP</b> — no split. Party bonus ×3!</div>`;
+
+/* ─────────────────────────── MONSTERS ───────────────────────────── */
+HELP_TABS.monsters = `
+<div class="hc-title">👹 Monster Compendium</div>
+<div class="hc-lead">Three acts, twenty-five unique creatures. Monster stats scale with level at spawn: HP +15%/lv, ATK/DEF +10%/lv above their base.</div>
+
+<div class="hc-h2">🌲 Act 1 — Dark Forest &nbsp;<span style="color:var(--muted);font-size:11px">Levels 1 – 12</span></div>
+<div class="mon-grid">
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('D')}<span class="mon-card-name">Green Slime</span><span style="font-size:11px;color:var(--muted)">Lv 1</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>60</b></span><span class="mon-stat">⚔️ <b>22</b></span><span class="mon-stat">🛡 <b>4</b></span></div>
+    <div class="mon-skills">Slam ×1.0</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('D')}<span class="mon-card-name">Blue Slime</span><span style="font-size:11px;color:var(--muted)">Lv 2</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>50</b></span><span class="mon-stat">⚔️ <b>20</b></span><span class="mon-stat">🛡 <b>3</b></span></div>
+    <div class="mon-skills">Acid Splash ×1.1 magic</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('C')}<span class="mon-card-name">Goblin Scout</span><span style="font-size:11px;color:var(--muted)">Lv 3</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>110</b></span><span class="mon-stat">⚔️ <b>30</b></span><span class="mon-stat">🛡 <b>10</b></span></div>
+    <div class="mon-skills">Strike ×1.0 · Backstab ×1.4</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('C')}<span class="mon-card-name">Forest Archer</span><span style="font-size:11px;color:var(--muted)">Lv 4</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>90</b></span><span class="mon-stat">⚔️ <b>33</b></span><span class="mon-stat">🛡 <b>7</b></span></div>
+    <div class="mon-skills">Arrow Shot ×1.0 · Piercing Shot ×1.3</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('B')}<span class="mon-card-name">Forest Shaman</span><span style="font-size:11px;color:var(--muted)">Lv 8</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>140</b></span><span class="mon-stat">⚔️ <b>42</b></span><span class="mon-stat">🛡 <b>15</b></span></div>
+    <div class="mon-skills">Hex Bolt ×1.2 · Nature's Curse ×1.5</div>
+  </div>
+  <div class="mon-card" style="border-color:rgba(255,140,0,.35);background:rgba(255,140,0,.04)">
+    <div class="mon-card-top">${_tier('S')}<span class="mon-card-name">☠ Demon Lord</span><span class="mon-boss-badge">BOSS</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Lv 12 · HP scales with party size</div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>900</b></span><span class="mon-stat">⚔️ <b>90</b></span><span class="mon-stat">🛡 <b>38</b></span></div>
+    <div class="mon-skills">Inferno ×1.8 · Hellfire ×1.4 · Cleave ×1.5</div>
+  </div>
+</div>
+
+<div class="hc-h2">🏜️ Act 2 — Desert Saharrrra &nbsp;<span style="color:var(--muted);font-size:11px">Levels 13 – 35</span></div>
+<div class="mon-grid">
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('C')}<span class="mon-card-name">Sand Scorpion</span><span style="font-size:11px;color:var(--muted)">Lv 13</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>200</b></span><span class="mon-stat">⚔️ <b>48</b></span><span class="mon-stat">🛡 <b>20</b></span></div>
+    <div class="mon-skills">Venomous Sting ×1.0 · Claw Snap ×1.4</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('C')}<span class="mon-card-name">Desert Jackal</span><span style="font-size:11px;color:var(--muted)">Lv 15</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>170</b></span><span class="mon-stat">⚔️ <b>52</b></span><span class="mon-stat">🛡 <b>16</b></span></div>
+    <div class="mon-skills">Jackal Bite ×1.1 · Pack Howl ×0.7</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('B')}<span class="mon-card-name">Sandstorm Wraith</span><span style="font-size:11px;color:var(--muted)">Lv 18</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>270</b></span><span class="mon-stat">⚔️ <b>62</b></span><span class="mon-stat">🛡 <b>24</b></span></div>
+    <div class="mon-skills">Desert Wail ×1.1 · Sandblast ×1.4</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('B')}<span class="mon-card-name">Bone Crawler</span><span style="font-size:11px;color:var(--muted)">Lv 20</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>310</b></span><span class="mon-stat">⚔️ <b>60</b></span><span class="mon-stat">🛡 <b>32</b></span></div>
+    <div class="mon-skills">Bone Rattle ×1.0 · Crushing Slam ×1.7</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('B')}<span class="mon-card-name">Canyon Serpent</span><span style="font-size:11px;color:var(--muted)">Lv 23</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>340</b></span><span class="mon-stat">⚔️ <b>70</b></span><span class="mon-stat">🛡 <b>28</b></span></div>
+    <div class="mon-skills">Serpent Fang ×1.2 · Constrict ×0.9</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('A')}<span class="mon-card-name">Dune Sorcerer</span><span style="font-size:11px;color:var(--muted)">Lv 25</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>280</b></span><span class="mon-stat">⚔️ <b>85</b></span><span class="mon-stat">🛡 <b>34</b></span></div>
+    <div class="mon-skills">Sand Curse ×1.5 · Mirage Blast ×1.8</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('A')}<span class="mon-card-name">Mirage Stalker</span><span style="font-size:11px;color:var(--muted)">Lv 28</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>380</b></span><span class="mon-stat">⚔️ <b>90</b></span><span class="mon-stat">🛡 <b>38</b></span></div>
+    <div class="mon-skills">Phase Strike ×1.8 · Sandblast ×1.4</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('A')}<span class="mon-card-name">Sandglass Golem</span><span style="font-size:11px;color:var(--muted)">Lv 30</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>480</b></span><span class="mon-stat">⚔️ <b>88</b></span><span class="mon-stat">🛡 <b>50</b></span></div>
+    <div class="mon-skills">Sandstorm ×1.3 · Crushing Slam ×1.7</div>
+  </div>
+  <div class="mon-card" style="border-color:rgba(255,140,0,.35);background:rgba(255,140,0,.04)">
+    <div class="mon-card-top">${_tier('S')}<span class="mon-card-name">☠ Pharaoh's Wrath</span><span class="mon-boss-badge">BOSS</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Lv 35 · HP scales with party</div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>3,000</b></span><span class="mon-stat">⚔️ <b>155</b></span><span class="mon-stat">🛡 <b>70</b></span></div>
+    <div class="mon-skills">Pharaoh's Curse ×1.8 · Solar Beam ×2.5 · Ancient Wrath ×3.0</div>
+  </div>
+</div>
+
+<div class="hc-h2">🌌 Act 3 — Abyssal Rift &nbsp;<span style="color:var(--muted);font-size:11px">Levels 36 – 50</span></div>
+<div class="mon-grid">
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('C')}<span class="mon-card-name">Void Wisp</span><span style="font-size:11px;color:var(--muted)">Lv 36</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>380</b></span><span class="mon-stat">⚔️ <b>95</b></span><span class="mon-stat">🛡 <b>48</b></span></div>
+    <div class="mon-skills">Void Pulse ×1.1 · Blink Strike ×1.6</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('C')}<span class="mon-card-name">Rift Stalker</span><span style="font-size:11px;color:var(--muted)">Lv 38</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>420</b></span><span class="mon-stat">⚔️ <b>108</b></span><span class="mon-stat">🛡 <b>52</b></span></div>
+    <div class="mon-skills">Phase Claw ×1.3 · Dimensional Rend ×1.8</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('B')}<span class="mon-card-name">Thought Devourer</span><span style="font-size:11px;color:var(--muted)">Lv 40</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>580</b></span><span class="mon-stat">⚔️ <b>118</b></span><span class="mon-stat">🛡 <b>60</b></span></div>
+    <div class="mon-skills">Mind Shatter ×1.4 · Psychic Drain ×1.2</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('B')}<span class="mon-card-name">Voidborn Herald</span><span style="font-size:11px;color:var(--muted)">Lv 42</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>640</b></span><span class="mon-stat">⚔️ <b>128</b></span><span class="mon-stat">🛡 <b>66</b></span></div>
+    <div class="mon-skills">Null Word ×1.5 · Herald Slam ×1.9</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('A')}<span class="mon-card-name">Star-Eater</span><span style="font-size:11px;color:var(--muted)">Lv 44</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>720</b></span><span class="mon-stat">⚔️ <b>145</b></span><span class="mon-stat">🛡 <b>72</b></span></div>
+    <div class="mon-skills">Cosmic Bite ×1.6 · Gravity Well ×1.3</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('A')}<span class="mon-card-name">Oblivion Wraith</span><span style="font-size:11px;color:var(--muted)">Lv 46</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>800</b></span><span class="mon-stat">⚔️ <b>158</b></span><span class="mon-stat">🛡 <b>78</b></span></div>
+    <div class="mon-skills">Soul Rend ×2.0 · Blink Strike ×1.6</div>
+  </div>
+  <div class="mon-card">
+    <div class="mon-card-top">${_tier('A')}<span class="mon-card-name">Null Colossus</span><span style="font-size:11px;color:var(--muted)">Lv 48</span></div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>980</b></span><span class="mon-stat">⚔️ <b>170</b></span><span class="mon-stat">🛡 <b>88</b></span></div>
+    <div class="mon-skills">Null Crash ×2.2 · Gravity Well ×1.3 · Herald Slam ×1.9</div>
+  </div>
+  <div class="mon-card" style="border-color:rgba(255,140,0,.35);background:rgba(255,140,0,.04)">
+    <div class="mon-card-top">${_tier('S')}<span class="mon-card-name">☠ The Abyssal God</span><span class="mon-boss-badge">FINAL BOSS</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Lv 50 · HP scales with party</div>
+    <div class="mon-stats"><span class="mon-stat">❤️ <b>6,000</b></span><span class="mon-stat">⚔️ <b>220</b></span><span class="mon-stat">🛡 <b>110</b></span></div>
+    <div class="mon-skills">Abyssal Gaze ×2.0 · Void Collapse ×2.8 · Cosmic Annihilation ×3.5 · Reality Unravel ×4.0</div>
+  </div>
+</div>`;
+
+/* ─────────────────────────── LOOT ───────────────────────────────── */
+HELP_TABS.loot = `
+<div class="hc-title">💎 Loot &amp; Drop System</div>
+<div class="hc-lead">Every defeated monster independently rolls for gold and items. Tier determines how generous the monster is. Rarity determines how powerful the item is.</div>
+
+<div class="hc-h2">Gold Drops by Tier</div>
+${_tb(
+  ['Tier','Gold Range','Average per Monster'],
+  [
+    [_tier('D'),'5 – 18','~12'],
+    [_tier('C'),'18 – 45','~32'],
+    [_tier('B'),'45 – 95','~70'],
+    [_tier('A'),'95 – 180','~138'],
+    [_tier('S'),'180 – 350','~265'],
+  ]
+)}
+
+<div class="hc-h2">Item Drop Chance by Tier</div>
+${_tb(
+  ['Tier','Item Drop Chance','Max Items per Fight'],
+  [
+    [_tier('D'),'35%','1'],
+    [_tier('C'),'55%','2'],
+    [_tier('B'),'72%','3'],
+    [_tier('A'),'88%','3'],
+    [_tier('S'),'96%','3'],
+  ]
+)}
+
+<div class="hc-h2">Loot Rarity by Monster Tier</div>
+${_tb(
+  ['Monster Tier',_rar('normal'),_rar('magic'),_rar('rare'),_rar('legendary'),_rar('godly')],
+  [
+    [_tier('D'),'100%','—','—','—','—'],
+    [_tier('C'),'95%','5%','—','—','—'],
+    [_tier('B'),'60%','35%','5%','—','—'],
+    [_tier('A'),'—','60%','35%','5%','—'],
+    [_tier('S'),'—','—','60%','35%','5%'],
+  ]
+)}
+
+<div class="hc-h2">Item Stat Scaling</div>
+${_formula('Weapon ATK (Keen affix)',`ATK = round(monsterLevel × rarityMult × rand(0.95–1.05))
+
+Multipliers: Normal×2.5 · Magic×3.0 · Rare×3.6 · Legendary×4.32 · Godly×5.18`)}
+${_formula('Armor DEF (Sturdy affix)',`DEF = round(item.level_req × rarityMult × rand(0.95–1.05))
+
+Multipliers: Normal×1.0 · Magic×1.2 · Rare×1.44 · Legendary×1.73 · Godly×2.07`)}
+${_formula('Item Level Requirement',`level_req = max(1, monsterLevel − rand(0, 2))
+  → item drops 0–2 levels below the monster`)}
+
+<div class="hc-h2">Special Affixes (Rare+ only)</div>
+<div class="hc-grid">
+${_card('🎯 Keen Eye (Weapon)','Rolls on mainhand with +10% on Rare, 18% on Legendary, 28% on Godly.<br>Adds flat Crit Rate %.<br><b>Rare:</b> 1–4% · <b>Legendary:</b> 3–7% · <b>Godly:</b> 6–10%')}
+${_card('🛡 Damage Reduction (Armor)','Rolls on armor pieces. Reduces all incoming damage by a flat %.<br><b>Rare:</b> 5–6% · <b>Legendary:</b> 6–8% · <b>Godly:</b> 8–10%<br>Total cap: <b>50%</b>')}
+</div>
+
+<div class="hc-h2">Sell Values</div>
+${_tb(
+  ['Rarity','Base Sell Price','With Level Scaling'],
+  [
+    [_rar('normal'),'15 gold','15 × (1 + (lv−1)×0.3) ± 15%'],
+    [_rar('magic'),'45 gold','scales with level'],
+    [_rar('rare'),'90 gold','scales with level'],
+    [_rar('legendary'),'300 gold','scales with level'],
+    [_rar('godly'),'600 gold','scales with level'],
+  ]
+)}`;
+
+/* ─────────────────────────── GEAR ───────────────────────────────── */
+HELP_TABS.gear = `
+<div class="hc-title">🔨 Gear &amp; Crafting</div>
+<div class="hc-lead">Seven equipment slots, five rarity tiers, and a rich affix system. Gear is the primary way to grow stronger between fights.</div>
+
+<div class="hc-h2">Equipment Slots</div>
+${_tb(
+  ['Slot','Icon','Type'],
+  [
+    ['Head','🪖','Armor'],
+    ['Chest','🦺','Armor'],
+    ['Gloves','🧤','Armor'],
+    ['Pants','👖','Armor'],
+    ['Boots','👢','Armor'],
+    ['Mainhand','⚔️','Weapon'],
+    ['Offhand','🔮 / 🛡️','Shield or Focus'],
+  ]
+)}
+
+<div class="hc-h2">Rarity Tiers</div>
+${_tb(
+  ['Rarity','Affix Count','Equip Level Req','Affix Value Tier'],
+  [
+    [_rar('normal'),'0','1','Weakest'],
+    [_rar('magic'),'1–2','5','Low'],
+    [_rar('rare'),'3–4','8','Medium'],
+    [_rar('legendary'),'5 (fixed)','12','High'],
+    [_rar('godly'),'6 (fixed)','15','Max'],
+  ]
+)}
+
+<div class="hc-h2">Weapon Affix Pool</div>
+${_tb(
+  ['Affix','Type','Stat','Values (Normal → Godly)'],
+  [
+    ['Serrated','Prefix','ATK','2 / 4 / 6 / 9 / 12 / 18'],
+    ['Vicious','Prefix','ATK','3 / 5 / 8 / 11 / 15 / 22'],
+    ['Cruel','Prefix','ATK','4 / 6 / 9 / 13 / 18 / 26'],
+    ['Heavy','Prefix','STR','1 / 2 / 3 / 5 / 7 / 10'],
+    ['Balanced','Prefix','DEX','1 / 2 / 3 / 4 / 6 / 9'],
+    ['Arcane','Prefix','INT','1 / 2 / 3 / 5 / 7 / 10'],
+    ['of Slaying','Suffix','ATK','1 / 3 / 5 / 7 / 10 / 15'],
+    ['of Ruin','Suffix','ATK','2 / 4 / 7 / 10 / 14 / 20'],
+    ['of Might','Suffix','STR','1 / 2 / 4 / 6 / 8 / 12'],
+    ['of Agility','Suffix','DEX','1 / 2 / 3 / 5 / 7 / 11'],
+    ['of the Hunt','Suffix','DEX','2 / 3 / 5 / 7 / 10 / 15'],
+    ['of the Mage','Suffix','INT','1 / 2 / 4 / 6 / 9 / 13'],
+  ]
+)}
+
+<div class="hc-h2">Armor Affix Pool</div>
+${_tb(
+  ['Affix','Type','Stat','Values (Normal → Godly)'],
+  [
+    ['Sturdy','Prefix','DEF','1 / 2 / 4 / 6 / 9 / 14'],
+    ['Warded','Prefix','DEF','2 / 3 / 5 / 8 / 12 / 18'],
+    ['Reinforced','Prefix','HP','4 / 8 / 14 / 20 / 30 / 45'],
+    ['Vital','Prefix','HP','6 / 12 / 18 / 26 / 38 / 55'],
+    ['Blessed','Prefix','SPIRIT','1 / 2 / 3 / 5 / 7 / 10'],
+    ['Arcane','Prefix','MP','4 / 8 / 14 / 20 / 30 / 45'],
+    ['of Life','Suffix','HP','5 / 10 / 16 / 24 / 35 / 50'],
+    ['of Resilience','Suffix','DEF','1 / 2 / 3 / 5 / 8 / 12'],
+    ['of Warding','Suffix','DEF','2 / 3 / 5 / 8 / 11 / 16'],
+    ['of Vigor','Suffix','STR','1 / 2 / 3 / 5 / 7 / 10'],
+    ['of the Sage','Suffix','INT','1 / 2 / 3 / 5 / 7 / 10'],
+    ['of Devotion','Suffix','SPIRIT','1 / 2 / 3 / 5 / 7 / 10'],
+  ]
+)}
+
+<div class="hc-h2">Blacksmith Shop</div>
+<div class="hc-grid">
+${_card('🔄 Refresh Timer','Shop refreshes every <b>2 hours</b> or whenever you level up. Yours alone — every player sees their own personalized wares.')}
+${_card('📊 Rarity by Level','<b>Lv 1–4:</b> Mostly Normal<br><b>Lv 5–9:</b> Normal + Magic<br><b>Lv 10–15:</b> Magic + Rare<br><b>Lv 16–22:</b> Rare + some Legendary<br><b>Lv 23+:</b> Rare/Legendary/Godly')}
+${_card('💰 Shop Prices','Normal: 450–840g<br>Magic: 1,650–2,850g<br>Rare: 5,400–9,600g<br>Legendary: 18,000–30,000g<br>Godly: 60,000–105,000g')}
+</div>
+
+<div class="hc-h2">Crafting</div>
+<p style="font-size:13px;color:var(--text);line-height:1.7;margin-bottom:12px">
+Visit the <b>Workshop</b> in the Blacksmith building. Each recipe requires two gear pieces from specific slots and rarities. The output is always a powerful crafted item scaled to the recipe's level requirement, with full affix generation.
+</p>
+${_tb(
+  ['To Craft','You Need'],
+  [
+    ['Legendary weapon','Two matching-tier weapon materials'],
+    ['Void Plate (Legendary chest)','Rare chest + Rare gloves'],
+    ['Null Gauntlets (Legendary gloves)','Rare gloves + Rare boots'],
+  ]
+)}`;
+
+/* ─────────────────────────── CLASSES ────────────────────────────── */
+HELP_TABS.classes = `
+<div class="hc-title">🧙 Classes</div>
+<div class="hc-lead">Choose your role and shape your destiny. Each class has unique base stats, starting skills, and a distinct skill tree.</div>
+
+<div class="hc-grid" style="margin-bottom:24px">
+  <div class="hc-card cls-warrior">
+    <div class="hc-card-title">⚔️ Warrior</div>
+    <div class="hc-card-body">
+      STR <b>15</b> · DEX <b>10</b> · INT 5 · SPIRIT 7<br><br>
+      <b>Playstyle:</b> Highest HP, strong melee damage. Can take a beating.<br><br>
+      <span style="color:var(--muted)">Free:</span> Strike ×1.0 melee<br>
+      <span style="color:var(--muted)">MP skill:</span> Bash ×1.7 single (8 MP)
+    </div>
+  </div>
+  <div class="hc-card cls-paladin">
+    <div class="hc-card-title">🛡️ Paladin</div>
+    <div class="hc-card-body">
+      STR <b>13</b> · DEX 8 · INT 6 · SPIRIT <b>12</b><br><br>
+      <b>Playstyle:</b> Holy AoE damage + lifesteal. Durable off-healer.<br><br>
+      <span style="color:var(--muted)">Free:</span> Strike ×1.0 melee<br>
+      <span style="color:var(--muted)">MP skill:</span> Holy Strike ×1.2 ALL (10 MP)
+    </div>
+  </div>
+  <div class="hc-card cls-rogue">
+    <div class="hc-card-title">🗡️ Rogue</div>
+    <div class="hc-card-body">
+      STR 9 · DEX <b>20</b> · INT 7 · SPIRIT 6<br><br>
+      <b>Playstyle:</b> Highest DEX — DEX drives ATK (not STR!). Glass cannon with high crit/dodge.<br><br>
+      <span style="color:var(--muted)">Free:</span> Quick Stab ×1.0<br>
+      <span style="color:var(--muted)">MP skill:</span> Backstab ×2.0 (8 MP)
+    </div>
+  </div>
+  <div class="hc-card cls-ranger">
+    <div class="hc-card-title">🏹 Ranger</div>
+    <div class="hc-card-body">
+      STR 10 · DEX <b>14</b> · INT 7 · SPIRIT 8<br><br>
+      <b>Playstyle:</b> Balanced — good dodge, multi-hit AoE, can sustain long fights.<br><br>
+      <span style="color:var(--muted)">Free:</span> Arrow Shot ×1.0<br>
+      <span style="color:var(--muted)">MP skill:</span> Volley ×1.4 ALL (10 MP)
+    </div>
+  </div>
+  <div class="hc-card cls-mage">
+    <div class="hc-card-title">🔮 Mage</div>
+    <div class="hc-card-body">
+      STR 5 · DEX 7 · INT <b>16</b> · SPIRIT <b>12</b><br><br>
+      <b>Playstyle:</b> Largest burst damage. Large MP pool. Low HP — keep DEF up.<br><br>
+      <span style="color:var(--muted)">Free:</span> Arcane Bolt ×1.0<br>
+      <span style="color:var(--muted)">MP skill:</span> Fireball ×2.0 ALL (15 MP)
+    </div>
+  </div>
+  <div class="hc-card cls-healer">
+    <div class="hc-card-title">💚 Healer</div>
+    <div class="hc-card-body">
+      STR 6 · DEX 7 · INT 10 · SPIRIT <b>16</b><br><br>
+      <b>Playstyle:</b> Self-sustain through Spirit-scaling heals. Invest SPIRIT for massive heals.<br><br>
+      <span style="color:var(--muted)">Free:</span> Smite ×0.9 holy<br>
+      <span style="color:var(--muted)">MP skill:</span> Heal = SPIRIT × 3 HP (12 MP)
+    </div>
+  </div>
+  <div class="hc-card cls-sage">
+    <div class="hc-card-title">🧙 Sage</div>
+    <div class="hc-card-body">
+      STR 5 · DEX 5 · INT <b>14</b> · SPIRIT <b>14</b><br><br>
+      <b>Playstyle:</b> Void/arcane burst with DEF-piercing abilities. Fragile but devastating.<br><br>
+      <span style="color:var(--muted)">Free:</span> Mind Bolt ×1.0<br>
+      <span style="color:var(--muted)">MP skill:</span> Arcane Burst ×2.2 ALL (18 MP)
+    </div>
+  </div>
+</div>
+
+<div class="hc-h2">Attribute Investment Guide</div>
+${_tb(
+  ['Goal','Invest In'],
+  [
+    ['More HP','STR'],
+    ['More MP','SPIRIT'],
+    ['More damage (non-Rogue)','STR'],
+    ['More damage (Rogue only)','DEX — DEX is Rogue\'s primary attack stat'],
+    ['More defense','DEX'],
+    ['More dodge &amp; crit','DEX (Rogue/Ranger get 1.5× bonus)'],
+    ['Better heals (Healer/Sage)','SPIRIT'],
+    ['Scale magic gear affixes','INT'],
+  ]
+)}`;
+
+/* ─────────────────────────── SKILL TREES ────────────────────────── */
+HELP_TABS.skills = `
+<div class="hc-title">🌟 Skill Trees</div>
+<div class="hc-lead">Each class has a 5-tier skill tree with 10 nodes (2 per tier). Spend 1 skill point per level. Active nodes add combat skills; passive nodes add permanent stat bonuses. Reset costs 3,000 gold.</div>
+
+${_formula('Active skill damage formula',`dmgMult = baseDmg + (allocatedPoints − 1) × dmgPerPt`)}
+${_formula('Heal skill formula',`HP restored = Spirit × (baseHealMult + (allocatedPoints − 1) × healPerPt)`)}
+
+<div class="hc-h2">⚔️ Warrior</div>
+${_tb(['Tier','Node','Type','Effect'],[
+  ['1','Sword Mastery','Passive','⚔ +3 ATK · 🎯 +1% Crit per point (max 5)'],
+  ['1','Iron Skin','Passive','🛡 -5% damage taken per point (max 5)'],
+  ['2','Whirlwind','Active','AoE melee — base 1.2× → +0.15×/pt · 14 MP'],
+  ['2','Iron Guard','Buff','Stance: 50%/60%/60% reduction for 2/2/3 hits; +10% dodge &amp; block/pt · 12 MP (max 3)'],
+  ['3','Berserk','Active','Single melee — base 2.5× → +0.2×/pt · 20 MP'],
+  ['3','Bloodvow','Passive','❤️ +10% Max HP per point'],
+  ['4','Titan Strike','Active','Single melee, 30% DEF pierce — base 3.8× → +0.25×/pt · 28 MP'],
+  ['4','Warlord Aura','Passive','❤️ +15% Max HP · 🛡 +8 DEF per point'],
+  ['5','Void Cleave','Active','AoE, ignores ALL DEF — base 2.8× → +0.3×/pt · 38 MP'],
+  ['5','Immortal Vow','Passive','When HP&lt;20%: 40%/55%/70% dmg reduction for 3 hits (once per fight, max 3)'],
+])}
+
+<div class="hc-h2">🛡️ Paladin</div>
+${_tb(['Tier','Node','Type','Effect'],[
+  ['1','Vampire Touch','Passive','🩸 +5% lifesteal per point'],
+  ['1','Divine Shield','Buff','Shield: 50%/75%/100% reduction for 2 hits · costs 20% max MP (max 3)'],
+  ['2','Consecration','Active','AoE holy — base 1.3× → +0.15×/pt · 16 MP'],
+  ['2','Guardian','Passive','🛡 +5% total DEF per point'],
+  ['3','Holy Wrath','Active','Single holy — base 2.8× → +0.2×/pt · 24 MP'],
+  ['3','Power Aura','Passive','⚔ +5% total ATK per point'],
+  ['4','Radiant Judgment','Active','AoE holy — base 2.5× → +0.25×/pt · 30 MP'],
+  ['4','Fortress of Faith','Passive','🛡 +10% DEF · ⚔ +5% ATK per point'],
+  ['5','Divine Reckoning','Active','AoE holy nova — base 3.5× → +0.3×/pt · 42 MP'],
+  ['5','Undying Light','Passive','🩸 Lifesteal +10%/+15%/+20% (max 3)'],
+])}
+
+<div class="hc-h2">🗡️ Rogue</div>
+${_tb(['Tier','Node','Type','Effect'],[
+  ['1','Shadow Step','Passive','🎯 +5% Crit Rate per point'],
+  ['1','Evasion','Passive','💨 +10% Dodge Rate per point (max 3)'],
+  ['2','Poison Strike','Active','Single stab — base 1.6× → +0.2×/pt · 12 MP'],
+  ['2','Smoke Bomb','Active','AoE melee — base 1.2× → +0.2×/pt · 10 MP'],
+  ['3','Death Mark','Active','Single stab, always 4× dmg, 20% 2nd hit, 10% 3rd hit · 22 MP'],
+  ['3','Shadow Mastery','Passive','💨 +5% Dodge BUT ❤️ -5% Max HP (trade-off) per point'],
+  ['4','Phantasm Blade','Active','Single stab, 5× base, 30% 2nd hit, 15% 3rd · 30 MP'],
+  ['4','Void Step','Passive','💨 +15% Dodge · 🎯 +8% Crit per point'],
+  ['5','Death Spiral','Active','AoE stab — base 2.2× → +0.2×/pt · 40 MP'],
+  ['5','Soul Harvest','Passive','Each kill restores 8%/12%/16% Max HP (max 3)'],
+])}
+
+<div class="hc-h2">🏹 Ranger</div>
+${_tb(['Tier','Node','Type','Effect'],[
+  ['1','Eagle Eye','Passive','⚔ +4 ATK per point'],
+  ['1','Agility','Passive','🛡 +3 DEF per point'],
+  ['2','Multi-Shot','Active','AoE arrow — base 1.3× → +0.15×/pt · 14 MP'],
+  ['2','Hunter\'s Mark','Active','Single pierce — base 1.7× → +0.15×/pt · 12 MP'],
+  ['3','Rain of Arrows','Active','AoE pierce — base 2.0× → +0.2×/pt · 22 MP'],
+  ['3','Quiver Mastery','Passive','⚔ +5 ATK · 💧 +10 max MP per point'],
+  ['4','Stellar Arrow','Active','AoE pierce — base 2.8× → +0.25×/pt · 28 MP'],
+  ['4','Beast Bond','Passive','⚔ +8 ATK · 🛡 +6 DEF · 🎯 +3% Crit per point'],
+  ['5','Void Barrage','Active','AoE arrow — base 3.2× → +0.3×/pt · 38 MP'],
+  ['5','Hunter\'s Instinct','Passive','Crit hits deal +25%/+40%/+60% bonus damage (max 3)'],
+])}
+
+<div class="hc-h2">🔮 Mage</div>
+${_tb(['Tier','Node','Type','Effect'],[
+  ['1','Arcane Knowledge','Passive','⚔ +4 ATK per point'],
+  ['1','Mana Surge','Passive','💧 +10 max MP per point'],
+  ['2','Ice Bolt','Active','Single magic — base 1.6× → +0.2×/pt · 14 MP'],
+  ['2','Chain Lightning','Active','AoE magic — base 1.4× → +0.15×/pt · 18 MP'],
+  ['3','Meteor','Active','AoE fire — base 3.0× → +0.3×/pt · 28 MP'],
+  ['3','Spell Power','Passive','⚔ +6 ATK · 💧 +8 max MP per point'],
+  ['4','Singularity','Active','AoE magic — base 3.2× → +0.3×/pt · 32 MP'],
+  ['4','Arcane Overflow','Passive','⚔ +12 ATK · 💧 +15 max MP per point'],
+  ['5','Void Implosion','Active','AoE burst — base 4.5× → +0.35×/pt · 45 MP'],
+  ['5','Time Stop','Active','Freeze all enemies 1/2/3 turns · 40 MP (max 3)'],
+])}
+
+<div class="hc-h2">💚 Healer</div>
+${_tb(['Tier','Node','Type','Effect'],[
+  ['1','Holy Spirit','Passive','✨ +4 SPIRIT per point'],
+  ['1','Mending','Passive','❤️ +12 Max HP per point'],
+  ['2','Revitalize','Active','Heal: SPIRIT × (4+1/pt) HP · 18 MP'],
+  ['2','Holy Barrier','Active','Heal: SPIRIT × (3+1/pt) HP · 14 MP'],
+  ['3','Sacred Ground','Active','Heal: SPIRIT × (6+1/pt) HP · 24 MP'],
+  ['3','Divine Grace','Passive','🛡 -5% damage taken per point'],
+  ['4','Resurrection Pulse','Active','Heal: SPIRIT × (10+2/pt) HP · 32 MP'],
+  ['4','Aegis of Light','Passive','🛡 -8% damage taken · ✨ +6 SPIRIT per point'],
+  ['5','Divine Miracle','Active','Heal: SPIRIT × 20 HP · 50 MP'],
+  ['5','Martyr\'s Resolve','Passive','When HP&lt;30%: instantly heal 20%/30%/40% max HP once per fight (max 3)'],
+])}
+
+<div class="hc-h2">🧙 Sage</div>
+${_tb(['Tier','Node','Type','Effect'],[
+  ['1','Wisdom','Passive','⚔ +3 ATK · 💧 +6 max MP per point'],
+  ['1','Runic Armor','Passive','🛡 +4 DEF per point'],
+  ['2','Void Bolt','Active','Single magic — base 1.8× → +0.2×/pt · 16 MP'],
+  ['2','Time Warp','Active','AoE burst — base 1.3× → +0.15×/pt · 20 MP'],
+  ['3','Apocalypse','Active','AoE burst — base 3.2× → +0.3×/pt · 30 MP'],
+  ['3','Ancient Lore','Passive','⚔ +5 ATK · 🛡 +3 DEF per point'],
+  ['4','Entropy Blast','Active','AoE burst, <b>ignores ALL DEF</b> — base 3.8× → +0.3×/pt · 35 MP'],
+  ['4','Planar Mastery','Passive','⚔ +8 ATK · 🛡 +5 DEF · 💧 +15 max MP per point'],
+  ['5','Reality Collapse','Active','AoE burst — base 5.0× → +0.4×/pt · 55 MP'],
+  ['5','Omniscience','Passive','⚔ +15% ATK · 🎯 +15% Crit · 💨 +15% Dodge per point (max 3)'],
+])}`;
+
+/* ─────────────────────────── ZONES ──────────────────────────────── */
+HELP_TABS.zones = `
+<div class="hc-title">🗺️ Zones &amp; Progression</div>
+<div class="hc-lead">Three acts, each unlocking after the previous is completed. Within each act, zones unlock linearly — defeat a zone to open the next.</div>
+
+<div class="hc-grid" style="margin-bottom:24px">
+  ${_card('🏘️ Town','Your home base. Contains the Royal Keep (heal), Blacksmith (gear), Chapel, Skill Shrine, Training Grounds, and more.')}
+  ${_card('🔓 Act Unlock','Complete all zones in an act to unlock the next world. Eastern Gate (→ Desert) and Abyssal Portal (→ Rift) appear in town.')}
+  ${_card('⚔️ Party Combat','Boss zones require a party modal. Invite up to 3 others. All members fight the same monsters. XP is awarded in full to each member.')}
+</div>
+
+<div class="hc-h2">🌲 Act 1 — Dark Forest</div>
+<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">Always available · Levels 1–12 · Completion: Defeat the Demon Lord</div>
+${_tb(
+  ['#','Zone','Level Range','Enemies'],
+  [
+    ['1','Forest Entrance','1–5','Green Slime, Blue Slime'],
+    ['2','Mid Forest','3–8','Goblin Scout, Forest Archer'],
+    ['3','Deep Forest','8–12','Forest Shaman'],
+    ['4 ☠','Demon\'s Lair','12','<b>BOSS:</b> Demon Lord + Demon Imp'],
+  ]
+)}
+
+<div class="hc-h2">🏜️ Act 2 — Desert Saharrrra</div>
+<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">Requires: All 4 Act 1 zones cleared · Levels 13–35 · Completion: Defeat the Pharaoh's Wrath</div>
+<div style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px;background:rgba(201,168,76,.04);border:1px solid rgba(201,168,76,.15);border-radius:3px;padding:10px 12px">
+  🐪 <i>"As the Demon Lord fell, it wheezed: 'The Eye... sleeps in Saharrrra... when it wakes... all light dies...'"</i>
+</div>
+${_tb(
+  ['#','Zone','Level Range','Enemies'],
+  [
+    ['1','The Sunscorched Dunes','13–18','Sand Scorpion, Desert Jackal'],
+    ['2','The Bone Wastes','18–23','Sandstorm Wraith, Bone Crawler'],
+    ['3','The Whispering Canyons','23–28','Canyon Serpent, Dune Sorcerer'],
+    ['4','The Oasis of Mirrors','28–33','Mirage Stalker, Sandglass Golem'],
+    ['5 ☠','Tomb of the Forgotten Sun','35','<b>BOSS:</b> Pharaoh\'s Wrath + Cursed Servant'],
+  ]
+)}
+<div style="font-size:12px;color:var(--muted);margin-bottom:20px">🏺 Oasis Camp offers Holy Well (heal) and Sand Bazaar (shop) throughout the desert.</div>
+
+<div class="hc-h2">🌌 Act 3 — Abyssal Rift</div>
+<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:10px">Requires: All 5 Act 2 zones cleared · Levels 36–50 · Completion: Defeat the Abyssal God</div>
+<div style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px;background:rgba(106,138,255,.04);border:1px solid rgba(106,138,255,.15);border-radius:3px;padding:10px 12px">
+  🌀 <i>"A rift tore open beyond the sands. Beyond it: not darkness, but un-darkness. An absence so total that even void has no name for it."</i>
+</div>
+${_tb(
+  ['#','Zone','Level Range','Enemies'],
+  [
+    ['1','Void Threshold','36–38','Void Wisp, Rift Stalker'],
+    ['2','Shattered Expanse','38–40','Rift Stalker, Thought Devourer'],
+    ['3','Mindflayer Hollows','40–42','Thought Devourer, Voidborn Herald'],
+    ['4','Starless Sea','44–46','Star-Eater, Oblivion Wraith'],
+    ['5','Null Citadel','42–48','Voidborn Herald, Null Colossus'],
+    ['6','Fracture Peaks','46–48','Null Colossus, Oblivion Wraith'],
+    ['7','Oblivion Gate','46–48','Oblivion Wraith, Null Colossus'],
+    ['8 ☠','Abyssal Sanctum','50','<b>FINAL BOSS:</b> The Abyssal God + Rift Architect'],
+  ]
+)}
+
+<div class="hc-h2">Combat Rules</div>
+<div class="hc-grid">
+  ${_card('🎲 Monster Count','1–3 monsters spawn per regular zone, randomly chosen from the zone pool.')}
+  ${_card('⚡ Enrage','If a monster is 3+ levels above you, it goes <b style="color:#ff4444">Enraged</b>: ATK ×2!')}
+  ${_card('👥 Party XP','In party fights, every member gets the full XP independently. Plus a <b>×3 Party Bonus</b>!')}
+  ${_card('🔄 Progress','Progress only advances — zones never roll back. One-way journey forward.')}
+</div>`;
+
+// Init first tab on page load
+window.addEventListener('load', () => {
+  // pre-warm first tab so content is ready
+});
 </script>
 </body>
 </html>

@@ -6,6 +6,7 @@ const path = require('path');
 const dbModule = require('./database');
 const { hashPassword, checkPassword, signToken, verifyToken, requireAuth, requireGM, requireAdmin } = require('./auth');
 const { calcStats, sumGear, CLASSES, SLOTS, CLASS_AVATARS, generateItemAffixes } = require('./classes');
+const { SKILL_TREES } = require('./public/skilltree.js');
 const { query, run, adjustAttrPoints, getStash, addStashItem, removeStashItem } = dbModule;
 
 // Parse affixes JSON for items returned from DB
@@ -83,44 +84,39 @@ const SHIELD_RE = /shield|buckler|aegis|bulwark|targe/i;
 function _offhandIcon(name) { return SHIELD_RE.test(name) ? '🛡️' : '🔮'; }
 function _isShield(name)    { return SHIELD_RE.test(name); }
 
-// Weapons always carry at least one ATK affix based on tier × level
-const WEAPON_ATK_TABLE = {
-  normal:    { base: 4,  per: 0.5 },
-  magic:     { base: 8,  per: 1.0 },
-  rare:      { base: 14, per: 1.7 },
-  legendary: { base: 22, per: 2.7 },
-  godly:     { base: 32, per: 4.0 },
-};
+// Weapon ATK scales with item level and rarity. Base multiplier 2.5 for Normal, ×1.2 per rarity tier.
+// Final value has ±5% fluctuation. Formula: round(level × rarityMult × rand(0.95–1.05))
+const WEAPON_ATK_MULT = { normal: 2.5, magic: 3.0, rare: 3.6, legendary: 4.32, godly: 5.184 };
 function guaranteeWeaponAtk(affixes, bonuses, rarity, level) {
-  const t = WEAPON_ATK_TABLE[rarity] || WEAPON_ATK_TABLE.normal;
-  const guaranteed = Math.floor(t.base + (level - 1) * t.per);
-  const currentAtk = bonuses.atk_bonus || 0;
-  if (currentAtk >= guaranteed) return { affixes, bonuses };
-  // Add a Keen affix for the shortfall, preserving all original affixes
-  const needed     = guaranteed - currentAtk;
-  const keenAffix  = { name: 'Keen', type: 'prefix', stat: 'atk_bonus', value: needed };
-  const newBonuses = { ...bonuses, atk_bonus: guaranteed };
-  return { affixes: [keenAffix, ...affixes], bonuses: newBonuses };
+  const mult  = WEAPON_ATK_MULT[rarity] || 2.5;
+  const fluc  = 0.95 + Math.random() * 0.10;
+  const value = Math.max(1, Math.round(level * mult * fluc));
+
+  // Remove any randomly-rolled atk affixes and replace with the level-scaled one
+  const oldAtkTotal = affixes.filter(a => a.stat === 'atk_bonus').reduce((s, a) => s + a.value, 0);
+  const filteredAffixes = affixes.filter(a => a.stat !== 'atk_bonus');
+  const newBonuses = { ...bonuses, atk_bonus: (bonuses.atk_bonus || 0) - oldAtkTotal + value };
+  const keenAffix  = { name: 'Keen', type: 'prefix', stat: 'atk_bonus', value };
+
+  return { affixes: [...filteredAffixes, keenAffix], bonuses: newBonuses };
 }
 
-// All non-weapon gear carries at least one DEF affix — guaranteed values by rarity tier
-const ARMOR_DEF_BY_RARITY = { normal:1, magic:2, rare:4, legendary:9, godly:14 };
-function guaranteeArmorDef(affixes, bonuses, rarity) {
-  if (affixes.some(a => a.stat === 'def_bonus')) return { affixes, bonuses };
-  const value    = ARMOR_DEF_BY_RARITY[rarity] || 1;
+// Armor DEF scales with item level and rarity. Each rarity tier multiplies by 1.2.
+// Final value has ±5% fluctuation. Formula: round(levelReq × rarityMult × rand(0.95–1.05))
+const RARITY_DEF_MULT = { normal: 1.0, magic: 1.2, rare: 1.44, legendary: 1.728, godly: 2.0736 };
+function guaranteeArmorDef(affixes, bonuses, rarity, levelReq) {
+  const mult  = RARITY_DEF_MULT[rarity] || 1.0;
+  const fluc  = 0.95 + Math.random() * 0.10;
+  const value = Math.max(1, Math.round(levelReq * mult * fluc));
   const defAffix = { name: 'Sturdy', type: 'prefix', stat: 'def_bonus', value };
   const newBonuses = { ...bonuses };
-  let newAffixes;
-  if (affixes.length > 0) {
-    const replaced = affixes[affixes.length - 1];
-    newBonuses[replaced.stat] = (newBonuses[replaced.stat] || 0) - replaced.value;
-    if (newBonuses[replaced.stat] <= 0) delete newBonuses[replaced.stat];
-    newAffixes = [...affixes.slice(0, -1), defAffix];
-  } else {
-    newAffixes = [defAffix];
-  }
-  newBonuses.def_bonus = (newBonuses.def_bonus || 0) + value;
-  return { affixes: newAffixes, bonuses: newBonuses };
+
+  // Remove any randomly-rolled def affixes and replace with the level-scaled one
+  const oldDefTotal = affixes.filter(a => a.stat === 'def_bonus').reduce((s, a) => s + a.value, 0);
+  const filteredAffixes = affixes.filter(a => a.stat !== 'def_bonus');
+  newBonuses.def_bonus = (newBonuses.def_bonus || 0) - oldDefTotal + value;
+
+  return { affixes: [...filteredAffixes, defAffix], bonuses: newBonuses };
 }
 
 // Base block rate ranges [min, max] by rarity — only applies to offhand items
@@ -172,8 +168,12 @@ function generateShopForPlayer(level) {
       const baseIdx  = _randInt(0, SHOP_BASE_NAMES[slot].length - 1);
       const baseName = SHOP_BASE_NAMES[slot][baseIdx];
       const icon     = SHOP_ICONS[slot][baseIdx] || '🎒';
+      // level_req scales item stats — must be close to player level so gear is useful,
+      // but never above player level (otherwise they can't equip it).
+      const rarityMin = RARITY_LEVEL_REQ[rarity] ?? 1;
+      const level_req = Math.max(rarityMin, level - _randInt(2, 6));
       if (slot !== 'mainhand')
-        ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity));
+        ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity, level_req));
 
       // Build name from affixes
       const prefix = affixes.find(a => a.type === 'prefix');
@@ -185,7 +185,6 @@ function generateShopForPlayer(level) {
       const cost = _randInt(cMin, cMax);
       const sell = Math.round(cost * 0.4);
 
-      const level_req  = RARITY_LEVEL_REQ[rarity] ?? 1;
       if (slot === 'mainhand')
         ({ affixes, bonuses } = guaranteeWeaponAtk(affixes, bonuses, rarity, level_req));
       const block_rate = slot === 'offhand' && _isShield(baseName) ? _rollBlockRate(rarity, _randInt) : 0;
@@ -359,6 +358,25 @@ app.patch('/api/users/:username/ban', requireAuth, requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Skill-tree HP helper ──────────────────────────────────────────────────────
+// Mirrors getEffectiveStats() on the client for HP-affecting passives.
+function effectiveMaxHp(username, cls, baseHp) {
+  const skillRows = db.getPlayerSkills.all(username);
+  const allocated = {};
+  skillRows.forEach(r => { allocated[r.node_id] = r.points; });
+  const tree = SKILL_TREES[cls] || [];
+  let hpFlat = 0, hpPctBonus = 0, hpPenaltyPct = 0;
+  tree.forEach(node => {
+    if (node.type !== 'passive' || !node.passive) return;
+    const pts = allocated[node.id] || 0;
+    if (!pts) return;
+    if (node.passive.maxHp)        hpFlat       += node.passive.maxHp * pts;
+    if (node.passive.hpPct)        hpPctBonus   += node.passive.hpPct * pts;
+    if (node.passive.hpPenaltyPct) hpPenaltyPct += node.passive.hpPenaltyPct * pts;
+  });
+  return Math.floor((baseHp + hpFlat) * (1 + hpPctBonus / 100) * (1 - hpPenaltyPct / 100));
+}
+
 // ── REST API: Stats & Equipment ───────────────────────────────────────────────
 
 // Current user's computed stats + equipped items + inventory + quests
@@ -371,8 +389,9 @@ app.get('/api/me/stats', requireAuth, (req, res) => {
   const attrStats  = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
   const classBase  = CLASSES[user.class] || CLASSES.Warrior;
   const stats      = calcStats(user.class, sumGear(equipped), attrStats);
-  const rawHp = user.hp !== undefined ? user.hp : stats.hp;
-  const curHp = Math.min(rawHp, stats.hp); // never exceed current max HP
+  const maxHp_ = effectiveMaxHp(user.username, user.class, stats.hp);
+  const rawHp  = (user.hp != null) ? user.hp : maxHp_;
+  const curHp  = Math.min(rawHp, maxHp_);
   res.json({ class: user.class, level: user.level, xp: user.xp, stats, classBase, attrStats, attrPoints: user.attr_points||0, equipped, slots: SLOTS, inventory, quests, gold: user.gold||0, curHp });
 });
 
@@ -493,6 +512,93 @@ app.post('/api/me/desert-progress', requireAuth, (req, res) => {
   res.json({ ok: true, desert_progress: Math.max(desert_progress, user.desert_progress ?? 0) });
 });
 
+app.get('/api/me/rift-progress', requireAuth, (req, res) => {
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ rift_progress: user.rift_progress ?? 0 });
+});
+
+app.post('/api/me/rift-progress', requireAuth, (req, res) => {
+  const { rift_progress } = req.body;
+  if (!Number.isInteger(rift_progress) || rift_progress < 0 || rift_progress > 99)
+    return res.status(400).json({ error: 'Invalid progress' });
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (rift_progress > (user.rift_progress ?? 0)) {
+    run('UPDATE users SET rift_progress=? WHERE username=?', [rift_progress, req.user.username]);
+  }
+  res.json({ ok: true, rift_progress: Math.max(rift_progress, user.rift_progress ?? 0) });
+});
+
+// ── Crafting ──────────────────────────────────────────────────────────────────
+
+app.get('/api/crafting/recipes', requireAuth, (_req, res) => {
+  const recipes = query('SELECT * FROM crafting_recipes ORDER BY level_req, gold_cost', []);
+  res.json({ recipes });
+});
+
+app.post('/api/crafting/craft', requireAuth, (req, res) => {
+  const { recipeId } = req.body;
+  if (!recipeId) return res.status(400).json({ error: 'Missing recipeId' });
+  const recipes = query('SELECT * FROM crafting_recipes WHERE id = ?', [recipeId]);
+  const recipe  = recipes[0];
+  if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
+
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if ((user.gold ?? 0) < recipe.gold_cost)
+    return res.status(400).json({ error: 'Not enough gold' });
+  if ((user.level ?? 1) < recipe.level_req)
+    return res.status(400).json({ error: `Requires level ${recipe.level_req}` });
+
+  // Find required materials in inventory
+  const inv = query(
+    `SELECT pi.id as inv_id, i.rarity, i.slot FROM player_inventory pi
+     JOIN items i ON i.id = pi.item_id WHERE pi.username = ?`, [req.user.username]
+  );
+  function findMat(rarity, slot) {
+    return inv.find(i => i.rarity === rarity && (!slot || i.slot === slot));
+  }
+  const mat1 = findMat(recipe.mat1_rarity, recipe.mat1_slot);
+  if (!mat1) return res.status(400).json({ error: `Missing material: ${recipe.mat1_rarity} ${recipe.mat1_slot || 'item'}` });
+  let mat2 = null;
+  if (recipe.mat2_rarity) {
+    // mat2 must be a different inv row from mat1
+    const availableForMat2 = inv.filter(i => i.inv_id !== mat1.inv_id);
+    mat2 = availableForMat2.find(i => i.rarity === recipe.mat2_rarity && (!recipe.mat2_slot || i.slot === recipe.mat2_slot));
+    if (!mat2) return res.status(400).json({ error: `Missing material: ${recipe.mat2_rarity} ${recipe.mat2_slot || 'item'}` });
+  }
+
+  // Consume mats + gold
+  run('DELETE FROM player_inventory WHERE id = ? AND username = ?', [mat1.inv_id, req.user.username]);
+  if (mat2) run('DELETE FROM player_inventory WHERE id = ? AND username = ?', [mat2.inv_id, req.user.username]);
+  run('UPDATE users SET gold = gold - ? WHERE username = ?', [recipe.gold_cost, req.user.username]);
+
+  // Generate crafted item
+  const slot    = recipe.slot;
+  const rarity  = recipe.out_rarity;
+  const icon    = slot === 'offhand' ? '🛡️' : (LOOT_SLOT_ICON[slot] || '🎒');
+  let { affixes, bonuses } = generateItemAffixes(slot, rarity);
+  if (slot !== 'mainhand')
+    ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity, recipe.level_req));
+  if (slot === 'mainhand')
+    ({ affixes, bonuses } = guaranteeWeaponAtk(affixes, bonuses, rarity, recipe.level_req));
+  const special = rollSpecialAffix(slot, rarity, recipe.level_req, (a, b) => Math.floor(Math.random() * (b - a + 1)) + a);
+  if (special) affixes = [...affixes, special];
+  const b = bonuses;
+  const { lastInsertRowid } = db.run(
+    `INSERT INTO items (name, slot, rarity, icon, affixes,
+       str_bonus, dex_bonus, int_bonus, spirit_bonus,
+       hp_bonus, mp_bonus, atk_bonus, def_bonus, level_req, block_rate)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [recipe.name, slot, rarity, icon, JSON.stringify(affixes),
+     b.str_bonus||0, b.dex_bonus||0, b.int_bonus||0, b.spirit_bonus||0,
+     b.hp_bonus||0, b.mp_bonus||0, b.atk_bonus||0, b.def_bonus||0, recipe.level_req, 0]
+  );
+  db.addInventoryItem.run(req.user.username, lastInsertRowid);
+  res.json({ ok: true, item: { id: lastInsertRowid, name: recipe.name, slot, rarity, icon, level_req: recipe.level_req, affixes, ...b } });
+});
+
 // Grant XP after combat win
 app.post('/api/me/xp', requireAuth, (req, res) => {
   const xpGain = parseInt(req.body.xp, 10);
@@ -501,7 +607,7 @@ app.post('/api/me/xp', requireAuth, (req, res) => {
   const user     = db.getUserByUsername.get(req.user.username);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const newTotal = user.xp + xpGain;
-  const newLevel = Math.min(30, Math.floor(Math.sqrt(newTotal / 100)) + 1);
+  const newLevel = Math.min(50, Math.floor(Math.sqrt(newTotal / 100)) + 1);
   const levelGain = Math.max(0, newLevel - user.level);
   db.updateUserXP.run(xpGain, newLevel, req.user.username);
   if (levelGain > 0) {
@@ -517,15 +623,17 @@ app.post('/api/me/die', requireAuth, (req, res) => {
   res.json({ ok: true, curHp: 1 });
 });
 
-// Heal at Royal Keep — restores HP and MP to max
+// Heal at Royal Keep — restores HP and MP to max (including skill tree passives)
 app.post('/api/me/heal', requireAuth, (req, res) => {
   const user = db.getUserByUsername.get(req.user.username);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const equipped  = parseAffixes(db.getEquipment.all(user.username));
   const attrStats = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
   const stats     = calcStats(user.class, sumGear(equipped), attrStats);
-  run('UPDATE users SET hp = ? WHERE username = ?', [stats.hp, req.user.username]);
-  res.json({ ok: true, curHp: stats.hp, curMp: stats.mp });
+
+  const maxHp = effectiveMaxHp(user.username, user.class, stats.hp);
+  run('UPDATE users SET hp = ? WHERE username = ?', [maxHp, req.user.username]);
+  res.json({ ok: true, curHp: maxHp, curMp: stats.mp });
 });
 
 // Distribute one attribute point into str / dex / int / spirit
@@ -573,10 +681,36 @@ app.post('/api/me/skills/assign', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'No skill points available' });
   const current = db.getPlayerSkills.get(req.user.username, nodeId);
   const currentPts = current ? current.points : 0;
-  if (currentPts >= 5) return res.status(400).json({ error: 'Skill at maximum level' });
+  // Per-node max points (default 5; some skills cap lower)
+  const NODE_MAX = { iron_guard:3, divine_shield:3, evasion:3 };
+  const maxPts = NODE_MAX[nodeId] ?? 5;
+  if (currentPts >= maxPts) return res.status(400).json({ error: 'Skill at maximum level' });
   db.assignSkillPoint.run(req.user.username, nodeId, currentPts + 1);
   db.adjustSkillPoints.run(-1, req.user.username);
   res.json({ ok: true, nodeId, points: currentPts + 1, unspentPoints: user.skill_points - 1 });
+});
+
+// Reset skill tree — costs 3000 gold, refunds all skill points
+app.post('/api/me/skills/reset', requireAuth, (req, res) => {
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if ((user.gold || 0) < 3000) return res.status(400).json({ error: 'Not enough gold. Need 3,000 💰.' });
+  const totalSkillPts = Math.max(0, (user.level || 1) - 1);
+  run('UPDATE users SET gold = gold - 3000, skill_points = ? WHERE username = ?', [totalSkillPts, req.user.username]);
+  run('DELETE FROM player_skills WHERE username = ?', [req.user.username]);
+  const updated = db.getUserByUsername.get(req.user.username);
+  res.json({ ok: true, gold: updated.gold, skillPoints: totalSkillPts });
+});
+
+// Reset attributes — costs 3000 gold, refunds all attribute points
+app.post('/api/me/attributes/reset', requireAuth, (req, res) => {
+  const user = db.getUserByUsername.get(req.user.username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if ((user.gold || 0) < 3000) return res.status(400).json({ error: 'Not enough gold. Need 3,000 💰.' });
+  const totalAttrPts = Math.max(0, (user.level || 1) - 1) * 5;
+  run('UPDATE users SET gold = gold - 3000, attr_points = ?, attr_str = 0, attr_dex = 0, attr_int = 0, attr_spirit = 0 WHERE username = ?', [totalAttrPts, req.user.username]);
+  const updated = db.getUserByUsername.get(req.user.username);
+  res.json({ ok: true, gold: updated.gold, attrPoints: totalAttrPts });
 });
 
 // ── Loot generation helpers ───────────────────────────────────────────────────
@@ -591,7 +725,26 @@ const LOOT_NAMES = {
   gloves:   { D:['Tattered Gloves','Worn Mitts','Cracked Gauntlets'], C:['Iron Gauntlets','Leather Gloves','Chain Mitts'], B:['Shadow Wraps','Knight\'s Gauntlets','Mage Gloves'], A:['Sunseeker\'s Handwraps','Khemeti Gauntlets','Eye-Blessed Mitts'], S:['Eternal Sun Gauntlets','Wrathbound Handwraps','Pharaoh\'s Gold Gloves'] },
 };
 const LOOT_SLOT_ICON = { mainhand:'⚔️', offhand:'🔮', head:'🪖', chest:'🦺', pants:'👖', boots:'👢', gloves:'🧤' };
-const LOOT_TIER_RARITY = { D:'normal', C:'magic', B:'rare', A:'legendary', S:'godly' };
+// Probabilistic rarity by monster tier
+// S: rare(60%) / legendary(35%) / godly(5%)
+// A: magic(60%) / rare(35%) / legendary(5%)
+// B: normal(60%) / magic(35%) / rare(5%)
+// C: normal(95%) / magic(5%)
+// D: normal(100%)
+function rollLootRarity(tier) {
+  const r = Math.random();
+  switch (tier) {
+    case 'S': return r < 0.05 ? 'godly'     : r < 0.40 ? 'legendary' : 'rare';
+    case 'A': return r < 0.05 ? 'legendary' : r < 0.40 ? 'rare'      : 'magic';
+    case 'B': return r < 0.05 ? 'rare'      : r < 0.40 ? 'magic'     : 'normal';
+    case 'C': return r < 0.05 ? 'magic'     : 'normal';
+    default:  return 'normal';
+  }
+}
+// Level requirement: monster level with slight downward fluctuation (±0 to -2)
+function rollLootLevelReq(monLevel) {
+  return Math.max(1, monLevel - lootRandInt(0, 2));
+}
 // SLOTS is imported from classes.js — no duplicate list needed
 function lootRandInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
@@ -624,17 +777,15 @@ app.post('/api/me/loot', requireAuth, (req, res) => {
     const names   = LOOT_NAMES[slot]?.[tier] || [`${tier} ${slot}`];
     const name    = names[Math.floor(Math.random() * names.length)];
     const icon    = slot === 'offhand' ? _offhandIcon(name) : (LOOT_SLOT_ICON[slot] || '🎒');
-    const rarity  = LOOT_TIER_RARITY[tier] || 'normal';
+    const rarity  = rollLootRarity(tier);
 
+    const level_req = rollLootLevelReq(mon.level || 1);
     let { affixes, bonuses } = generateItemAffixes(slot, rarity);
     if (slot !== 'mainhand')
-      ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity));
+      ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity, level_req));
     if (slot === 'mainhand')
       ({ affixes, bonuses } = guaranteeWeaponAtk(affixes, bonuses, rarity, mon.level || 1));
     const b = bonuses;
-
-    const rarityReq  = RARITY_LEVEL_REQ[rarity] ?? 1;
-    const level_req  = Math.min(rarityReq, mon.level || 1);
     const block_rate = slot === 'offhand' && _isShield(name) ? _rollBlockRate(rarity, lootRandInt) : 0;
     const special = rollSpecialAffix(slot, rarity, level_req, lootRandInt);
     if (special) affixes = [...affixes, special];
@@ -665,8 +816,13 @@ app.get('/api/users/:target/combat-stats', requireAuth, (req, res) => {
   const equipped  = parseAffixes(db.getEquipment.all(user.username));
   const attrStats = { str: user.attr_str||0, dex: user.attr_dex||0, int: user.attr_int||0, spirit: user.attr_spirit||0 };
   const stats     = calcStats(user.class, sumGear(equipped), attrStats);
-  const curHp     = Math.min(user.hp !== undefined ? user.hp : stats.hp, stats.hp);
-  res.json({ username: user.username, class: user.class, level: user.level, curHp, stats });
+  const maxHp     = effectiveMaxHp(user.username, user.class, stats.hp);
+  // user.hp may be NULL in the DB — null coerces to 0 in Math.min, so guard explicitly
+  const rawHp     = (user.hp != null) ? user.hp : maxHp;
+  const curHp     = Math.min(rawHp, maxHp);
+  const skillRows = db.getPlayerSkills.all(user.username);
+  const skillData = { allocated: Object.fromEntries(skillRows.map(r => [r.node_id, r.points])) };
+  res.json({ username: user.username, class: user.class, level: user.level, curHp, maxHp, stats, skillData, equipped });
 });
 
 // Award XP + independent loot rolls to every party member after a boss win
@@ -686,7 +842,7 @@ app.post('/api/party/reward', requireAuth, (req, res) => {
 
     // XP
     const newTotal  = user.xp + xp;
-    const newLevel  = Math.min(30, Math.floor(Math.sqrt(newTotal / 100)) + 1);
+    const newLevel  = Math.min(50, Math.floor(Math.sqrt(newTotal / 100)) + 1);
     const levelGain = Math.max(0, newLevel - user.level);
     db.updateUserXP.run(xp, newLevel, member);
     if (levelGain > 0) {
@@ -713,12 +869,12 @@ app.post('/api/party/reward', requireAuth, (req, res) => {
         const names  = LOOT_NAMES[slot]?.[tier] || [`${tier} ${slot}`];
         const name   = names[Math.floor(Math.random() * names.length)];
         const icon   = slot === 'offhand' ? _offhandIcon(name) : (LOOT_SLOT_ICON[slot] || '🎒');
-        const rarity = LOOT_TIER_RARITY[tier] || 'normal';
+        const rarity = rollLootRarity(tier);
         let { affixes, bonuses } = generateItemAffixes(slot, rarity);
-        if (slot !== 'mainhand') ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity));
+        const level_req  = rollLootLevelReq(mon.level || 1);
+        if (slot !== 'mainhand') ({ affixes, bonuses } = guaranteeArmorDef(affixes, bonuses, rarity, level_req));
         if (slot === 'mainhand')  ({ affixes, bonuses } = guaranteeWeaponAtk(affixes, bonuses, rarity, mon.level || 1));
         const b          = bonuses;
-        const level_req  = Math.min(RARITY_LEVEL_REQ[rarity] ?? 1, mon.level || 1);
         const block_rate = slot === 'offhand' && _isShield(name) ? _rollBlockRate(rarity, lootRandInt) : 0;
         const special    = rollSpecialAffix(slot, rarity, level_req, lootRandInt);
         if (special) affixes = [...affixes, special];
@@ -806,11 +962,12 @@ app.get('/api/shop', requireAuth, (req, res) => {
   try {
     const username = req.user.username;
     const now = Date.now();
+    const user   = db.getUserByUsername.get(username);
+    const plevel = user?.level || 1;
     const cached = shopCache.get(username);
-    if (!cached || now - cached.generatedAt > SHOP_TTL) {
-      const user = db.getUserByUsername.get(username);
-      const items = generateShopForPlayer(user?.level || 1);
-      shopCache.set(username, { items, generatedAt: now });
+    if (!cached || now - cached.generatedAt > SHOP_TTL || cached.level !== plevel) {
+      const items = generateShopForPlayer(plevel);
+      shopCache.set(username, { items, generatedAt: now, level: plevel });
     }
     const entry = shopCache.get(username);
     res.json({ items: entry.items, expiresAt: entry.generatedAt + SHOP_TTL });
@@ -936,7 +1093,7 @@ app.post('/api/admin/reset-progression', requireAuth, requireAdmin, (_req, res) 
     xp=0, level=1,
     skill_points=0,
     attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0,
-    forest_progress=0
+    forest_progress=0, desert_progress=0, rift_progress=0
     WHERE role != 'admin'`);
   run(`DELETE FROM player_skills`);
   res.json({ ok: true, message: 'All progression reset to zero.' });
@@ -950,7 +1107,7 @@ app.post('/api/admin/users/:username/reset-progression', requireAuth, requireAdm
     xp=0, level=1,
     skill_points=0,
     attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0,
-    forest_progress=0
+    forest_progress=0, desert_progress=0, rift_progress=0
     WHERE username=?`, [username]);
   run(`DELETE FROM player_skills WHERE username=?`, [username]);
   res.json({ ok: true });
@@ -1035,7 +1192,7 @@ app.post('/api/admin/new-season', requireAuth, requireAdmin, (req, res) => {
   // 5. Reset all player progression
   run(`UPDATE users SET xp=0, level=1, skill_points=0,
     attr_points=0, attr_str=0, attr_dex=0, attr_int=0, attr_spirit=0, gold=100,
-    forest_progress=0
+    forest_progress=0, desert_progress=0, rift_progress=0
     WHERE role != 'admin'`);
   run('DELETE FROM player_skills');
   run('DELETE FROM player_quests');
@@ -1350,7 +1507,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('pvp:action', ({ sessionId, skillName, dmg, healAmt, mpCost, targetSelf }) => {
+  socket.on('pvp:action', ({ sessionId, skillName, dmg, healAmt, mpCost, targetSelf, buffType, buffReduction, buffHits }) => {
     const session = pvpSessions.get(sessionId);
     if (!session || session.turn !== username) return;
 
@@ -1365,12 +1522,30 @@ io.on('connection', (socket) => {
     self.curMp = Math.max(0, self.curMp - actualMp);
 
     let log;
-    if (targetSelf) {
+    if (buffType) {
+      // Buff skill — store stance on self, no HP change
+      const reduction = Math.max(0, Math.min(1, buffReduction || 0));
+      const hits      = Math.max(1, Math.min(10, Math.floor(buffHits || 2)));
+      self.guard = { reduction, hitsRemaining: hits };
+      const pct  = Math.round(reduction * 100);
+      log = reduction >= 1
+        ? `${username} used ${skillName} → Invincible for ${hits} hit${hits > 1 ? 's' : ''}!`
+        : `${username} used ${skillName} → ${pct}% damage reduction for ${hits} hit${hits > 1 ? 's' : ''}.`;
+    } else if (targetSelf) {
       self.curHp = Math.min(self.maxHp, self.curHp + actualHeal);
       log = `${username} used ${skillName} → healed ${actualHeal} HP.`;
     } else {
-      opp.curHp = Math.max(0, opp.curHp - actualDmg);
-      log = `${username} used ${skillName} → ${actualDmg} damage to ${opp.username}.`;
+      // Apply attacker's damage, reduced by defender's active guard
+      let finalDmg = actualDmg;
+      if (opp.guard) {
+        finalDmg = opp.guard.reduction >= 1 ? 0 : Math.max(1, Math.floor(actualDmg * (1 - opp.guard.reduction)));
+        opp.guard.hitsRemaining--;
+        if (opp.guard.hitsRemaining <= 0) opp.guard = null;
+      }
+      opp.curHp = Math.max(0, opp.curHp - finalDmg);
+      const guardNote = opp.guard !== undefined && actualDmg !== finalDmg
+        ? ` (reduced from ${actualDmg} by guard)` : '';
+      log = `${username} used ${skillName} → ${finalDmg} damage to ${opp.username}${guardNote}.`;
     }
 
     if (opp.curHp <= 0) {
@@ -1379,8 +1554,8 @@ io.on('connection', (socket) => {
       session.turn = opp.username;
       const base = {
         sessionId, turnUsername: session.turn, log,
-        p1: { username: session.p1.username, curHp: session.p1.curHp, maxHp: session.p1.maxHp, curMp: session.p1.curMp, maxMp: session.p1.maxMp },
-        p2: { username: session.p2.username, curHp: session.p2.curHp, maxHp: session.p2.maxHp, curMp: session.p2.curMp, maxMp: session.p2.maxMp },
+        p1: { username: session.p1.username, curHp: session.p1.curHp, maxHp: session.p1.maxHp, curMp: session.p1.curMp, maxMp: session.p1.maxMp, guard: session.p1.guard || null },
+        p2: { username: session.p2.username, curHp: session.p2.curHp, maxHp: session.p2.maxHp, curMp: session.p2.curMp, maxMp: session.p2.maxMp, guard: session.p2.guard || null },
       };
       const s1 = onlineUsers.get(session.p1.username);
       const s2 = onlineUsers.get(session.p2.username);

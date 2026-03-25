@@ -797,4 +797,269 @@ const MONSTER_SVGS = {
     <ellipse cx="70" cy="90" rx="58" ry="55" fill="none" stroke="#ffaa00" stroke-width="1.5" opacity=".15"/>
     <ellipse cx="70" cy="90" rx="65" ry="62" fill="none" stroke="#ff8800" stroke-width="1"   opacity=".1"/>
   </svg>`,
+
+  void_wisp: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+    <!-- Outer glow -->
+    <ellipse cx="40" cy="40" rx="34" ry="34" fill="none" stroke="#7000cc" stroke-width="4" opacity=".18"/>
+    <ellipse cx="40" cy="40" rx="26" ry="26" fill="none" stroke="#9020ff" stroke-width="3" opacity=".28"/>
+    <!-- Core void body -->
+    <circle cx="40" cy="40" r="18" fill="#0a0018"/>
+    <circle cx="40" cy="40" r="18" fill="url(#wg)" opacity=".9"/>
+    <defs><radialGradient id="wg" cx="40%" cy="35%" r="60%" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#8020ff" stop-opacity=".9"/><stop offset="60%" stop-color="#3000aa" stop-opacity=".7"/><stop offset="100%" stop-color="#0a0018" stop-opacity=".95"/></radialGradient></defs>
+    <!-- Eyes -->
+    <ellipse cx="33" cy="38" rx="4" ry="5" fill="#fff" opacity=".9"/>
+    <ellipse cx="47" cy="38" rx="4" ry="5" fill="#fff" opacity=".9"/>
+    <circle cx="34" cy="39" r="2.5" fill="#cc00ff"/>
+    <circle cx="48" cy="39" r="2.5" fill="#cc00ff"/>
+    <circle cx="35" cy="38" r="1" fill="#000"/>
+    <circle cx="49" cy="38" r="1" fill="#000"/>
+    <!-- Trailing energy wisps -->
+    <path d="M22,30 Q10,20 14,10" stroke="#6000cc" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/>
+    <path d="M58,30 Q70,20 66,10" stroke="#6000cc" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/>
+    <path d="M40,22 Q36,10 40,4" stroke="#8020ff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".5"/>
+    <circle cx="14" cy="10" r="3" fill="#9040ff" opacity=".6"/>
+    <circle cx="66" cy="10" r="3" fill="#9040ff" opacity=".6"/>
+    <circle cx="40" cy="4" r="2" fill="#b060ff" opacity=".5"/>
+  </svg>`,
+
+  rift_stalker: `<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Shadow cloak -->
+    <ellipse cx="40" cy="88" rx="28" ry="8" fill="#1a0030" opacity=".5"/>
+    <!-- Body -->
+    <path d="M20,95 L14,55 Q14,30 40,28 Q66,30 66,55 L60,95 Z" fill="#120020"/>
+    <path d="M22,90 L16,55 Q17,34 40,32 Q63,34 64,55 L58,90 Z" fill="#2a0050"/>
+    <!-- Cloak shimmer -->
+    <path d="M18,70 Q14,60 16,50" stroke="#6000cc" stroke-width="1.5" fill="none" opacity=".5"/>
+    <path d="M62,70 Q66,60 64,50" stroke="#6000cc" stroke-width="1.5" fill="none" opacity=".5"/>
+    <!-- Head -->
+    <ellipse cx="40" cy="22" rx="16" ry="18" fill="#1a0030"/>
+    <ellipse cx="40" cy="22" rx="14" ry="16" fill="#250040"/>
+    <!-- Glowing eye slits -->
+    <rect x="27" y="19" width="10" height="3" rx="1.5" fill="#cc00ff"/>
+    <rect x="43" y="19" width="10" height="3" rx="1.5" fill="#cc00ff"/>
+    <rect x="28" y="19.5" width="8" height="2" rx="1" fill="#ff80ff" opacity=".8"/>
+    <rect x="44" y="19.5" width="8" height="2" rx="1" fill="#ff80ff" opacity=".8"/>
+    <!-- Void claws -->
+    <path d="M14,75 L4,68 M14,80 L2,78 M14,85 L6,88" stroke="#8020cc" stroke-width="2" stroke-linecap="round"/>
+    <path d="M66,75 L76,68 M66,80 L78,78 M66,85 L74,88" stroke="#8020cc" stroke-width="2" stroke-linecap="round"/>
+    <!-- Phase rift glow -->
+    <ellipse cx="40" cy="55" rx="12" ry="8" fill="none" stroke="#6010aa" stroke-width="1" opacity=".4"/>
+  </svg>`,
+
+  thought_devourer: `<svg viewBox="0 0 100 90" xmlns="http://www.w3.org/2000/svg">
+    <!-- Tentacle base -->
+    <ellipse cx="50" cy="78" rx="30" ry="10" fill="#0e001c" opacity=".6"/>
+    <!-- Main body - brain-like mass -->
+    <ellipse cx="50" cy="45" rx="36" ry="30" fill="#1a0028"/>
+    <ellipse cx="50" cy="43" rx="32" ry="27" fill="#2a0042"/>
+    <!-- Brain folds -->
+    <path d="M22,42 Q26,28 34,30 Q38,32 36,42" fill="none" stroke="#4a1080" stroke-width="2.5" opacity=".8"/>
+    <path d="M38,36 Q42,24 50,26 Q56,28 56,36" fill="none" stroke="#4a1080" stroke-width="2.5" opacity=".8"/>
+    <path d="M56,36 Q62,26 68,30 Q72,34 68,42" fill="none" stroke="#4a1080" stroke-width="2.5" opacity=".8"/>
+    <!-- Mind-shard eyes (3 of them) -->
+    <ellipse cx="36" cy="46" rx="5" ry="6" fill="#000"/>
+    <ellipse cx="50" cy="42" rx="6" ry="7" fill="#000"/>
+    <ellipse cx="64" cy="46" rx="5" ry="6" fill="#000"/>
+    <ellipse cx="36" cy="46" rx="3" ry="4" fill="#9900cc"/>
+    <ellipse cx="50" cy="42" rx="4" ry="5" fill="#bb00ee"/>
+    <ellipse cx="64" cy="46" rx="3" ry="4" fill="#9900cc"/>
+    <!-- Tentacles -->
+    <path d="M22,55 Q8,65 6,78" stroke="#3a006a" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M30,62 Q20,72 18,84" stroke="#3a006a" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M78,55 Q92,65 94,78" stroke="#3a006a" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M70,62 Q80,72 82,84" stroke="#3a006a" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <!-- Psy aura -->
+    <ellipse cx="50" cy="45" rx="40" ry="34" fill="none" stroke="#6600aa" stroke-width="1.5" opacity=".25"/>
+  </svg>`,
+
+  voidborn_herald: `<svg viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg">
+    <!-- Shadow base -->
+    <ellipse cx="40" cy="102" rx="22" ry="6" fill="#0a0010" opacity=".5"/>
+    <!-- Robed body -->
+    <path d="M18,105 L12,65 L16,40 L40,36 L64,40 L68,65 L62,105 Z" fill="#0e0020"/>
+    <path d="M20,102 L15,66 L18,43 L40,40 L62,43 L65,66 L60,102 Z" fill="#1c0038"/>
+    <!-- Void sigil chest -->
+    <circle cx="40" cy="68" r="8" fill="none" stroke="#7020cc" stroke-width="1.5" opacity=".6"/>
+    <path d="M40,60 L42,68 L40,76 L38,68 Z" fill="#8030dd" opacity=".5"/>
+    <path d="M32,68 L40,66 L48,68 L40,70 Z" fill="#8030dd" opacity=".5"/>
+    <!-- Head with hood -->
+    <ellipse cx="40" cy="28" rx="16" ry="18" fill="#1a0030"/>
+    <path d="M24,20 Q22,8 40,4 Q58,8 56,20" fill="#0e0020"/>
+    <!-- Hollow glowing face -->
+    <ellipse cx="33" cy="26" rx="4.5" ry="5" fill="#5500aa"/>
+    <ellipse cx="47" cy="26" rx="4.5" ry="5" fill="#5500aa"/>
+    <ellipse cx="33" cy="26" rx="2.5" ry="3" fill="#cc44ff"/>
+    <ellipse cx="47" cy="26" rx="2.5" ry="3" fill="#cc44ff"/>
+    <!-- Herald staff -->
+    <line x1="68" y1="105" x2="74" y2="28" stroke="#5000aa" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="74" cy="25" r="6" fill="#1a004a"/>
+    <circle cx="74" cy="25" r="4" fill="#8800dd"/>
+    <circle cx="74" cy="25" r="2" fill="#cc66ff"/>
+  </svg>`,
+
+  star_eater: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Dark void aura -->
+    <circle cx="50" cy="50" r="46" fill="none" stroke="#1a0030" stroke-width="6" opacity=".5"/>
+    <!-- Serpentine void body -->
+    <path d="M50,14 Q72,14 76,30 Q80,46 68,54 Q80,62 76,78 Q72,92 50,88 Q28,92 24,78 Q20,62 32,54 Q20,46 24,30 Q28,14 50,14 Z" fill="#0c0018"/>
+    <path d="M50,18 Q70,18 73,32 Q76,46 65,53 Q76,60 73,74 Q70,86 50,84 Q30,86 27,74 Q24,60 35,53 Q24,46 27,32 Q30,18 50,18 Z" fill="#1a0030"/>
+    <!-- Star-eating maw -->
+    <ellipse cx="50" cy="52" rx="14" ry="12" fill="#000"/>
+    <ellipse cx="50" cy="52" rx="10" ry="8" fill="#0a0018"/>
+    <!-- Teeth of void -->
+    <path d="M40,44 L42,52 L36,48 L40,56" fill="none" stroke="#4400aa" stroke-width="1.5"/>
+    <path d="M60,44 L58,52 L64,48 L60,56" fill="none" stroke="#4400aa" stroke-width="1.5"/>
+    <!-- Star-fragment eyes -->
+    <circle cx="36" cy="38" r="5" fill="#ffcc00" opacity=".9"/>
+    <circle cx="64" cy="38" r="5" fill="#ffcc00" opacity=".9"/>
+    <circle cx="36" cy="38" r="3" fill="#ff8800"/>
+    <circle cx="64" cy="38" r="3" fill="#ff8800"/>
+    <circle cx="36" cy="38" r="1.5" fill="#000"/>
+    <circle cx="64" cy="38" r="1.5" fill="#000"/>
+    <!-- Consumed star fragments -->
+    <circle cx="22" cy="50" r="2" fill="#ffcc00" opacity=".4"/>
+    <circle cx="78" cy="50" r="2" fill="#ffcc00" opacity=".4"/>
+    <circle cx="50" cy="20" r="1.5" fill="#ffcc00" opacity=".3"/>
+    <circle cx="50" cy="82" r="1.5" fill="#ffcc00" opacity=".3"/>
+  </svg>`,
+
+  oblivion_wraith: `<svg viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg">
+    <!-- Wraith trail -->
+    <path d="M30,108 Q28,95 32,82" stroke="#3a0070" stroke-width="8" fill="none" stroke-linecap="round" opacity=".4"/>
+    <path d="M50,108 Q52,95 48,82" stroke="#3a0070" stroke-width="8" fill="none" stroke-linecap="round" opacity=".4"/>
+    <path d="M40,108 Q40,96 40,84" stroke="#4a0090" stroke-width="10" fill="none" stroke-linecap="round" opacity=".5"/>
+    <!-- Flowing void body -->
+    <path d="M14,82 Q10,55 24,38 Q32,28 40,26 Q48,28 56,38 Q70,55 66,82 Q58,92 40,94 Q22,92 14,82 Z" fill="#140024"/>
+    <path d="M18,78 Q15,55 26,41 Q33,32 40,30 Q47,32 54,41 Q65,55 62,78 Q55,88 40,90 Q25,88 18,78 Z" fill="#220040"/>
+    <!-- Spectral face: no visible features except eyes -->
+    <ellipse cx="40" cy="52" rx="20" ry="22" fill="#1a0030"/>
+    <!-- Eyes: pure white voids -->
+    <ellipse cx="32" cy="48" rx="5" ry="6" fill="#fff" opacity=".95"/>
+    <ellipse cx="48" cy="48" rx="5" ry="6" fill="#fff" opacity=".95"/>
+    <ellipse cx="32" cy="48" rx="3" ry="4" fill="#8800ff"/>
+    <ellipse cx="48" cy="48" rx="3" ry="4" fill="#8800ff"/>
+    <!-- Howling mouth -->
+    <ellipse cx="40" cy="58" rx="6" ry="8" fill="#000"/>
+    <ellipse cx="40" cy="60" rx="4" ry="5" fill="#0a0018"/>
+    <!-- Wisp fragments -->
+    <circle cx="16" cy="40" r="3" fill="#6600cc" opacity=".5"/>
+    <circle cx="64" cy="40" r="3" fill="#6600cc" opacity=".5"/>
+    <circle cx="12" cy="62" r="2" fill="#4400aa" opacity=".4"/>
+    <circle cx="68" cy="62" r="2" fill="#4400aa" opacity=".4"/>
+  </svg>`,
+
+  null_colossus: `<svg viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg">
+    <!-- Massive shadow base -->
+    <ellipse cx="60" cy="122" rx="48" ry="8" fill="#0a0010" opacity=".6"/>
+    <!-- Golem body — void stone -->
+    <rect x="24" y="64" width="72" height="56" rx="6" fill="#0c0018"/>
+    <rect x="28" y="68" width="64" height="50" rx="4" fill="#180028"/>
+    <!-- Chest crack glowing -->
+    <path d="M60,76 L56,92 L60,108 L64,92 Z" fill="none" stroke="#5500cc" stroke-width="2.5" opacity=".7"/>
+    <path d="M44,84 L76,84" fill="none" stroke="#3300aa" stroke-width="1.5" opacity=".5"/>
+    <!-- Head -->
+    <rect x="34" y="34" width="52" height="34" rx="5" fill="#130022"/>
+    <rect x="38" y="38" width="44" height="28" rx="3" fill="#1e0034"/>
+    <!-- Eyes: massive void panels -->
+    <rect x="40" y="43" width="16" height="10" rx="2" fill="#6600cc"/>
+    <rect x="64" y="43" width="16" height="10" rx="2" fill="#6600cc"/>
+    <rect x="42" y="45" width="12" height="6" rx="1" fill="#bb44ff"/>
+    <rect x="66" y="45" width="12" height="6" rx="1" fill="#bb44ff"/>
+    <!-- Void mouth slit -->
+    <rect x="46" y="57" width="28" height="4" rx="2" fill="#3300aa"/>
+    <!-- Arms — massive blocks -->
+    <rect x="2" y="70" width="24" height="44" rx="4" fill="#0e0020"/>
+    <rect x="4" y="72" width="20" height="40" rx="3" fill="#1a0030"/>
+    <rect x="94" y="70" width="24" height="44" rx="4" fill="#0e0020"/>
+    <rect x="96" y="72" width="20" height="40" rx="3" fill="#1a0030"/>
+    <!-- Fist void aura -->
+    <circle cx="14" cy="118" r="8" fill="none" stroke="#6600cc" stroke-width="2" opacity=".4"/>
+    <circle cx="106" cy="118" r="8" fill="none" stroke="#6600cc" stroke-width="2" opacity=".4"/>
+    <!-- Null rune on chest -->
+    <circle cx="60" cy="90" r="10" fill="none" stroke="#4400aa" stroke-width="1.5" opacity=".5"/>
+    <text x="60" y="94" font-size="10" fill="#6600cc" text-anchor="middle" opacity=".6">∅</text>
+  </svg>`,
+
+  rift_architect: `<svg viewBox="0 0 90 110" xmlns="http://www.w3.org/2000/svg">
+    <!-- Reality fractures behind figure -->
+    <line x1="0" y1="30" x2="20" y2="55" stroke="#4400aa" stroke-width="1.5" opacity=".4"/>
+    <line x1="90" y1="30" x2="70" y2="55" stroke="#4400aa" stroke-width="1.5" opacity=".4"/>
+    <line x1="0" y1="80" x2="18" y2="70" stroke="#3300aa" stroke-width="1" opacity=".3"/>
+    <line x1="90" y1="80" x2="72" y2="70" stroke="#3300aa" stroke-width="1" opacity=".3"/>
+    <!-- Body: geometric void form -->
+    <polygon points="45,8 68,28 68,72 45,86 22,72 22,28" fill="#0e001e"/>
+    <polygon points="45,12 65,30 65,70 45,82 25,70 25,30" fill="#1c0034"/>
+    <!-- Geometric eye: single center -->
+    <polygon points="45,42 52,49 45,56 38,49" fill="#000"/>
+    <polygon points="45,44 50,49 45,54 40,49" fill="#7700cc"/>
+    <polygon points="45,46 48,49 45,52 42,49" fill="#cc44ff"/>
+    <!-- Blueprint lines on body -->
+    <line x1="30" y1="35" x2="60" y2="35" stroke="#4400aa" stroke-width="1" opacity=".5"/>
+    <line x1="30" y1="65" x2="60" y2="65" stroke="#4400aa" stroke-width="1" opacity=".5"/>
+    <line x1="30" y1="35" x2="30" y2="65" stroke="#4400aa" stroke-width="1" opacity=".5"/>
+    <line x1="60" y1="35" x2="60" y2="65" stroke="#4400aa" stroke-width="1" opacity=".5"/>
+    <!-- Arms: extending fractured limbs -->
+    <line x1="22" y1="45" x2="4" y2="40" stroke="#2a0050" stroke-width="4" stroke-linecap="round"/>
+    <line x1="4" y1="40" x2="0" y2="55" stroke="#2a0050" stroke-width="3" stroke-linecap="round"/>
+    <line x1="68" y1="45" x2="86" y2="40" stroke="#2a0050" stroke-width="4" stroke-linecap="round"/>
+    <line x1="86" y1="40" x2="90" y2="55" stroke="#2a0050" stroke-width="3" stroke-linecap="round"/>
+    <!-- Legs -->
+    <line x1="35" y1="82" x2="30" y2="105" stroke="#160028" stroke-width="8" stroke-linecap="round"/>
+    <line x1="55" y1="82" x2="60" y2="105" stroke="#160028" stroke-width="8" stroke-linecap="round"/>
+  </svg>`,
+
+  abyssal_god: `<svg viewBox="0 0 160 180" xmlns="http://www.w3.org/2000/svg">
+    <!-- Outer void rings -->
+    <ellipse cx="80" cy="90" rx="78" ry="78" fill="none" stroke="#1a0030" stroke-width="3" opacity=".3"/>
+    <ellipse cx="80" cy="90" rx="66" ry="66" fill="none" stroke="#2a0050" stroke-width="2" opacity=".3"/>
+    <!-- Cosmic tear behind body -->
+    <ellipse cx="80" cy="90" rx="45" ry="55" fill="#04000e" opacity=".9"/>
+    <path d="M44,50 Q80,20 116,50 L116,130 Q80,160 44,130 Z" fill="#07001a" opacity=".8"/>
+    <!-- Massive void body -->
+    <ellipse cx="80" cy="90" rx="40" ry="50" fill="#0c001e"/>
+    <ellipse cx="80" cy="88" rx="36" ry="46" fill="#140030"/>
+    <!-- Cosmic texture: void cracks -->
+    <path d="M60,65 L70,80 L60,95" fill="none" stroke="#3300aa" stroke-width="2" opacity=".6"/>
+    <path d="M100,65 L90,80 L100,95" fill="none" stroke="#3300aa" stroke-width="2" opacity=".6"/>
+    <path d="M70,108 Q80,118 90,108" fill="none" stroke="#5500cc" stroke-width="2" opacity=".5"/>
+    <!-- The great eye — center of the god -->
+    <ellipse cx="80" cy="80" rx="22" ry="18" fill="#000"/>
+    <ellipse cx="80" cy="80" rx="16" ry="12" fill="#08001a"/>
+    <ellipse cx="80" cy="80" rx="10" ry="8" fill="#4400cc"/>
+    <ellipse cx="80" cy="80" rx="6" ry="5" fill="#9900ff"/>
+    <ellipse cx="80" cy="80" rx="3" ry="2.5" fill="#dd66ff"/>
+    <circle  cx="80" cy="80" r="1.5" fill="#fff"/>
+    <!-- Eye lids -->
+    <path d="M58,80 Q80,64 102,80" fill="none" stroke="#1a0040" stroke-width="3"/>
+    <path d="M58,80 Q80,96 102,80" fill="none" stroke="#1a0040" stroke-width="3"/>
+    <!-- Smaller orbiting eyes -->
+    <circle cx="46" cy="62" r="6" fill="#000"/>
+    <circle cx="46" cy="62" r="4" fill="#6600aa"/>
+    <circle cx="46" cy="62" r="2" fill="#cc44ff"/>
+    <circle cx="114" cy="62" r="6" fill="#000"/>
+    <circle cx="114" cy="62" r="4" fill="#6600aa"/>
+    <circle cx="114" cy="62" r="2" fill="#cc44ff"/>
+    <circle cx="46" cy="112" r="5" fill="#000"/>
+    <circle cx="46" cy="112" r="3" fill="#4400aa"/>
+    <circle cx="114" cy="112" r="5" fill="#000"/>
+    <circle cx="114" cy="112" r="3" fill="#4400aa"/>
+    <!-- Tentacle appendages -->
+    <path d="M44,75 Q20,65 8,75 Q0,82 8,92" stroke="#1e0038" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M44,100 Q22,110 12,125" stroke="#1e0038" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M116,75 Q140,65 152,75 Q160,82 152,92" stroke="#1e0038" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M116,100 Q138,110 148,125" stroke="#1e0038" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M64,130 Q60,150 52,165" stroke="#1e0038" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M96,130 Q100,150 108,165" stroke="#1e0038" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M80,135 L80,168" stroke="#220040" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <!-- Void pulse aura -->
+    <ellipse cx="80" cy="90" rx="55" ry="65" fill="none" stroke="#5500cc" stroke-width="1.5" opacity=".2"/>
+    <ellipse cx="80" cy="90" rx="50" ry="60" fill="none" stroke="#7700ee" stroke-width="1" opacity=".15"/>
+    <!-- Stars being consumed -->
+    <circle cx="28" cy="30" r="2" fill="#ffcc88" opacity=".5"/>
+    <circle cx="132" cy="28" r="2" fill="#ffcc88" opacity=".5"/>
+    <circle cx="18" cy="100" r="1.5" fill="#ffcc88" opacity=".4"/>
+    <circle cx="142" cy="100" r="1.5" fill="#ffcc88" opacity=".4"/>
+    <circle cx="55" cy="16" r="1.5" fill="#ffcc88" opacity=".3"/>
+    <circle cx="108" cy="16" r="1.5" fill="#ffcc88" opacity=".3"/>
+  </svg>`,
 };

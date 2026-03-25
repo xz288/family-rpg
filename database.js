@@ -275,6 +275,62 @@ async function initDb() {
     _db._save();
   }
 
+  // ── V14 Migration: rift_progress + crafting_recipes ──────────────────────────
+  const userColsV14 = (_db.exec('PRAGMA table_info(users)')[0]?.values || []).map(r => r[1]);
+  if (!userColsV14.includes('rift_progress')) {
+    _db.exec('ALTER TABLE users ADD COLUMN rift_progress INTEGER NOT NULL DEFAULT 0');
+    _db._save();
+  }
+  const craftingTableExists = (_db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='crafting_recipes'")[0]?.values || []).length > 0;
+  if (!craftingTableExists) {
+    _db.exec(`CREATE TABLE crafting_recipes (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      slot        TEXT    NOT NULL,
+      out_rarity  TEXT    NOT NULL,
+      level_req   INTEGER NOT NULL DEFAULT 1,
+      gold_cost   INTEGER NOT NULL DEFAULT 500,
+      mat1_rarity TEXT    NOT NULL,
+      mat1_slot   TEXT,
+      mat2_rarity TEXT,
+      mat2_slot   TEXT
+    )`);
+    // Seed initial recipes
+    const recipes = [
+      ['Forged Blade',      'mainhand', 'rare',      10,  500,  'magic',     'mainhand', null,        null      ],
+      ['Void Steel Blade',  'mainhand', 'legendary',  25, 2000,  'rare',      'mainhand', 'rare',      'mainhand'],
+      ['Abyss Edge',        'mainhand', 'godly',      40, 8000,  'legendary', 'mainhand', 'rare',      'offhand' ],
+      ['Reinforced Mail',   'chest',    'rare',        8,  400,  'magic',     'chest',    null,        null      ],
+      ['Void Plate',        'chest',    'legendary',  22, 1800,  'rare',      'chest',    'rare',      'gloves'  ],
+      ['Chaos Cowl',        'head',     'legendary',  20, 1600,  'rare',      'head',     'magic',     'chest'   ],
+      ['Phase Boots',       'boots',    'legendary',  18, 1400,  'rare',      'boots',    'rare',      'gloves'  ],
+      ['Null Gauntlets',    'gloves',   'legendary',  24, 2000,  'rare',      'gloves',   'rare',      'boots'   ],
+      ['Abyssal Crown',     'head',     'godly',      45, 10000, 'legendary', 'head',     'legendary', 'chest'   ],
+      ['Reality Shield',    'offhand',  'godly',      42, 9000,  'legendary', 'offhand',  'legendary', 'chest'   ],
+    ];
+    for (const [name, slot, out_rarity, level_req, gold_cost, mat1_rarity, mat1_slot, mat2_rarity, mat2_slot] of recipes) {
+      _db.exec(
+        'INSERT INTO crafting_recipes (name,slot,out_rarity,level_req,gold_cost,mat1_rarity,mat1_slot,mat2_rarity,mat2_slot) VALUES (?,?,?,?,?,?,?,?,?)',
+        [name, slot, out_rarity, level_req, gold_cost, mat1_rarity, mat1_slot, mat2_rarity, mat2_slot]
+      );
+    }
+    _db._save();
+  }
+
+  // ── V15 Migration: fix duplicate-material recipes ────────────────────────────
+  // Void Plate and Null Gauntlets previously required two of the same item.
+  // Update them to use complementary materials.
+  const voidPlate = (_db.exec("SELECT mat2_slot FROM crafting_recipes WHERE name='Void Plate'")[0]?.values || [])[0];
+  if (voidPlate && voidPlate[0] === 'chest') {
+    _db.exec("UPDATE crafting_recipes SET mat2_slot='gloves' WHERE name='Void Plate'");
+    _db._save();
+  }
+  const nullGauntlets = (_db.exec("SELECT mat2_slot FROM crafting_recipes WHERE name='Null Gauntlets'")[0]?.values || [])[0];
+  if (nullGauntlets && nullGauntlets[0] === 'gloves') {
+    _db.exec("UPDATE crafting_recipes SET mat2_slot='boots' WHERE name='Null Gauntlets'");
+    _db._save();
+  }
+
   return _db;
 }
 

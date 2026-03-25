@@ -6,7 +6,7 @@ const CLASS_SKILLS = {
   ],
   Paladin: [
     { id:'strike',      name:'Strike',      mpCost:0,  dmgMult:1.0, type:'melee', target:'single', desc:'A basic melee strike.' },
-    { id:'holy_strike', name:'Holy Strike', mpCost:10, dmgMult:1.6, type:'holy',  target:'all',    desc:'A holy burst that damages all enemies.' },
+    { id:'holy_strike', name:'Holy Strike', mpCost:10, dmgMult:1.2, type:'holy',  target:'all',    desc:'A holy burst that damages all enemies.' },
   ],
   Rogue: [
     { id:'stab',     name:'Quick Stab', mpCost:0,  dmgMult:1.0, type:'melee', target:'single', desc:'A swift stab.' },
@@ -57,6 +57,17 @@ const MONSTER_DEFS = {
   sandglass_golem:  { name:'Sandglass Golem',   tier:'A', level:30, hp:480, atk:88, def:50, skills:['m_sandstorm','m_crush'] },
   pharaoh_wrath:    { name:"The Pharaoh's Wrath", tier:'S', level:35, hp:3000, atk:155, def:70, skills:['m_pharaoh_curse','m_solar_beam','m_ancient_wrath'], isBoss:true },
   cursed_servant:   { name:'Cursed Servant',    tier:'A', level:33, hp:400, atk:98, def:42, skills:['m_servant_slash','m_sandblast'], isMinion:true },
+  // ── Abyssal Rift (Act 3) ─────────────────────────────────────────────────────
+  void_wisp:         { name:'Void Wisp',          tier:'C', level:36, hp:380,  atk:95,  def:48,  skills:['m_void_pulse','m_blink_strike'] },
+  rift_stalker:      { name:'Rift Stalker',        tier:'C', level:38, hp:420,  atk:108, def:52,  skills:['m_phase_claw','m_dimensional_rend'] },
+  thought_devourer:  { name:'Thought Devourer',    tier:'B', level:40, hp:580,  atk:118, def:60,  skills:['m_mind_shatter','m_psy_drain'] },
+  voidborn_herald:   { name:'Voidborn Herald',     tier:'B', level:42, hp:640,  atk:128, def:66,  skills:['m_null_word','m_herald_slam'] },
+  star_eater:        { name:'Star-Eater',          tier:'A', level:44, hp:720,  atk:145, def:72,  skills:['m_cosmic_bite','m_gravity_well'] },
+  oblivion_wraith:   { name:'Oblivion Wraith',     tier:'A', level:46, hp:800,  atk:158, def:78,  skills:['m_soul_rend','m_blink_strike'] },
+  null_colossus:     { name:'Null Colossus',       tier:'A', level:48, hp:980,  atk:170, def:88,  skills:['m_null_crash','m_gravity_well','m_herald_slam'] },
+  rift_architect:    { name:'Rift Architect',      tier:'S', level:49, hp:1200, atk:185, def:95,  skills:['m_reality_tear','m_void_nova'], isMinion:true },
+  abyssal_god:       { name:'The Abyssal God',     tier:'S', level:50, hp:6000, atk:220, def:110,
+                       skills:['m_abyss_gaze','m_void_collapse','m_cosmic_annihilation','m_reality_unravel'], isBoss:true },
 };
 
 // ── Monster skills ────────────────────────────────────────────────────────────
@@ -93,6 +104,25 @@ const MONSTER_SKILLS = {
   m_solar_beam:    { name:'Solar Beam',       dmgMult:2.5, type:'fire'   },
   m_ancient_wrath: { name:'Ancient Wrath',    dmgMult:3.0, type:'melee'  },
   m_servant_slash: { name:'Servant Slash',    dmgMult:1.4, type:'melee'  },
+  // ── Abyssal Rift skills ───────────────────────────────────────────────────────
+  m_void_pulse:          { name:'Void Pulse',           dmgMult:1.1, type:'magic'  },
+  m_blink_strike:        { name:'Blink Strike',          dmgMult:1.6, type:'melee'  },
+  m_phase_claw:          { name:'Phase Claw',            dmgMult:1.3, type:'melee'  },
+  m_dimensional_rend:    { name:'Dimensional Rend',      dmgMult:1.8, type:'magic'  },
+  m_mind_shatter:        { name:'Mind Shatter',          dmgMult:1.4, type:'magic'  },
+  m_psy_drain:           { name:'Psychic Drain',         dmgMult:1.2, type:'curse'  },
+  m_null_word:           { name:'Null Word',             dmgMult:1.5, type:'curse'  },
+  m_herald_slam:         { name:'Herald Slam',           dmgMult:1.9, type:'melee'  },
+  m_cosmic_bite:         { name:'Cosmic Bite',           dmgMult:1.6, type:'melee'  },
+  m_gravity_well:        { name:'Gravity Well',          dmgMult:1.3, type:'magic'  },
+  m_soul_rend:           { name:'Soul Rend',             dmgMult:2.0, type:'curse'  },
+  m_null_crash:          { name:'Null Crash',            dmgMult:2.2, type:'melee'  },
+  m_reality_tear:        { name:'Reality Tear',          dmgMult:2.4, type:'magic'  },
+  m_void_nova:           { name:'Void Nova',             dmgMult:1.6, type:'burst'  },
+  m_abyss_gaze:          { name:'Abyssal Gaze',          dmgMult:2.0, type:'curse'  },
+  m_void_collapse:       { name:'Void Collapse',         dmgMult:2.8, type:'magic'  },
+  m_cosmic_annihilation: { name:'Cosmic Annihilation',   dmgMult:3.5, type:'burst'  },
+  m_reality_unravel:     { name:'Reality Unravel',       dmgMult:4.0, type:'melee'  },
 };
 
 // ── Zone → monster pool (up to 3 will spawn) ─────────────────────────────────
@@ -108,6 +138,15 @@ const ZONE_MONSTER_POOL = {
   canyons:      ['canyon_serpent', 'dune_sorcerer'],
   mirror_oasis: ['mirage_stalker', 'sandglass_golem'],
   pharaoh_tomb: ['pharaoh_wrath'],
+  // Abyssal Rift (Act 3)
+  void_threshold:     ['void_wisp', 'rift_stalker'],
+  shattered_expanse:  ['rift_stalker', 'thought_devourer'],
+  mindflayer_hollows: ['thought_devourer', 'voidborn_herald'],
+  starless_sea:       ['star_eater', 'oblivion_wraith'],
+  null_citadel:       ['voidborn_herald', 'null_colossus'],
+  fracture_peaks:     ['null_colossus', 'oblivion_wraith'],
+  oblivion_gate:      ['oblivion_wraith', 'null_colossus'],
+  abyssal_sanctum:    ['abyssal_god'],
 };
 
 const TIER_COLORS = {
@@ -119,7 +158,7 @@ const TIER_COLORS = {
 };
 
 const ANIM_PROJECTILE = {
-  arrow:'🏹', pierce:'🏹', magic:'🔮', burst:'🔮', fire:'🔥', holy:'✨', curse:'💜',
+  arrow:'🏹', pierce:'🏹', magic:'🔮', burst:'🔮', fire:'🔥', holy:'✨', curse:'💜', buff:null,
 };
 
 // ── Loot tables ───────────────────────────────────────────────────────────────

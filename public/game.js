@@ -61,8 +61,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const desertProgressRes = await api('GET', '/api/me/desert-progress');
   _desertProgress = desertProgressRes?.desert_progress ?? 0;
 
+  // Load rift progress
+  const riftProgressRes = await api('GET', '/api/me/rift-progress');
+  _riftProgress = riftProgressRes?.rift_progress ?? 0;
+
   // Show/hide Eastern Gate based on forest completion
   updateEasternGate();
+  // Show/hide Rift Gate based on desert completion
+  updateRiftGate();
 
   await Promise.all([loadUsers(), loadPublicHistory(), loadEvents(), loadMyInvites(), loadQuestLog()]);
 
@@ -84,6 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function api(method, path, body) {
   const res = await fetch(path, {
     method,
+    signal: AbortSignal.timeout(15000),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
@@ -232,6 +239,11 @@ function sendMessage() {
     socket.emit('chat:private', { to: dmTarget.username, content });
   } else {
     socket.emit('chat:public', { content });
+    // Pitou summon — solo combat only, player's turn
+    if (content.trim().toLowerCase() === 'pitou, i need your help!' &&
+        combatState && !combatState.isParty && combatState.phase === 'player') {
+      invokePitou();
+    }
   }
 }
 
@@ -526,9 +538,9 @@ async function openCharPanel(tab) {
   const cpXp       = charCache?.xp ?? 0;
   const xpThisLv   = (cpLv - 1) ** 2 * 100;
   const xpNextLv   = cpLv ** 2 * 100;
-  const xpProgress = cpLv >= 30 ? 1 : (cpXp - xpThisLv) / (xpNextLv - xpThisLv);
+  const xpProgress = cpLv >= 50 ? 1 : (cpXp - xpThisLv) / (xpNextLv - xpThisLv);
   document.getElementById('cp-xp-bar-fill').style.width = `${Math.max(0, Math.min(100, xpProgress * 100))}%`;
-  document.getElementById('cp-xp-label').textContent = cpLv >= 30
+  document.getElementById('cp-xp-label').textContent = cpLv >= 50
     ? 'MAX LEVEL'
     : `${cpXp - xpThisLv} / ${xpNextLv - xpThisLv} XP`;
 
@@ -1105,18 +1117,18 @@ function renderSkillTree(data) {
       const isLocked  = pts === 0 && !reqsMet;
 
       let cls2 = 'st-node';
-      cls2 += node.type === 'active' ? ' skill-active' : ' skill-passive';
+      cls2 += node.type === 'active' ? ' skill-active' : node.type === 'buff' ? ' skill-buff' : node.type === 'curse' ? ' skill-curse' : ' skill-passive';
       if (isLocked)   cls2 += ' locked';
       if (pts > 0)    cls2 += ' has-points';
       if (pts >= node.maxPoints) cls2 += ' maxed';
       if (canAssign)  cls2 += ' can-assign';
 
-      const dotType = node.type === 'active' ? 'active-type' : 'passive-type';
+      const dotType = node.type === 'active' ? 'active-type' : node.type === 'buff' ? 'buff-type' : node.type === 'curse' ? 'curse-type' : 'passive-type';
       const dots = Array.from({ length: node.maxPoints }, (_, i) =>
         `<span class="st-dot${i < pts ? ` filled ${dotType}` : ''}"></span>`
       ).join('');
 
-      const typeLabel = node.type === 'active' ? '⚡ Active' : '🔷 Passive';
+      const typeLabel = node.type === 'active' ? '⚡ Active' : node.type === 'buff' ? '💛 Buff' : node.type === 'curse' ? '🟣 Curse' : '🔷 Passive';
 
       // Connector from previous node in same column
       if (idx > 0) {
@@ -1182,17 +1194,41 @@ function selectSkillNode(nodeId) {
     if (p.atk)    parts.push(`+${p.atk} ATK`);
     if (p.def)    parts.push(`+${p.def} DEF`);
     if (p.spirit) parts.push(`+${p.spirit} Spirit`);
-    if (p.maxHp)  parts.push(`+${p.maxHp} Max HP`);
-    if (p.maxMp)  parts.push(`+${p.maxMp} Max MP`);
-    if (p.defPct) parts.push(`-${p.defPct}% damage taken`);
+    if (p.maxHp)   parts.push(`+${p.maxHp} Max HP`);
+    if (p.maxMp)   parts.push(`+${p.maxMp} Max MP`);
+    if (p.defPct)       parts.push(`-${p.defPct}% damage taken`);
+    if (p.critPct)      parts.push(`+${p.critPct}% Crit Rate`);
+    if (p.hpPct)        parts.push(`+${p.hpPct}% Max HP`);
+    if (p.atkPct)        parts.push(`+${p.atkPct}% ATK`);
+    if (p.defStatPct)    parts.push(`+${p.defStatPct}% DEF`);
+    if (p.lifestealPct)  parts.push(`+${p.lifestealPct}% Lifesteal`);
+    if (p.dodgePct)      parts.push(`+${p.dodgePct}% Dodge Rate`);
+    if (p.blockRatePct)  parts.push(`+${p.blockRatePct}% Block Rate`);
+    if (p.hpPenaltyPct)  parts.push(`−${p.hpPenaltyPct}% Max HP`);
     benefitText = `Per point: ${parts.join(', ')}`;
   } else if (node.skill) {
     const s = node.skill;
     if (s.heal) {
       benefitText = `Current heal: Spirit × ${s.baseHealMult + pts * s.healPerPt}${pts < node.maxPoints ? ` → next: ×${s.baseHealMult + (pts + 1) * s.healPerPt}` : ' (max)'}`;
+    } else if (s.type === 'guard' || s.type === 'divine_shield') {
+      const redArr  = s.reductionByPt || [];
+      const hitsArr = s.hitsByPt || [];
+      const curPt   = Math.max(0, pts - 1);
+      const nxtPt   = pts;
+      const curRed  = redArr[curPt] != null ? `${Math.round(redArr[curPt] * 100)}%` : '—';
+      const curHits = s.type === 'guard' ? (hitsArr[curPt] ?? '—') : (s.hits ?? 2);
+      const nxtRed  = redArr[nxtPt] != null ? `${Math.round(redArr[nxtPt] * 100)}%` : null;
+      const nxtHits = s.type === 'guard' ? (hitsArr[nxtPt] ?? null) : (s.hits ?? 2);
+      const guardBase = pts > 0
+        ? `${curRed} reduction · ${curHits} hit${curHits > 1 ? 's' : ''}${pts < node.maxPoints && nxtRed ? ` → next: ${nxtRed} · ${nxtHits} hit${nxtHits > 1 ? 's' : ''}` : pts >= node.maxPoints ? ' (max)' : ''}`
+        : `Rank 1: ${Math.round((redArr[0] ?? 0.5) * 100)}% reduction · ${s.type === 'guard' ? (hitsArr[0] ?? 2) : (s.hits ?? 2)} hits`;
+      const activeParts = [];
+      if (s.blockPerPt) activeParts.push(`+${s.blockPerPt * (pts || 1)}% Block while active`);
+      if (s.dodgePerPt) activeParts.push(`+${s.dodgePerPt * (pts || 1)}% Dodge while active`);
+      benefitText = guardBase + (activeParts.length ? ` · ${activeParts.join(', ')}` : '');
     } else {
-      const cur = (s.baseDmg + Math.max(0, pts - 1) * s.dmgPerPt).toFixed(2);
-      const nxt = (s.baseDmg + pts * s.dmgPerPt).toFixed(2);
+      const cur = (s.baseDmg + Math.max(0, pts - 1) * (s.dmgPerPt || 0)).toFixed(2);
+      const nxt = (s.baseDmg + pts * (s.dmgPerPt || 0)).toFixed(2);
       benefitText = pts > 0
         ? `DMG ×${cur}${pts < node.maxPoints ? ` → next: ×${nxt}` : ' (max)'}`
         : `DMG ×${s.baseDmg.toFixed(2)} at rank 1`;
@@ -1211,7 +1247,7 @@ function selectSkillNode(nodeId) {
   if (!panel) return;
   panel.innerHTML = `
     <div class="st-detail-name">${node.icon} ${escHtml(node.name)}</div>
-    <div class="st-detail-meta">${node.type === 'active' ? '⚡ Active Skill' : '🔷 Passive Bonus'} · Rank ${pts}/${node.maxPoints}${node.type === 'active' && node.skill ? ` · ${node.skill.mpCost > 0 ? `${node.skill.mpCost} MP` : 'Free'}` : ''}${reqText ? ` · Requires: ${escHtml(reqText)}` : ''}</div>
+    <div class="st-detail-meta">${node.type === 'active' ? '⚡ Active Skill' : node.type === 'buff' ? '💛 Buff Skill' : node.type === 'curse' ? '🟣 Curse Skill' : '🔷 Passive Bonus'} · Rank ${pts}/${node.maxPoints}${(node.type === 'active' || node.type === 'buff' || node.type === 'curse') && node.skill ? ` · ${node.skill.mpCostPct ? `${node.skill.mpCostPct}% max MP` : node.skill.mpCost > 0 ? `${node.skill.mpCost} MP` : 'Free'}` : ''}${reqText ? ` · Requires: ${escHtml(reqText)}` : ''}</div>
     <div class="st-detail-desc">${escHtml(node.desc)}</div>
     ${benefitText ? `<div class="st-detail-pts">${escHtml(benefitText)}</div>` : ''}
     <button class="st-assign-btn" onclick="assignSkillPoint('${node.id}')"
@@ -1254,27 +1290,55 @@ function getEffectiveStats(data) {
     const pts = alloc[node.id] || 0;
     if (pts <= 0) return;
     const p = node.passive;
-    if (p.atk)    base.atk    += p.atk    * pts;
-    if (p.def)    base.def    += p.def    * pts;
-    if (p.spirit) base.spirit += p.spirit * pts;
-    if (p.maxHp)  { base.hp  += p.maxHp  * pts; base.max_hp = (base.max_hp || base.hp) + p.maxHp * pts; }
-    if (p.maxMp)  base.mp    += p.maxMp  * pts;
-    if (p.defPct) base.defPct = (base.defPct || 0) + p.defPct * pts;
+    if (p.atk)     base.atk     += p.atk     * pts;
+    if (p.def)     base.def     += p.def     * pts;
+    if (p.spirit)  base.spirit  += p.spirit  * pts;
+    if (p.maxHp)   { base.hp  += p.maxHp  * pts; base.max_hp = (base.max_hp || base.hp) + p.maxHp * pts; }
+    if (p.maxMp)   base.mp    += p.maxMp   * pts;
+    if (p.defPct)       base.defPct       = (base.defPct       || 0) + p.defPct       * pts;
+    if (p.critPct)      base.critPct      = (base.critPct      || 0) + p.critPct      * pts;
+    if (p.hpPct)        base.hpPct        = (base.hpPct        || 0) + p.hpPct        * pts;
+    if (p.atkPct)       base.atkPct       = (base.atkPct       || 0) + p.atkPct       * pts;
+    if (p.defStatPct)   base.defStatPct   = (base.defStatPct   || 0) + p.defStatPct   * pts;
+    if (p.lifestealPct) base.lifestealPct = (base.lifestealPct || 0) + p.lifestealPct * pts;
+    if (p.dodgePct)     base.dodgePct     = (base.dodgePct     || 0) + p.dodgePct     * pts;
+    if (p.hpPenaltyPct)    base.hpPenaltyPct    = (base.hpPenaltyPct    || 0) + p.hpPenaltyPct    * pts;
+    if (p.critDmgBonus)    base.critDmgBonus    = (base.critDmgBonus    || 0) + p.critDmgBonus    * pts;
+    if (p.onKillHealPct)   base.onKillHealPct   = (base.onKillHealPct   || 0) + p.onKillHealPct   * pts;
+    if (p.martyrTriggerPct)base.martyrTriggerPct= (base.martyrTriggerPct|| 0) + p.martyrTriggerPct* pts;
+    if (p.lastStand)       base.lastStand       = true;
   });
+  // Apply % HP bonus after all flat bonuses are accumulated
+  if (base.hpPct) {
+    const bonus = Math.floor(base.hp * base.hpPct / 100);
+    base.hp += bonus;
+  }
+  // Apply % ATK bonus after all flat bonuses are accumulated
+  if (base.atkPct) {
+    base.atk = Math.floor(base.atk * (1 + base.atkPct / 100));
+  }
+  // Apply % DEF bonus after all flat bonuses are accumulated
+  if (base.defStatPct) {
+    base.def = Math.floor(base.def * (1 + base.defStatPct / 100));
+  }
+  // Apply HP penalty (Shadow Mastery trade-off) after all other HP bonuses
+  if (base.hpPenaltyPct) {
+    base.hp = Math.max(1, Math.floor(base.hp * (1 - base.hpPenaltyPct / 100)));
+  }
 
   // ── Dodge / Crit from DEX ──────────────────────────────────────────────────
   const cls     = data?.class || 'Warrior';
   const isAgile = cls === 'Rogue' || cls === 'Ranger';
   const dexPts  = calcDexBonus(base.dex || 0);
   const dexBonus = isAgile ? dexPts * 1.5 : dexPts;
-  base.dodgeRate = Math.min(75, (isAgile ? 10 : 5) + dexBonus);
+  base.dodgeRate = Math.min(75, (isAgile ? 10 : 5) + dexBonus + (base.dodgePct || 0));
 
   // ── Special affixes from all equipped gear ─────────────────────────────────
   const equippedArr    = Array.isArray(data?.equipped) ? data.equipped : [];
   const equippedAffixes = equippedArr.flatMap(item => item.affixes || []);
   const critBonus  = equippedAffixes.filter(a => a.stat === 'crit_bonus').reduce((s, a) => s + a.value, 0);
   const dmgReducPct = equippedAffixes.filter(a => a.stat === 'dmg_reduction').reduce((s, a) => s + a.value, 0);
-  base.critRate     = Math.min(75, 5 + dexBonus + critBonus);
+  base.critRate     = Math.min(75, 5 + dexBonus + critBonus + (base.critPct || 0));
   base.dmgReduction = Math.min(50, dmgReducPct);
 
   // ── Block from equipped offhand ────────────────────────────────────────────
@@ -1293,11 +1357,11 @@ function getPlayerCombatSkills(data) {
   const alloc = data?.skillData?.allocated || {};
 
   const treeSkills = tree
-    .filter(n => n.type === 'active' && (alloc[n.id] || 0) > 0)
+    .filter(n => (n.type === 'active' || n.type === 'buff' || n.type === 'curse') && (alloc[n.id] || 0) > 0)
     .map(n => {
       const pts = alloc[n.id];
       const s   = n.skill;
-      const dmgMult = s.heal ? 0 : (s.baseDmg + (pts - 1) * (s.dmgPerPt || 0));
+      const dmgMult = s.heal || s.type === 'guard' ? 0 : (s.baseDmg + (pts - 1) * (s.dmgPerPt || 0));
       const healMult = s.heal ? (s.baseHealMult + (pts - 1) * (s.healPerPt || 0)) : undefined;
       return {
         id:       s.id,
@@ -1308,6 +1372,17 @@ function getPlayerCombatSkills(data) {
         heal:     s.heal || false,
         healMult,
         dmgMult,
+        pts,
+        reductionByPt: s.reductionByPt,
+        hitsByPt:      s.hitsByPt,
+        blockPerPt:    s.blockPerPt,
+        dodgePerPt:    s.dodgePerPt,
+        mpCostPct:     s.mpCostPct,
+        hits:          s.hits,
+        multiHit:      s.multiHit,
+        defPierce:     s.defPierce,
+        freeze:        s.freeze,
+        durationByPt:  s.durationByPt,
       };
     });
 
@@ -1577,8 +1652,15 @@ socket.on('party:combat_start', async ({ partyId, members, zone, monsters }) => 
   }));
   partyState.memberStats = memberStats;
 
-  await new Promise(r => setTimeout(r, 800));
+  // Refresh charCache (especially skillData) so skill tree skills are available.
+  // Run fetch in parallel with the 800ms delay so we don't widen the window where
+  // combatState is still null when party:turn arrives.
+  await Promise.all([
+    fetchAndCacheStats().catch(() => {}),
+    new Promise(r => setTimeout(r, 800)),
+  ]);
   document.getElementById('forest-overlay').style.display = 'none';
+  document.getElementById('desert-overlay').style.display = 'none';
   // Use the leader's pre-built monsters so all players fight the same boss
   startCombat(zone, members, memberStats, monsters || null, false);
 });
@@ -1600,7 +1682,15 @@ socket.on('party:ended', async ({ result } = {}) => {
 });
 
 // Leader receives a party member's chosen action
-socket.on('party:action', ({ from, skillId, targetIdx, dmg, logText, healAmt }) => {
+socket.on('party:action', ({ from, skillId, targetIdx, dmg, logText, healAmt, guardState, shieldState }) => {
+  // Store the member's buff state on their combatant entry so monsterTurn can apply it
+  if (guardState !== undefined || shieldState !== undefined) {
+    const pm = combatState?.partyMembers.find(m => m.username === from);
+    if (pm) {
+      if (guardState  !== undefined) pm.ironGuard    = guardState;
+      if (shieldState !== undefined) pm.divineShield = shieldState;
+    }
+  }
   if (_partyActionResolve) {
     _partyActionResolve({ from, skillId, targetIdx, dmg, logText, healAmt });
     _partyActionResolve = null;
@@ -1612,7 +1702,19 @@ socket.on('party:sync', async (syncData) => {
   if (!combatState || combatState.partyRole !== 'member') return;
   if (syncData.monsters) {
     syncData.monsters.forEach((m, i) => {
-      if (!combatState.monsters[i]) return;
+      if (!combatState.monsters[i]) {
+        // New minion summoned by boss — add it to our local state and re-render
+        const base = MONSTER_DEFS[m.monsterId];
+        if (base) {
+          const lv  = base.level;
+          const hp  = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
+          const atk = Math.round(base.atk * (1 + (lv - 1) * 0.10));
+          const def = Math.round(base.def * (1 + (lv - 1) * 0.10));
+          combatState.monsters.push({ ...base, monsterId: m.monsterId, level: lv, hp, atk, def, xp: 0, curHp: m.curHp });
+          renderMonsterCards();
+        }
+        return;
+      }
       const wasAlive = combatState.monsters[i].curHp > 0;
       combatState.monsters[i].curHp = m.curHp;
       if (wasAlive && m.curHp <= 0) {
@@ -1631,6 +1733,76 @@ socket.on('party:sync', async (syncData) => {
   if (syncData.newLogs) {
     for (const entry of syncData.newLogs) addCombatLog(entry);
   }
+  if (syncData.dmgEvents) {
+    syncData.dmgEvents.forEach((ev, i) => {
+      const delay = i * 120;
+      if (ev.target === 'monster') {
+        // Skip own attacks — already animated locally in useSkill()
+        if (ev.attacker === me.username) return;
+        // Find attacker's figure — leader is in partyMembers on the member's screen
+        const atkIdx = combatState.partyMembers.findIndex(pm => pm.username === ev.attacker);
+        const atkFig = atkIdx >= 0 ? partyMemberFig(atkIdx) : null;
+        setTimeout(() => {
+          if (atkFig) addAnim(atkFig, 'anim-atk-r', 700);
+          const tfig = monsterEl(ev.idx);
+          setTimeout(() => {
+            if (tfig) { addAnim(tfig, 'anim-hit', 400); addAnim(tfig, 'anim-shake', 450); }
+            spawnFxText(`-${ev.dmg}`, ev.crit ? '#ff2020' : '#ff6060', tfig, ev.crit);
+          }, 340);
+        }, delay);
+      } else if (ev.target === me.username) {
+        // Monster attacked me (this viewer) — show boss attack anim + my player figure hit/dodge/block
+        setTimeout(() => {
+          const mfig = monsterEl(ev.monIdx);
+          if (mfig) addAnim(mfig, 'anim-atk-l', 700);
+          const pfig = document.getElementById('cb-player-figure');
+          setTimeout(() => {
+            if (ev.dodge) {
+              spawnFxText('DODGE!', '#88ccff', pfig);
+            } else if (ev.block) {
+              spawnFxText('BLOCK!', '#aaaaee', pfig);
+            } else {
+              if (pfig) { addAnim(pfig, 'anim-hit', 400); addAnim(pfig, 'anim-shake', 450); }
+              spawnFxText(`-${ev.dmg}`, '#ff4444', pfig);
+            }
+          }, 340);
+        }, delay);
+      } else if (ev.target === 'self') {
+        // Skip own buff/heal — already animated locally in useSkill()
+        if (ev.attacker === me.username) return;
+        // Party member used a buff/heal — show animation on their figure
+        const atkIdx = combatState.partyMembers.findIndex(pm => pm.username === ev.attacker);
+        const atkFig = atkIdx >= 0 ? partyMemberFig(atkIdx) : null;
+        setTimeout(() => {
+          if (atkFig) {
+            addAnim(atkFig, ev.healAmt > 0 ? 'anim-heal' : 'anim-buff', 700);
+            if (ev.healAmt > 0) spawnFxText(`+${ev.healAmt}`, '#4ade80', atkFig);
+            else spawnFxText('GUARD!', '#88ccff', atkFig);
+          }
+        }, delay);
+      } else if (ev.target) {
+        // Monster attacked a party member — show boss attack anim + member hit/dodge/block anim
+        const pmIdx = combatState.partyMembers.findIndex(pm => pm.username === ev.target);
+        if (pmIdx >= 0) {
+          setTimeout(() => {
+            const mfig = monsterEl(ev.monIdx);
+            if (mfig) addAnim(mfig, 'anim-atk-l', 700);
+            const pmfig = partyMemberFig(pmIdx);
+            setTimeout(() => {
+              if (ev.dodge) {
+                spawnFxText('DODGE!', '#88ccff', pmfig);
+              } else if (ev.block) {
+                spawnFxText('BLOCK!', '#aaaaee', pmfig);
+              } else {
+                if (pmfig) { addAnim(pmfig, 'anim-hit', 400); addAnim(pmfig, 'anim-shake', 450); }
+                spawnFxText(`-${ev.dmg}`, '#ff4444', pmfig);
+              }
+            }, 340);
+          }, delay);
+        }
+      }
+    });
+  }
   renderCombatBars();
   // If all monsters are dead and we haven't won yet, trigger win flow
   if (combatState.monsters.every(m => m.curHp <= 0) &&
@@ -1644,7 +1816,18 @@ socket.on('party:turn', (syncData) => {
   if (!combatState || combatState.partyRole !== 'member') return;
   if (syncData.monsters) {
     syncData.monsters.forEach((m, i) => {
-      if (!combatState.monsters[i]) return;
+      if (!combatState.monsters[i]) {
+        const base = MONSTER_DEFS[m.monsterId];
+        if (base) {
+          const lv  = base.level;
+          const hp  = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
+          const atk = Math.round(base.atk * (1 + (lv - 1) * 0.10));
+          const def = Math.round(base.def * (1 + (lv - 1) * 0.10));
+          combatState.monsters.push({ ...base, monsterId: m.monsterId, level: lv, hp, atk, def, xp: 0, curHp: m.curHp });
+          renderMonsterCards();
+        }
+        return;
+      }
       const wasAlive = combatState.monsters[i].curHp > 0;
       combatState.monsters[i].curHp = m.curHp;
       if (wasAlive && m.curHp <= 0) {
@@ -1666,7 +1849,10 @@ socket.on('party:turn', (syncData) => {
   combatState.phase = 'player';
   renderCombatBars();
   renderSkillButtons();
-  showToast('⚔ Your turn! Choose a skill.');
+  // Flash the skill panel so the member can't miss their turn
+  const skillEl = document.getElementById('combat-skills');
+  if (skillEl) { skillEl.classList.add('your-turn-flash'); setTimeout(() => skillEl.classList.remove('your-turn-flash'), 1200); }
+  showToast('⚔️ YOUR TURN — Choose a skill!');
 });
 
 async function partyBeginBossFight() {
@@ -1690,6 +1876,161 @@ async function partyBeginBossFight() {
   startCombat(partyState.zoneId, partyState.members, memberStats, monsters, true);
 }
 
+// ── Pitou — summoned ally ─────────────────────────────────────────────────────
+
+const PITOU_SVG = `<svg viewBox="0 0 60 100" xmlns="http://www.w3.org/2000/svg">
+  <path d="M34,70 Q50,60 55,44 Q59,32 50,28" stroke="#D4C5A0" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <circle cx="50" cy="28" r="4" fill="#C4B090"/>
+  <rect x="18" y="68" width="10" height="24" rx="2" fill="#26A69A"/>
+  <rect x="32" y="68" width="10" height="24" rx="2" fill="#26A69A"/>
+  <rect x="15" y="88" width="14" height="10" rx="3" fill="#004D40"/>
+  <rect x="31" y="88" width="14" height="10" rx="3" fill="#004D40"/>
+  <path d="M14,28 L46,28 L43,70 L17,70 Z" fill="#26A69A"/>
+  <path d="M22,30 L38,30 L36,62 L24,62 Z" fill="#80CBC4"/>
+  <rect x="14" y="56" width="32" height="5" rx="2" fill="#004D40"/>
+  <path d="M46,30 L54,52 L48,56 L42,32" fill="#FFCCAA"/>
+  <path d="M14,30 L4,46 L9,52 L18,32" fill="#FFCCAA"/>
+  <circle cx="6" cy="51" r="7" fill="rgba(180,100,255,0.3)"/>
+  <circle cx="6" cy="51" r="4.5" fill="rgba(210,150,255,0.55)"/>
+  <circle cx="6" cy="51" r="2.5" fill="rgba(245,210,255,0.9)"/>
+  <line x1="2" y1="48" x2="0" y2="43" stroke="rgba(220,180,255,0.9)" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6" y1="46" x2="6" y2="41" stroke="rgba(220,180,255,0.9)" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="10" y1="48" x2="12" y2="43" stroke="rgba(220,180,255,0.9)" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="26" y="20" width="8" height="10" fill="#FFCCAA"/>
+  <circle cx="30" cy="13" r="12" fill="#FFCCAA"/>
+  <polygon points="20,7 15,1 25,9" fill="#FFCCAA"/>
+  <polygon points="40,7 45,1 35,9" fill="#FFCCAA"/>
+  <polygon points="20,6 16,2 24,8" fill="#F48FB1"/>
+  <polygon points="40,6 44,2 36,8" fill="#F48FB1"/>
+  <path d="M18,16 Q14,7 20,2 Q30,0 40,2 Q46,7 42,16 Q38,22 22,22 Z" fill="#E8E8E8"/>
+  <path d="M18,15 Q12,22 10,30" stroke="#E0E0E0" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <path d="M42,15 Q48,22 50,30" stroke="#E0E0E0" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="25" cy="13" rx="3.5" ry="3" fill="#FFD600"/>
+  <ellipse cx="35" cy="13" rx="3.5" ry="3" fill="#FFD600"/>
+  <rect x="24.5" y="10.5" width="1" height="5" rx="0.5" fill="#180800"/>
+  <rect x="34.5" y="10.5" width="1" height="5" rx="0.5" fill="#180800"/>
+  <circle cx="23.5" cy="11.5" r="0.7" fill="rgba(255,255,255,0.8)"/>
+  <circle cx="33.5" cy="11.5" r="0.7" fill="rgba(255,255,255,0.8)"/>
+  <path d="M28.5,18 Q30,20 31.5,18 L30,17 Z" fill="#F48FB1"/>
+  <path d="M27,21 Q30,23.5 33,21" stroke="#C87DA0" stroke-width="0.7" fill="none"/>
+  <line x1="17" y1="18" x2="23" y2="19" stroke="#C0A080" stroke-width="0.7" opacity="0.7"/>
+  <line x1="17" y1="20.5" x2="23" y2="20.5" stroke="#C0A080" stroke-width="0.7" opacity="0.7"/>
+  <line x1="43" y1="19" x2="37" y2="18" stroke="#C0A080" stroke-width="0.7" opacity="0.7"/>
+  <line x1="43" y1="20.5" x2="37" y2="20.5" stroke="#C0A080" stroke-width="0.7" opacity="0.7"/>
+</svg>`;
+
+const PITOU_DEBUFFS = [
+  { type:'weakness',   name:'Enfeeble',  icon:'💜', spellIcon:'💜',
+    desc:'−30% enemy ATK',            turns:3,
+    castLines:['She traces a sigil in the air — the enemy\'s strength drains away...'] },
+  { type:'vulnerable', name:'Hex Mark',  icon:'🎯', spellIcon:'💫',
+    desc:'+30% damage you deal',       turns:3,
+    castLines:['Her claw carves a glowing rune — the enemy is marked!'] },
+  { type:'freeze',     name:'Petrify',   icon:'❄️', spellIcon:'❄️',
+    desc:'Enemies skip attacks',       turns:2,
+    castLines:['She exhales cold light — the enemy is frozen solid!'] },
+];
+
+const PITOU_GREETINGS = [
+  '"Kukuku… you called?"',
+  '"I\'ve been watching this whole time."',
+  '"How fun. Leave it to me."',
+  '"Oh? You actually need help?"',
+];
+
+async function invokePitou() {
+  if (!combatState || combatState.isParty) return;
+  if (combatState.phase === 'win' || combatState.phase === 'lose') return;
+  if (combatState._pitouCalled) {
+    addCombatLog('🐱 Pitou has already aided you this battle — she can only help once per fight!');
+    return;
+  }
+  if (combatState.busy) return;
+
+  combatState._pitouCalled = true;
+  combatState.busy = true;
+  renderSkillButtons();
+
+  const debuff = PITOU_DEBUFFS[Math.floor(Math.random() * PITOU_DEBUFFS.length)];
+
+  // Inject SVG into the figure element and reveal it
+  const el = document.getElementById('pitou-figure');
+  if (!el) { combatState.busy = false; return; }
+  el.innerHTML = PITOU_SVG;
+  el.style.display = 'block';
+  el.className = '';
+  void el.offsetWidth;
+  el.classList.add('pitou-anim-enter');
+
+  await new Promise(r => setTimeout(r, 750));
+
+  addCombatLog(`🐱 Pitou appears: ${PITOU_GREETINGS[Math.floor(Math.random() * PITOU_GREETINGS.length)]}`);
+  await new Promise(r => setTimeout(r, 700));
+
+  // Switch to casting animation
+  el.classList.remove('pitou-anim-enter');
+  el.classList.add('pitou-anim-cast');
+
+  // Shoot spell projectile toward the enemies
+  const arena = document.getElementById('combat-arena');
+  if (arena) {
+    const proj = document.createElement('div');
+    proj.className = 'pitou-spell-proj';
+    proj.textContent = debuff.spellIcon;
+    arena.appendChild(proj);
+    await new Promise(r => setTimeout(r, 560));
+    proj.remove();
+  } else {
+    await new Promise(r => setTimeout(r, 560));
+  }
+
+  // Apply debuff — hit all alive monsters with visual FX
+  combatState._pitouDebuff = { ...debuff, turnsLeft: debuff.turns };
+  addCombatLog(`✨ ${debuff.castLines[0]}`);
+  addCombatLog(`💜 ${debuff.name} applied to all enemies! ${debuff.desc} for ${debuff.turns} turn${debuff.turns > 1 ? 's' : ''}!`);
+  combatState.monsters.forEach((m, i) => {
+    if (m.curHp > 0) {
+      const fig = monsterEl(i);
+      spawnFxText(debuff.icon, '#cc88ff', fig);
+      addAnim(fig, 'anim-hit', 400);
+    }
+  });
+  renderPitouDebuffBadge();
+
+  await new Promise(r => setTimeout(r, 900));
+
+  // Pitou departs
+  addCombatLog('🐱 Pitou: "I\'ll be watching." *vanishes into the shadows*');
+  el.classList.remove('pitou-anim-cast');
+  el.classList.add('pitou-anim-exit');
+  await new Promise(r => setTimeout(r, 480));
+  el.style.display = 'none';
+  el.className = '';
+
+  combatState.busy = false;
+  renderSkillButtons();
+}
+
+function renderPitouDebuffBadge() {
+  if (!combatState) return;
+  const debuff = combatState._pitouDebuff;
+  combatState.monsters.forEach((m, i) => {
+    const card = monsterCard(i);
+    if (!card) return;
+    let badge = card.querySelector('.cb-monster-debuff');
+    if (debuff && m.curHp > 0) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'cb-monster-debuff';
+        card.insertBefore(badge, card.firstChild);
+      }
+      badge.textContent = `${debuff.icon} ${debuff.name} (${debuff.turnsLeft}t)`;
+    } else if (badge) {
+      badge.remove();
+    }
+  });
+}
+
 // ── Combat system ─────────────────────────────────────────────────────────────
 
 let combatState = null;
@@ -1702,11 +2043,14 @@ function emitPartySync() {
   for (const pm of combatState.partyMembers) memberHps[pm.username] = pm.curHp;
   const newLogs = combatState.log.slice(combatState._syncedLogLen || 0);
   combatState._syncedLogLen = combatState.log.length;
+  const dmgEvents = combatState._pendingSyncEvents || [];
+  combatState._pendingSyncEvents = [];
   socket.emit('party:sync', {
     partyId: partyState.partyId,
-    monsters: combatState.monsters.map(m => ({ curHp: m.curHp })),
+    monsters: combatState.monsters.map(m => ({ curHp: m.curHp, monsterId: m.monsterId })),
     memberHps,
     newLogs,
+    dmgEvents,
   });
 }
 
@@ -1725,7 +2069,7 @@ async function doPartyMemberTurns() {
     socket.emit('party:turn', {
       partyId: partyState.partyId,
       target: member.username,
-      monsters: combatState.monsters.map(m => ({ curHp: m.curHp })),
+      monsters: combatState.monsters.map(m => ({ curHp: m.curHp, monsterId: m.monsterId })),
       memberHps,
       newLogs,
     });
@@ -1746,8 +2090,12 @@ async function doPartyMemberTurns() {
         await new Promise(r => setTimeout(r, 340));
         const tfig = monsterEl(action.targetIdx);
         addAnim(tfig, 'anim-hit', 400); addAnim(tfig, 'anim-shake', 450);
+        spawnFxText(`-${action.dmg}`, '#ff6060', tfig);
         target.curHp = Math.max(0, target.curHp - action.dmg);
         addCombatLog(action.logText);
+        // Queue so other party members see this animation
+        if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+        combatState._pendingSyncEvents.push({ target: 'monster', idx: action.targetIdx, dmg: action.dmg, crit: false, attacker: member.username });
         if (target.curHp <= 0) {
           target.curHp = 0;
           if (tfig) tfig.classList.add('anim-death');
@@ -1760,6 +2108,9 @@ async function doPartyMemberTurns() {
       addAnim(mfig, 'anim-magic', 550);
       addCombatLog(action.logText);
       member.curHp = Math.min(member.maxHp, member.curHp + (action.healAmt || 0));
+      // Queue so other party members see this animation
+      if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+      combatState._pendingSyncEvents.push({ target: 'self', attacker: member.username, healAmt: action.healAmt || 0 });
     } else {
       // Timeout — auto basic attack
       const aliveMonsters = combatState.monsters.filter(m => m.curHp > 0);
@@ -1772,8 +2123,11 @@ async function doPartyMemberTurns() {
         addAnim(tfig, 'anim-hit', 400); addAnim(tfig, 'anim-shake', 450);
         const atk = member.stats?.atk || 20;
         const dmg = Math.max(1, atk - Math.floor(target.def * 0.5) + randInt(-3, 3));
+        spawnFxText(`-${dmg}`, '#ff6060', tfig);
         target.curHp = Math.max(0, target.curHp - dmg);
         addCombatLog(`⚔ ${member.username} attacks ${target.name}: −${dmg} (auto)`);
+        if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+        combatState._pendingSyncEvents.push({ target: 'monster', idx: ti, dmg, crit: false, attacker: member.username });
         if (target.curHp <= 0) {
           target.curHp = 0;
           if (tfig) tfig.classList.add('anim-death');
@@ -1797,7 +2151,7 @@ function partyMemberFig(idx){ return document.getElementById(`cb-party-fig-${idx
 function generateMonsters(zoneId, partySize) {
   const pool = ZONE_MONSTER_POOL[zoneId];
   if (!pool?.length) return [];
-  const zone = FOREST_ZONES.find(z => z.id === zoneId) || DESERT_ZONES.find(z => z.id === zoneId);
+  const zone = FOREST_ZONES.find(z => z.id === zoneId) || DESERT_ZONES.find(z => z.id === zoneId) || RIFT_ZONES.find(z => z.id === zoneId);
   const [lvMin, lvMax] = zone?.levelRange || [1, 4];
   const hasBoss = pool.some(id => MONSTER_DEFS[id]?.isBoss);
   const maxCount = hasBoss ? 1 : randInt(1, 3);
@@ -1831,8 +2185,13 @@ function startCombat(zoneId, partyMembers = null, memberStats = null, preBuiltMo
 
   // Start appropriate music
   const isDesertZone = DESERT_ZONES.some(z => z.id === zoneId);
+  const isRiftZone   = RIFT_ZONES.some(z => z.id === zoneId);
   try {
-    if (hasBoss) {
+    if (zoneId === 'abyssal_sanctum') {
+      SoundEngine.play('abyss_boss');
+    } else if (isRiftZone) {
+      SoundEngine.play('abyss');
+    } else if (hasBoss) {
       SoundEngine.play('boss');
     } else if (isDesertZone) {
       SoundEngine.play('desert');
@@ -1844,22 +2203,29 @@ function startCombat(zoneId, partyMembers = null, memberStats = null, preBuiltMo
   // Build party member combatants (exclude self)
   const partyOthers = partyMembers ? partyMembers.filter(u => u !== me.username) : [];
   const partyMemberCombatants = partyOthers.map(u => {
-    const d = memberStats?.[u];
-    const hp = d?.stats?.hp || 100;
-    return { username: u, class: d?.class || 'Warrior', curHp: hp, maxHp: hp, stats: d?.stats || {} };
+    const d      = memberStats?.[u];
+    const maxHp  = d?.maxHp || d?.stats?.hp || 100;
+    const curHp  = Math.min(d?.curHp ?? maxHp, maxHp);
+    // Compute full effective stats (skill tree passives + dodge/crit/block) if skillData is available
+    const fullStats = (d?.skillData && d?.stats)
+      ? getEffectiveStats({ class: d.class, stats: d.stats, skillData: d.skillData, equipped: d.equipped || [] })
+      : (d?.stats || {});
+    return { username: u, class: d?.class || 'Warrior', curHp, maxHp, stats: fullStats };
   });
 
   const _preInvIds = new Set((charCache?.inventory || []).map(i => i.inv_id));
 
   const _desertZoneIdx = DESERT_ZONES.findIndex(z => z.id === zoneId);
+  const _riftZoneIdx   = RIFT_ZONES.findIndex(z => z.id === zoneId);
   combatState = {
     zoneId,
     zoneIdx:           FOREST_ZONES.findIndex(z => z.id === zoneId),
     desertZoneIdx:     _desertZoneIdx,
+    riftZoneIdx:       _riftZoneIdx,
     monsters,
     _preInvIds,
     _syncedLogLen: 0,
-    player:       { curHp: Math.min(charCache?.curHp ?? stats.hp, stats.hp), maxHp: stats.hp, curMp: stats.mp, maxMp: stats.mp, class: cls, stats },
+    player:       { curHp: Math.min(charCache?.curHp ?? stats.hp, stats.hp), maxHp: stats.hp, curMp: stats.mp, maxMp: stats.mp, class: cls, stats, skillData: charCache?.skillData },
     partyMembers: partyMemberCombatants,
     isParty:      partyOthers.length > 0,
     partyRole:    partyOthers.length > 0 ? (isPartyLeader ? 'leader' : 'member') : null,
@@ -1870,7 +2236,7 @@ function startCombat(zoneId, partyMembers = null, memberStats = null, preBuiltMo
   };
 
   // Header
-  const zoneInfo = FOREST_ZONES.find(z => z.id === zoneId) || DESERT_ZONES.find(z => z.id === zoneId);
+  const zoneInfo = FOREST_ZONES.find(z => z.id === zoneId) || DESERT_ZONES.find(z => z.id === zoneId) || RIFT_ZONES.find(z => z.id === zoneId);
   const badge = document.getElementById('cb-tier-badge');
   badge.textContent      = `Tier ${firstTier}`;
   badge.className        = `cb-tier cb-tier-${firstTier}`;
@@ -1894,38 +2260,71 @@ function startCombat(zoneId, partyMembers = null, memberStats = null, preBuiltMo
   // Monster cards
   renderMonsterCards();
 
-  // Enrage animation for monsters significantly stronger than the player
-  const playerLevel = charCache?.level || me.level || 1;
-  const enragedNames = [];
-  monsters.forEach((mon, i) => {
-    if (mon.level > playerLevel + 3) {
-      mon.enraged = true;
-      mon.atk = Math.round(mon.atk * 2.0);
-      enragedNames.push(mon.name);
+  // Enrage: party members skip this — the leader already applied enrage to pre-built monsters.
+  // Running it again would double ATK a second time and add a duplicate log.
+  if (combatState.partyRole !== 'member') {
+    const playerLevel = charCache?.level || me.level || 1;
+    const enragedNames = [];
+    monsters.forEach((mon, i) => {
+      if (mon.level > playerLevel + 3) {
+        mon.enraged = true;
+        mon.atk = Math.round(mon.atk * 2.0);
+        enragedNames.push(mon.name);
+        setTimeout(() => {
+          const fig = document.getElementById(`cb-mon-fig-${i}`);
+          if (fig) fig.classList.add('anim-enraged');
+        }, i * 120);
+      }
+    });
+    if (enragedNames.length) {
       setTimeout(() => {
-        const fig = document.getElementById(`cb-mon-fig-${i}`);
-        if (fig) fig.classList.add('anim-enraged');
-      }, i * 120);
+        const names = [...new Set(enragedNames)].join(', ');
+        addCombatLog(`🔴 ${names} ${enragedNames.length > 1 ? 'are' : 'is'} enraged by your weakness (3+ levels below)! ATK +100% — be careful!`);
+        showToast(`⚠️ ${names} senses you are far weaker and goes berserk! ATK +100%!`);
+      }, 400);
     }
-  });
-  if (enragedNames.length) {
-    setTimeout(() => {
-      const names = [...new Set(enragedNames)].join(', ');
-      addCombatLog(`🔴 ${names} ${enragedNames.length > 1 ? 'are' : 'is'} enraged by your weakness (3+ levels below)! ATK +100% — be careful!`);
-      showToast(`⚠️ ${names} senses you are far weaker and goes berserk! ATK +100%!`);
-    }, 400);
+  } else {
+    // Member: apply enrage visual only (ATK was already doubled by the leader)
+    monsters.forEach((mon, i) => {
+      if (mon.enraged) {
+        setTimeout(() => {
+          const fig = document.getElementById(`cb-mon-fig-${i}`);
+          if (fig) fig.classList.add('anim-enraged');
+        }, i * 120);
+      }
+    });
   }
 
   const names = monsters.map(m => m.name).join(', ');
-  addCombatLog(`⚔ ${monsters.length > 1 ? `${monsters.length} enemies appear` : `A ${names} appears`}!`);
+  // Party members skip the local spawn log — they receive it from the leader via party:sync
+  if (!combatState || combatState.partyRole !== 'member') {
+    addCombatLog(`⚔ ${monsters.length > 1 ? `${monsters.length} enemies appear` : `A ${names} appears`}!`);
+  }
   renderCombatBars();
   renderSkillButtons();
 
-  const showCombat = () => { document.getElementById('combat-overlay').style.display = 'flex'; };
+  const showCombat = () => {
+    const forestEl = document.getElementById('forest-overlay');
+    const desertEl = document.getElementById('desert-overlay');
+    const riftEl   = document.getElementById('rift-overlay');
+    // Remember which map overlay was open so closeCombat can restore it
+    // Use === 'block' (not !== 'none') because an unset inline style is '' which !== 'none'
+    // Check rift first — it sits above desert (z-index:20 vs 15), so if both are open,
+    // rift is the active overlay and should be restored after combat.
+    combatState._fromOverlay = riftEl.style.display   === 'block' ? 'rift'
+                             : desertEl.style.display === 'block' ? 'desert'
+                             : forestEl.style.display === 'block' ? 'forest' : null;
+    forestEl.style.display = 'none';
+    desertEl.style.display = 'none';
+    if (riftEl) riftEl.style.display = 'none';
+    document.getElementById('combat-overlay').style.display = 'flex';
+  };
   if (zoneId === 'demon') {
     showBossIntro(showCombat);
   } else if (zoneId === 'pharaoh_tomb') {
     showDesertBossIntro(showCombat);
+  } else if (zoneId === 'abyssal_sanctum') {
+    showAbyssalBossIntro(showCombat);
   } else {
     showCombat();
   }
@@ -1976,8 +2375,8 @@ function renderCombatBars() {
   const curXp   = charCache?.xp    || 0;
   const xpThis  = (lv - 1) * (lv - 1) * 100;
   const xpNext  = lv * lv * 100;
-  document.getElementById('cb-player-xp-fill').style.width = lv >= 30 ? '100%' : pct(curXp - xpThis, xpNext - xpThis);
-  document.getElementById('cb-player-xp-num').textContent = lv >= 30 ? 'MAX' : `${curXp - xpThis}/${xpNext - xpThis}`;
+  document.getElementById('cb-player-xp-fill').style.width = lv >= 50 ? '100%' : pct(curXp - xpThis, xpNext - xpThis);
+  document.getElementById('cb-player-xp-num').textContent = lv >= 50 ? 'MAX' : `${curXp - xpThis}/${xpNext - xpThis}`;
 
   combatState.monsters.forEach((mon, i) => {
     const fill = document.getElementById(`cb-mon-hp-${i}`);
@@ -1985,7 +2384,10 @@ function renderCombatBars() {
     const card = monsterCard(i);
     if (fill) fill.style.width = pct(mon.curHp, mon.hp);
     if (num)  num.textContent  = `${Math.max(0, mon.curHp)}/${mon.hp}`;
-    if (card) card.className   = `cb-monster-card${mon.curHp <= 0 ? ' dead' : ''}`;
+    if (card) {
+      const bossClass = mon.isBoss ? ' boss-card' + (mon.bossEnraged ? ' boss-enraged' : '') : '';
+      card.className = `cb-monster-card${bossClass}${mon.curHp <= 0 ? ' dead' : ''}`;
+    }
   });
 
   // Party member cards — persistent DOM so animation classes survive re-renders
@@ -2036,14 +2438,18 @@ function renderSkillButtons() {
     return;
   }
   const busy   = combatState.busy || combatState.phase !== 'player';
-  const skills = getPlayerCombatSkills(charCache);
+  const skills = getPlayerCombatSkills(combatState.player);
   el.innerHTML = skills.map(sk => {
-    const noMp   = sk.mpCost > 0 && combatState.player.curMp < sk.mpCost;
-    const tgtTag = sk.heal ? '💚 Self' : sk.target === 'all' ? '◎ All' : '◉ Single';
+    const actualCost = sk.mpCostPct
+      ? Math.max(1, Math.floor(combatState.player.maxMp * sk.mpCostPct / 100))
+      : sk.mpCost;
+    const noMp   = actualCost > 0 && combatState.player.curMp < actualCost;
+    const tgtTag = sk.heal ? '💚 Self' : sk.target === 'self' ? '🛡 Self' : sk.target === 'all' ? '◎ All' : '◉ Single';
+    const costLabel = sk.mpCostPct ? `${sk.mpCostPct}% max MP` : sk.mpCost ? `${sk.mpCost} MP` : 'Free';
     return `<button class="skill-btn${noMp ? ' no-mp' : ''}"
       onclick="useSkill('${sk.id}')" ${(busy || noMp) ? 'disabled' : ''}>
       ${escHtml(sk.name)}
-      <span class="sk-cost">${sk.mpCost ? `${sk.mpCost} MP` : 'Free'}</span>
+      <span class="sk-cost">${costLabel}</span>
       <span class="sk-target">${tgtTag}</span>
     </button>`;
   }).join('');
@@ -2110,12 +2516,23 @@ async function doAnimation(type, playerAttacking, monIdx = 0) {
       hitAll('anim-hit', 400); hitAll('anim-shake', 350);
       await new Promise(r => setTimeout(r, 380));
       break;
-    case 'magic': case 'burst': case 'curse':
+    case 'magic': case 'burst':
       addAnim(atkEl, 'anim-magic', 550);
       await new Promise(r => setTimeout(r, 140));
       await spawnProjectile(proj, playerAttacking);
       hitAll('anim-hit', 400);
       await new Promise(r => setTimeout(r, 340));
+      break;
+    case 'curse':
+      addAnim(atkEl, 'anim-curse', 550);
+      await new Promise(r => setTimeout(r, 140));
+      await spawnProjectile(proj, playerAttacking);
+      hitAll('anim-hit', 400);
+      await new Promise(r => setTimeout(r, 340));
+      break;
+    case 'buff':
+      addAnim(atkEl, 'anim-buff', 700);
+      await new Promise(r => setTimeout(r, 700));
       break;
     case 'fire':
       addAnim(atkEl, 'anim-fire', 550);
@@ -2144,19 +2561,38 @@ async function doAnimation(type, playerAttacking, monIdx = 0) {
 
 function useSkill(skillId) {
   if (!combatState || combatState.busy || combatState.phase !== 'player' || combatState.player.ko) return;
-  const skills = getPlayerCombatSkills(charCache);
+  const skills = getPlayerCombatSkills(combatState.player);
   const skill  = skills.find(s => s.id === skillId);
   if (!skill) return;
-  if (skill.mpCost > combatState.player.curMp) { showToast('❌ Not enough MP!'); return; }
+  const _actualCost = skill.mpCostPct
+    ? Math.max(1, Math.floor(combatState.player.maxMp * skill.mpCostPct / 100))
+    : skill.mpCost;
+  if (_actualCost > combatState.player.curMp) { showToast('❌ Not enough MP!'); return; }
 
   // Party member: compute action locally and relay to leader
   if (combatState.partyRole === 'member') {
-    combatState.player.curMp -= skill.mpCost;
+    combatState.player.curMp -= _actualCost;
     let dmg = 0, targetIdx = -1, logText = '', healAmt = 0;
     if (skill.heal) {
       healAmt = Math.floor(combatState.player.stats.spirit * (skill.healMult || 3));
       combatState.player.curHp = Math.min(combatState.player.maxHp, combatState.player.curHp + healAmt);
       logText = `💚 ${me.username} uses ${skill.name}: +${healAmt} HP`;
+    } else if (skill.type === 'guard') {
+      const pt  = Math.min((skill.pts || 1), 3) - 1;
+      const reduction = (skill.reductionByPt || [0.5, 0.6, 0.6])[pt];
+      const hits      = (skill.hitsByPt      || [2,   2,   3  ])[pt];
+      const pts       = skill.pts || 1;
+      combatState.player.ironGuard = { reduction, hitsRemaining: hits,
+        blockBonus: (skill.blockPerPt || 0) * pts,
+        dodgeBonus: (skill.dodgePerPt || 0) * pts };
+      logText = `🛡️ ${me.username} uses ${skill.name}: ${Math.round(reduction * 100)}% damage reduction for ${hits} hit${hits > 1 ? 's' : ''}!`;
+    } else if (skill.type === 'divine_shield') {
+      const pt        = Math.min((skill.pts || 1), 3) - 1;
+      const reduction = (skill.reductionByPt || [0.5, 0.75, 1.0])[pt];
+      const hits      = skill.hits || 2;
+      combatState.player.divineShield = { reduction, hitsRemaining: hits };
+      const label = reduction >= 1.0 ? 'INVINCIBLE' : `${Math.round(reduction * 100)}% dmg reduction`;
+      logText = `🔰 ${me.username} uses ${skill.name}: ${label} for ${hits} hit${hits > 1 ? 's' : ''}!`;
     } else {
       targetIdx = combatState.monsters.findIndex(m => m.curHp > 0);
       if (targetIdx === -1) return;
@@ -2169,13 +2605,29 @@ function useSkill(skillId) {
     combatState.phase = 'waiting';
     renderSkillButtons();
     renderCombatBars();
-    // Show local animation so the member sees their own character act
+    // Show local animation + fx so the member sees their own action
     const pfig = document.getElementById('cb-player-figure');
-    addAnim(pfig, skill.heal ? 'anim-magic' : 'anim-atk-r', 700);
-    if (!skill.heal && targetIdx >= 0) {
-      setTimeout(() => { addAnim(monsterEl(targetIdx), 'anim-hit', 400); addAnim(monsterEl(targetIdx), 'anim-shake', 450); }, 340);
+    const isSelfBuff = skill.type === 'guard' || skill.type === 'divine_shield';
+    addAnim(pfig, skill.heal ? 'anim-heal' : isSelfBuff ? 'anim-buff' : 'anim-atk-r', 700);
+    if (skill.heal) {
+      spawnFxText(`+${healAmt}`, '#4ade80', pfig);
+    } else if (skill.type === 'guard') {
+      spawnFxText('GUARD!', '#88ccff', pfig);
+    } else if (skill.type === 'divine_shield') {
+      spawnFxText('DIVINE!', '#ffe080', pfig);
+    } else if (targetIdx >= 0) {
+      const isCrit = dmg > 0 && logText.includes('CRIT');
+      setTimeout(() => {
+        const tfig = monsterEl(targetIdx);
+        addAnim(tfig, 'anim-hit', 400); addAnim(tfig, 'anim-shake', 450);
+        spawnFxText(`-${dmg}`, isCrit ? '#ff2020' : '#ff6060', tfig, isCrit);
+      }, 340);
     }
-    socket.emit('party:action', { partyId: partyState.partyId, skillId, targetIdx, dmg, healAmt, logText });
+    // Only send guard/shield state when the member just activated the buff (not on every action).
+    // Sending stale hitsRemaining on later turns would reset the leader's tracked hit count.
+    const guardState  = skillId === 'iron_guard'    && combatState.player.ironGuard    ? { ...combatState.player.ironGuard }    : undefined;
+    const shieldState = skillId === 'divine_shield' && combatState.player.divineShield ? { ...combatState.player.divineShield } : undefined;
+    socket.emit('party:action', { partyId: partyState.partyId, skillId, targetIdx, dmg, healAmt, logText, guardState, shieldState });
     return;
   }
 
@@ -2211,23 +2663,91 @@ function cancelTargetMode() {
   renderSkillButtons();
 }
 
+// Queue a monster-hit event so party members see the leader's damage numbers + animations via party:sync
+function _queueMonsterHit(monIdx, dmg, crit = false) {
+  if (!combatState.isParty || combatState.partyRole !== 'leader') return;
+  if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+  combatState._pendingSyncEvents.push({ target: 'monster', idx: monIdx, dmg, crit, attacker: me.username });
+}
+
+function _applyLifesteal(dmgDealt) {
+  const pct = combatState?.player?.stats?.lifestealPct || 0;
+  if (!pct || dmgDealt <= 0) return;
+  const heal = Math.max(1, Math.floor(dmgDealt * pct / 100));
+  combatState.player.curHp = Math.min(combatState.player.maxHp, combatState.player.curHp + heal);
+  addCombatLog(`🧛 Lifesteal: +${heal} HP`);
+  spawnFxText(`+${heal}`, '#cc44ff', document.getElementById('cb-player-figure'));
+}
+
+function _applySoulHarvest() {
+  const pct = combatState?.player?.stats?.onKillHealPct || 0;
+  if (!pct) return;
+  const heal = Math.max(1, Math.floor(combatState.player.maxHp * pct / 100));
+  combatState.player.curHp = Math.min(combatState.player.maxHp, combatState.player.curHp + heal);
+  addCombatLog(`💜 Soul Harvest: +${heal} HP on kill!`);
+  spawnFxText(`+${heal}`, '#9040ff', document.getElementById('cb-player-figure'));
+}
+
 async function executeSkill(skillId, targetIdx = null) {
-  const skills = getPlayerCombatSkills(charCache);
+  const skills = getPlayerCombatSkills(combatState.player);
   const skill  = skills.find(s => s.id === skillId);
 
   combatState.busy = true;
-  combatState.player.curMp -= skill.mpCost;
+  const _cost = skill.mpCostPct
+    ? Math.max(1, Math.floor(combatState.player.maxMp * skill.mpCostPct / 100))
+    : skill.mpCost;
+  combatState.player.curMp -= _cost;
   renderSkillButtons();
   renderCombatBars();
+
+  const _sfxCls = charCache?.class || 'Warrior';
 
   // ── Self-heal ──────────────────────────────────────────────────────────────
   if (skill.heal) {
     await doAnimation(skill.type, true, 0);
+    try { SoundEngine.playSfxBuff(); } catch(e) {}
     const mult = skill.healMult || 3;
     const amt = Math.floor(combatState.player.stats.spirit * mult);
     combatState.player.curHp = Math.min(combatState.player.maxHp, combatState.player.curHp + amt);
     addCombatLog(`💚 ${skill.name}: +${amt} HP`);
     spawnFxText(`+${amt}`, '#4ade80', document.getElementById('cb-player-figure'));
+
+  // ── Iron Guard (defensive stance) ─────────────────────────────────────────
+  } else if (skill.type === 'guard') {
+    await doAnimation('buff', true, 0);
+    try { SoundEngine.playSfxBuff(); } catch(e) {}
+    const pt  = Math.min((skill.pts || 1), 3) - 1;
+    const reduction = (skill.reductionByPt || [0.5, 0.6, 0.6])[pt];
+    const hits      = (skill.hitsByPt      || [2,   2,   3  ])[pt];
+    const pts       = skill.pts || 1;
+    combatState.player.ironGuard = { reduction, hitsRemaining: hits,
+      blockBonus: (skill.blockPerPt || 0) * pts,
+      dodgeBonus: (skill.dodgePerPt || 0) * pts };
+    addCombatLog(`🛡️ ${skill.name}: ${Math.round(reduction * 100)}% damage reduction for ${hits} hit${hits > 1 ? 's' : ''}!`);
+    spawnFxText('GUARD!', '#88ccff', document.getElementById('cb-player-figure'));
+
+  // ── Time Stop (freeze enemies) ─────────────────────────────────────────────
+  } else if (skill.freeze) {
+    await doAnimation('buff', true, 0);
+    try { SoundEngine.playSfxBuff(); } catch(e) {}
+    const pt  = Math.min((skill.pts || 1), 3) - 1;
+    const dur = (skill.durationByPt || [1, 2, 3])[pt];
+    combatState._pitouDebuff = { type: 'freeze', name: 'Time Stop', turnsLeft: dur };
+    renderPitouDebuffBadge();
+    addCombatLog(`⏸️ ${skill.name}: All enemies frozen for ${dur} turn${dur > 1 ? 's' : ''}!`);
+    spawnFxText('FROZEN!', '#88d8ff', document.getElementById('cb-player-figure'));
+
+  // ── Divine Shield (turn-based immunity) ───────────────────────────────────
+  } else if (skill.type === 'divine_shield') {
+    await doAnimation('buff', true, 0);
+    try { SoundEngine.playSfxBuff(); } catch(e) {}
+    const pt        = Math.min((skill.pts || 1), 3) - 1;
+    const reduction = (skill.reductionByPt || [0.5, 0.75, 1.0])[pt];
+    const hits      = skill.hits || 2;
+    combatState.player.divineShield = { reduction, hitsRemaining: hits };
+    const label = reduction >= 1.0 ? 'INVINCIBLE' : `${Math.round(reduction * 100)}% dmg reduction`;
+    addCombatLog(`🔰 ${skill.name}: ${label} for ${hits} hit${hits > 1 ? 's' : ''}!`);
+    spawnFxText(reduction >= 1.0 ? 'INVINCIBLE!' : 'DIVINE!', '#ffe080', document.getElementById('cb-player-figure'));
 
   // ── AoE attack ────────────────────────────────────────────────────────────
   } else if (skill.target === 'all') {
@@ -2235,27 +2755,38 @@ async function executeSkill(skillId, targetIdx = null) {
     if (!alive.length) { await handleCombatWin(); return; }
 
     await doAnimation(skill.type, true, 'all');
+    try { skill.type === 'curse' ? SoundEngine.playSfxCurse() : SoundEngine.playSfxPlayerAttack(_sfxCls, false); } catch(e) {}
 
     const critRate = combatState.player.stats.critRate || 0;
+    const critDmgBonus = combatState.player.stats.critDmgBonus || 0;
     const label = alive.length > 1 ? 'all enemies' : alive[0].m.name;
     addCombatLog(`⚔ ${skill.name} hits ${label}!`);
+    let _aoeTotal = 0;
+    const _vulnMult = combatState._pitouDebuff?.type === 'vulnerable' ? 1.3 : 1.0;
     for (const [idx, { m: target, i: ti }] of alive.entries()) {
       const isCrit = Math.random() * 100 < critRate;
+      const defMult = skill.defPierce !== undefined ? (1 - skill.defPierce) : 0.5;
       const raw = Math.floor(combatState.player.stats.atk * skill.dmgMult)
-                  - Math.floor(target.def * 0.5) + randInt(-3, 3);
-      const dmg = Math.max(1, isCrit ? raw * 2 : raw);
+                  - Math.floor(target.def * defMult) + randInt(-3, 3);
+      const critMult = isCrit ? 2 + critDmgBonus / 100 : 1;
+      const dmg = Math.max(1, Math.floor((critMult > 1 ? raw * critMult : raw) * _vulnMult));
+      _aoeTotal += dmg;
       target.curHp -= dmg;
       addCombatLog(`  ${target.name}: ${isCrit ? '💥 CRIT ' : ''}−${dmg}`);
       const fig = monsterEl(ti);
       setTimeout(() => spawnFxText(`-${dmg}`, isCrit ? '#ff2020' : '#ff6060', fig, isCrit), idx * 80);
+      setTimeout(() => { try { SoundEngine.playSfxEnemyHit(isCrit); } catch(e) {} }, idx * 80 + 130);
+      _queueMonsterHit(ti, dmg, isCrit);
       if (target.curHp <= 0) {
         target.curHp = 0;
         const fig = monsterEl(ti);
         if (fig) fig.classList.add('anim-death');
         addCombatLog(`💀 ${target.name} is defeated!`);
+        _applySoulHarvest();
       }
     }
     if (alive.some(({ m }) => m.curHp <= 0)) await new Promise(r => setTimeout(r, 600));
+    _applyLifesteal(_aoeTotal);
 
   // ── Single-target attack ───────────────────────────────────────────────────
   } else {
@@ -2266,24 +2797,62 @@ async function executeSkill(skillId, targetIdx = null) {
     await doAnimation(skill.type, true, targetIdx);
 
     const critRate = combatState.player.stats.critRate || 0;
+    const critDmgBonus = combatState.player.stats.critDmgBonus || 0;
     const isCrit   = Math.random() * 100 < critRate;
+    try { skill.type === 'curse' ? SoundEngine.playSfxCurse() : SoundEngine.playSfxPlayerAttack(_sfxCls, isCrit); } catch(e) {}
+    const defMult  = skill.defPierce !== undefined ? (1 - skill.defPierce) : 0.5;
     const raw = Math.floor(combatState.player.stats.atk * skill.dmgMult)
-                - Math.floor(target.def * 0.5) + randInt(-3, 3);
-    const dmg = Math.max(1, isCrit ? raw * 2 : raw);
+                - Math.floor(target.def * defMult) + randInt(-3, 3);
+    const vulnMult = combatState._pitouDebuff?.type === 'vulnerable' ? 1.3 : 1.0;
+    const critMult = isCrit ? 2 + critDmgBonus / 100 : 1;
+    const dmg = Math.max(1, Math.floor((critMult > 1 ? raw * critMult : raw) * vulnMult));
     target.curHp -= dmg;
     addCombatLog(`⚔ ${skill.name} hits ${target.name}: ${isCrit ? '💥 CRIT ' : ''}−${dmg}`);
     spawnFxText(`-${dmg}`, isCrit ? '#ff2020' : '#ff6060', monsterEl(targetIdx), isCrit);
+    setTimeout(() => { try { SoundEngine.playSfxEnemyHit(isCrit); } catch(e) {} }, 140);
+    _queueMonsterHit(targetIdx, dmg, isCrit);
+    _applyLifesteal(dmg);
+    // ── Death Mark multi-hit ──────────────────────────────────────────────────
+    if (skill.multiHit && target.curHp > 0) {
+      const critRate2 = combatState.player.stats.critRate || 0;
+      if (Math.random() < skill.multiHit.chance2) {
+        await new Promise(r => setTimeout(r, 300));
+        const isCrit2 = Math.random() * 100 < critRate2;
+        const raw2 = Math.floor(combatState.player.stats.atk * skill.dmgMult) - Math.floor(target.def * 0.5) + randInt(-3, 3);
+        const dmg2 = Math.max(1, isCrit2 ? raw2 * 2 : raw2);
+        target.curHp = Math.max(0, target.curHp - dmg2);
+        addCombatLog(`💀 Death Mark strikes again! ${isCrit2 ? '💥 CRIT ' : ''}−${dmg2}`);
+        spawnFxText(`-${dmg2}`, isCrit2 ? '#ff2020' : '#aa2020', monsterEl(targetIdx), isCrit2);
+        _queueMonsterHit(targetIdx, dmg2, isCrit2);
+        _applyLifesteal(dmg2);
+        if (target.curHp > 0 && Math.random() < skill.multiHit.chance3) {
+          await new Promise(r => setTimeout(r, 300));
+          const isCrit3 = Math.random() * 100 < critRate2;
+          const raw3 = Math.floor(combatState.player.stats.atk * skill.dmgMult) - Math.floor(target.def * 0.5) + randInt(-3, 3);
+          const dmg3 = Math.max(1, isCrit3 ? raw3 * 2 : raw3);
+          target.curHp = Math.max(0, target.curHp - dmg3);
+          addCombatLog(`💀 Death Mark — third strike! ${isCrit3 ? '💥 CRIT ' : ''}−${dmg3}`);
+          spawnFxText(`-${dmg3}`, isCrit3 ? '#ff2020' : '#aa2020', monsterEl(targetIdx), isCrit3);
+          _queueMonsterHit(targetIdx, dmg3, isCrit3);
+          _applyLifesteal(dmg3);
+        }
+      }
+    }
     if (target.curHp <= 0) {
       target.curHp = 0;
       const fig = monsterEl(targetIdx);
       if (fig) fig.classList.add('anim-death');
       addCombatLog(`💀 ${target.name} is defeated!`);
+      _applySoulHarvest();
       await new Promise(r => setTimeout(r, 600));
     }
   }
 
   renderCombatBars();
   if (combatState.monsters.every(m => m.curHp <= 0)) { await handleCombatWin(); return; }
+
+  // Immediately push the leader's attack damage numbers to party members
+  emitPartySync();
 
   // Party member interactive turns (leader awaits each member's chosen action)
   if (combatState.isParty && combatState.partyRole === 'leader') {
@@ -2296,6 +2865,10 @@ async function executeSkill(skillId, targetIdx = null) {
   renderSkillButtons();
   await new Promise(r => setTimeout(r, 400));
   await monsterTurn();
+  // If leader was KO'd during the monster attack, hand off to the ally auto-turn loop
+  if (combatState && combatState.player.ko && combatState.partyMembers?.some(m => m.curHp > 0)) {
+    await doAllyAutoTurn();
+  }
 }
 
 // ── Boss intro cutscene ────────────────────────────────────────────────────────
@@ -2359,7 +2932,14 @@ function renderDesertMap() {
     </div>
   </div>`;
 
-  document.getElementById('dm-zones').innerHTML = campHtml + zonesHtml;
+  const riftGateHtml = progress >= DESERT_ZONES.length
+    ? `<div id="rift-gate-btn" style="display:flex" onclick="openRiftGate()">
+        <div id="rift-gate-btn-name">🌌 The Abyssal Rift</div>
+        <div id="rift-gate-btn-sub">A wound in the sky calls to you</div>
+      </div>`
+    : '';
+
+  document.getElementById('dm-zones').innerHTML = campHtml + zonesHtml + riftGateHtml;
 }
 
 let _desertTimer = null;
@@ -2425,6 +3005,8 @@ const RASHID_LINES = [
 let _teAdvanceHandler = null;
 
 function openEasternGate() {
+  if (localStorage.getItem('rpg_eastern_gate_seen')) { openDesert(); return; }
+  localStorage.setItem('rpg_eastern_gate_seen', '1');
   const overlay  = document.getElementById('travel-east-overlay');
   const textEl   = document.getElementById('te-text');
   const promptEl = document.getElementById('te-prompt');
@@ -2576,6 +3158,96 @@ function showDesertBossIntro(onDone) {
   typeLine(0);
 }
 
+const ABYSS_BOSS_INTRO_LINES = [
+  "You dare approach the Abyssal Sanctum? Ten billion years of silence — and you choose now to interrupt it.",
+  "I do not destroy. I erase. Your world, your history, your name — all of it, gone as if it never existed.",
+  "The worlds that came before yours? You cannot remember them because I finished my work. You are simply next.",
+  "There is no victory here. There is only the question of how much of existence survives your failure.",
+  "Fight then, little spark. I have extinguished stars. You are merely... charming.",
+];
+
+function showAbyssalBossIntro(onDone) {
+  if (localStorage.getItem('rpg_abyss_boss_intro_seen')) { onDone(); return; }
+
+  const overlay  = document.getElementById('abyss-boss-intro-overlay');
+  const textEl   = document.getElementById('abyss-boss-intro-text');
+  const promptEl = document.getElementById('abyss-boss-intro-prompt');
+  const fightBtn = document.getElementById('abyss-boss-intro-fight-btn');
+  const entityEl = document.getElementById('abyss-boss-intro-entity');
+
+  const lines = ABYSS_BOSS_INTRO_LINES;
+
+  entityEl.innerHTML = MONSTER_SVGS['abyssal_god'] || '<div style="font-size:120px;text-align:center">🌌</div>';
+  overlay.style.display = 'flex';
+
+  let lineIdx = 0;
+  let typing  = false;
+  let ticker  = null;
+
+  function showFull() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    typing = false;
+    textEl.textContent = lines[lineIdx];
+    const isLast = lineIdx >= lines.length - 1;
+    promptEl.style.display = isLast ? 'none' : 'block';
+    fightBtn.style.display  = isLast ? 'block' : 'none';
+  }
+
+  function typeLine(idx) {
+    promptEl.style.display = 'none';
+    fightBtn.style.display = 'none';
+    textEl.textContent = '';
+    typing = true;
+    let i = 0;
+    ticker = setInterval(() => {
+      textEl.textContent += lines[idx][i++];
+      if (i >= lines[idx].length) { clearInterval(ticker); ticker = null; showFull(); }
+    }, 35);
+  }
+
+  function advance() {
+    if (typing) { showFull(); return; }
+    if (lineIdx < lines.length - 1) { lineIdx++; typeLine(lineIdx); }
+  }
+
+  function closeAbyssBossIntro() {
+    overlay.style.display = 'none';
+    overlay.removeEventListener('click', advance);
+    fightBtn.onclick = null;
+    localStorage.setItem('rpg_abyss_boss_intro_seen', '1');
+    onDone();
+  }
+
+  overlay.addEventListener('click', advance);
+  fightBtn.onclick = (e) => { e.stopPropagation(); closeAbyssBossIntro(); };
+
+  typeLine(0);
+}
+
+async function abyssalBossSummonMinion() {
+  const base = MONSTER_DEFS['rift_architect'];
+  const lv   = base.level;
+  const hp   = Math.round(base.hp  * (1 + (lv - 1) * 0.15));
+  const atk  = Math.round(base.atk * (1 + (lv - 1) * 0.10));
+  const def  = Math.round(base.def * (1 + (lv - 1) * 0.10));
+  const architect = { ...base, monsterId: 'rift_architect', level: lv, hp, atk, def, xp: 0, curHp: hp };
+  combatState.monsters.push(architect);
+
+  const area = document.getElementById('cb-monsters-area');
+  area.classList.add('summon-flashing');
+  setTimeout(() => area.classList.remove('summon-flashing'), 600);
+
+  renderMonsterCards();
+  renderCombatBars();
+
+  const newIdx = combatState.monsters.length - 1;
+  const newCard = document.getElementById(`cb-mon-card-${newIdx}`);
+  if (newCard) newCard.classList.add('imp-spawning');
+
+  addCombatLog(`⚫ The Abyssal God tears reality — a Rift Architect emerges from nothingness!`);
+  await new Promise(r => setTimeout(r, 700));
+}
+
 async function desertBossSummonMinion() {
   const base = MONSTER_DEFS['cursed_servant'];
   const lv   = base.level;
@@ -2600,7 +3272,180 @@ async function desertBossSummonMinion() {
   await new Promise(r => setTimeout(r, 700));
 }
 
-// ── End Desert Saharrrra ──────────────────────────────────────────────────────
+// ── End Desert Saharrrra ─────────────────────────────────────────────────────
+// ── Act 3: The Abyssal Rift ──────────────────────────────────────────────────
+
+/* global RIFT_ZONES */
+const RIFT_ZONES = [
+  // Entry — dark rocky cliffs bottom-left
+  { id:'void_threshold',    name:'The Void Threshold',    sub:'Reality frays here · Wisps of non-existence drift', pos:{left:'17%',top:'72%'}, levelRange:[36,40] },
+  // Broken floating terrain, left-center
+  { id:'shattered_expanse', name:'The Shattered Expanse', sub:'Broken planes · Gravity forgets its direction',      pos:{left:'26%',top:'52%'}, levelRange:[40,43], danger:true },
+  // Dark cave hollows, upper-left cliffs
+  { id:'mindflayer_hollows',name:'Mindflayer Hollows',    sub:'Thoughts devoured · Silence is the only mercy',      pos:{left:'50%',top:'25%'}, levelRange:[43,46], danger:true },
+  // The great vortex — center of the map
+  { id:'starless_sea',      name:'The Starless Sea',      sub:'Where stars go to die · Cold beyond cold',           pos:{left:'38%',top:'85%'}, levelRange:[46,48], danger:true },
+  // Floating castle above the vortex, upper-center
+  { id:'null_citadel',      name:'The Null Citadel',      sub:'Built from erased worlds · Home of the Architects',  pos:{left:'62%',top:'30%'}, levelRange:[48,49], danger:true },
+  // Ruined structures, right side
+  { id:'fracture_peaks',    name:'Fracture Peaks',        sub:'The summit of nothing · The Rift breathes here',     pos:{left:'67%',top:'85%'}, levelRange:[49,50], danger:true },
+  // Glowing green portal, far right
+  { id:'oblivion_gate',     name:'The Oblivion Gate',     sub:'One-way threshold · All who enter are forgotten',    pos:{left:'90%',top:'45%'}, levelRange:[49,50], danger:true },
+  // Heart of the vortex — boss
+  { id:'abyssal_sanctum',   name:'☠ The Abyssal Sanctum', sub:'??? · Do not enter alone — or at all',              pos:{left:'50%',top:'58%'}, levelRange:[50,50], danger:true },
+];
+
+let _riftProgress = 0;
+
+function getRiftProgress() { return _riftProgress; }
+
+async function setRiftProgress(v) {
+  _riftProgress = v;
+  await api('POST', '/api/me/rift-progress', { rift_progress: v });
+}
+
+function updateRiftGate() {
+  const btn = document.getElementById('rift-gate-btn');
+  if (btn) btn.style.display = _desertProgress >= DESERT_ZONES.length ? 'flex' : 'none';
+}
+
+function renderRiftMap() {
+  const progress = getRiftProgress();
+  const zonesHtml = RIFT_ZONES.map((z, i) => {
+    const locked    = i > progress;
+    const completed = i < progress;
+    const dangerCls = z.danger && !locked ? ' danger' : '';
+    const stateCls  = locked ? ' locked' : completed ? ' done' : '';
+    const clickAttr = locked ? '' : `onclick="onRiftZoneClick('${z.id}')"`;
+    return `<div class="rm-zone${dangerCls}${stateCls}" style="left:${z.pos.left};top:${z.pos.top}" ${clickAttr}>
+      <div class="rm-zone-label">
+        ${locked    ? '<div class="rm-lock">🔒</div>' : ''}
+        ${completed ? '<div class="rm-done">✓</div>'  : ''}
+        <div class="rm-zone-name">${z.name}</div>
+        <div class="rm-zone-sub">${locked ? 'Advance through the Rift first' : z.sub}</div>
+        ${!locked && z.levelRange ? `<div class="rm-zone-lvrange">Lv.${z.levelRange[0]}–${z.levelRange[1]}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('rm-zones').innerHTML = zonesHtml;
+}
+
+let _riftTimer = null;
+
+function openRift() {
+  fetchAndCacheStats().catch(() => {});
+  try { SoundEngine.play('abyss'); } catch(e) {}
+
+  const overlay = document.getElementById('rift-overlay');
+  const loading = document.getElementById('rift-loading');
+  const map     = document.getElementById('rift-map');
+  overlay.style.display = 'block';
+  loading.style.display = '';
+  map.style.display = 'none';
+
+  const bar = document.getElementById('rld-bar');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    bar.style.transition = 'width 1.5s linear';
+    bar.style.width = '100%';
+  }));
+
+  clearTimeout(_riftTimer);
+  _riftTimer = setTimeout(() => {
+    loading.style.display = 'none';
+    map.style.display = 'block';
+    renderRiftMap();
+    updateRiftGate();
+  }, 1500);
+}
+
+function closeRift() {
+  clearTimeout(_riftTimer);
+  document.getElementById('rift-overlay').style.display = 'none';
+  document.getElementById('rift-loading').style.display = '';
+  document.getElementById('rift-map').style.display = 'none';
+  SoundEngine.play('town');
+}
+
+function onRiftZoneClick(id) {
+  const idx      = RIFT_ZONES.findIndex(z => z.id === id);
+  const progress = getRiftProgress();
+  if (idx > progress) { showToast('🔒 Advance through the Rift first.'); return; }
+  const pool = ZONE_MONSTER_POOL[id] || [];
+  const hasBoss = pool.some(mid => MONSTER_DEFS[mid]?.isBoss);
+  if (hasBoss) {
+    openPartyModal(id);
+  } else {
+    startCombat(id);
+  }
+}
+
+function openRiftGate() {
+  if (localStorage.getItem('rpg_rift_gate_seen')) { openRift(); return; }
+  localStorage.setItem('rpg_rift_gate_seen', '1');
+  showAct3TransitionScene().then(() => openRift());
+}
+
+async function showAct3TransitionScene() {
+  return new Promise(resolve => {
+    const ACT3_LINES = [
+      'As the Pharaoh crumbled to dust, the Eye of the Forgotten Sun shattered. In its place — a wound in the sky.',
+      'The Void Scholar appeared from nowhere. "It was a seal," she whispered. "The Pharaoh was never a tyrant. He was a guardian."',
+      '"Beyond that crack is the Abyssal Rift — home of the entity that predates all creation. The Abyssal God does not want power. It wants to finish what it started before the first star was lit."',
+      '"Entire worlds have been erased from existence. Not destroyed — erased. As if they never were. We are next."',
+      '"The rift opens wider each hour. No army can stop it. But one traveler — one who has proven themselves against forest demons and desert pharaohs — might reach the Abyssal Sanctum."',
+      '"I will not lie to you. You may not return. But if you do not go... nothing will." — The Void Scholar',
+    ];
+
+    const overlay  = document.getElementById('act3-transition-overlay');
+    const textEl   = document.getElementById('act3-text');
+    const promptEl = document.getElementById('act3-prompt');
+    const enterBtn = document.getElementById('act3-enter-btn');
+
+    overlay.style.display = 'flex';
+    let lineIdx = 0, typing = false, ticker = null;
+
+    function showFull() {
+      if (ticker) { clearInterval(ticker); ticker = null; }
+      typing = false;
+      textEl.textContent = ACT3_LINES[lineIdx];
+      const isLast = lineIdx >= ACT3_LINES.length - 1;
+      promptEl.style.display = isLast ? 'none' : 'block';
+      enterBtn.style.display  = isLast ? 'block' : 'none';
+    }
+
+    function typeLine(idx) {
+      promptEl.style.display = 'none';
+      enterBtn.style.display = 'none';
+      textEl.textContent = '';
+      typing = true;
+      let i = 0;
+      ticker = setInterval(() => {
+        textEl.textContent += ACT3_LINES[idx][i++];
+        if (i >= ACT3_LINES[idx].length) { clearInterval(ticker); ticker = null; showFull(); }
+      }, 32);
+    }
+
+    function advance() {
+      if (typing) { showFull(); return; }
+      if (lineIdx < ACT3_LINES.length - 1) { lineIdx++; typeLine(lineIdx); }
+    }
+
+    function closeScene() {
+      if (ticker) { clearInterval(ticker); ticker = null; }
+      overlay.style.display = 'none';
+      overlay.removeEventListener('click', advance);
+      enterBtn.onclick = null;
+      resolve();
+    }
+
+    overlay.addEventListener('click', advance);
+    enterBtn.onclick = (e) => { e.stopPropagation(); closeScene(); };
+    typeLine(0);
+  });
+}
 
 const BOSS_INTRO_LINES = [
   "A lone {cls}… how disappointing.",
@@ -2718,12 +3563,59 @@ async function monsterTurn() {
   if (isSummonRound) {
     const aliveMinions = combatState.monsters.filter(m => m.isMinion && m.curHp > 0).length;
     const isDesertBoss = combatState.zoneId === 'pharaoh_tomb';
+    const isAbyssBoss  = combatState.zoneId === 'abyssal_sanctum';
     if (aliveMinions < 3) {
-      if (isDesertBoss) await desertBossSummonMinion();
+      if (isAbyssBoss)  await abyssalBossSummonMinion();
+      else if (isDesertBoss) await desertBossSummonMinion();
       else              await bossSummonMinion();
     } else {
       await bossEnrage(bossIdx);
     }
+  }
+
+  // ── Abyss boss phase transitions ────────────────────────────────────────────
+  if (combatState.zoneId === 'abyssal_sanctum' && bossIdx !== -1) {
+    const boss  = combatState.monsters[bossIdx];
+    const hpPct = boss.curHp / boss.hp;
+    const phase = hpPct > 0.65 ? 1 : hpPct > 0.30 ? 2 : 3;
+    if (phase !== combatState._abyssPhase) {
+      combatState._abyssPhase = phase;
+      try { SoundEngine.setAbyssBossPhase(phase === 1 ? 'void_approach' : phase === 2 ? 'cosmic_battle' : 'annihilation'); } catch(e) {}
+      if (phase === 2) {
+        addCombatLog(`🌌 The Abyssal God stirs — PHASE 2: COSMIC BATTLE! Reality warps around you!`);
+        showToast('🌌 PHASE 2 — The void ignites!');
+        const card = document.getElementById(`cb-mon-card-${bossIdx}`);
+        if (card) card.classList.add('boss-enraged');
+      } else if (phase === 3) {
+        addCombatLog(`⚫ PHASE 3: ANNIHILATION — The Abyssal God tears reality itself apart!`);
+        showToast('⚫ PHASE 3 — ANNIHILATION!');
+        const card = document.getElementById(`cb-mon-card-${bossIdx}`);
+        if (card) { card.style.filter = 'drop-shadow(0 0 20px #7000ff)'; }
+        boss.atk = Math.round(boss.atk * 1.4);
+      }
+    }
+  }
+
+  // ── Pitou freeze check — skip ALL monster attacks this turn ─────────────────
+  if (combatState._pitouDebuff?.type === 'freeze') {
+    const d = combatState._pitouDebuff;
+    addCombatLog(`❄️ Pitou's Petrify holds! All enemies are frozen. (${d.turnsLeft} turn${d.turnsLeft > 1 ? 's' : ''} left)`);
+    combatState.monsters.filter(m => m.curHp > 0).forEach((_, i) => {
+      spawnFxText('FROZEN!', '#88d8ff', monsterEl(i));
+    });
+    d.turnsLeft--;
+    if (d.turnsLeft <= 0) {
+      addCombatLog('❄️ Pitou\'s Petrify fades — enemies can move again!');
+      combatState._pitouDebuff = null;
+    }
+    renderPitouDebuffBadge();
+    renderCombatBars();
+    // Skip to end-of-monster-turn cleanup
+    emitPartySync();
+    combatState.phase = 'player';
+    combatState.busy  = false;
+    renderSkillButtons();
+    return;
   }
 
   // Each alive monster attacks in sequence
@@ -2746,12 +3638,54 @@ async function monsterTurn() {
       const member = alivePartyMembers[randInt(0, alivePartyMembers.length - 1)];
       const memberIdx = combatState.partyMembers.indexOf(member);
       const mfig = partyMemberFig(memberIdx);
+
+      // Dodge check for party member
+      const mIronGuardDodge = member.ironGuard?.dodgeBonus || 0;
+      if (Math.random() * 100 < (member.stats?.dodgeRate || 0) + mIronGuardDodge) {
+        addCombatLog(`💨 ${mon.name} uses ${skill.name} on ${member.username} — dodged!`);
+        spawnFxText('DODGE!', '#88ccff', mfig);
+        if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+        combatState._pendingSyncEvents.push({ target: member.username, monIdx: i, dmg: 0, dodge: true });
+        await new Promise(r => setTimeout(r, 280));
+        continue;
+      }
+
+      // Block check for party member
+      const mIronGuardBlock = member.ironGuard?.blockBonus || 0;
+      if ((member.stats?.blockRate > 0 || mIronGuardBlock > 0) && Math.random() * 100 < (member.stats?.blockRate || 0) + mIronGuardBlock) {
+        addCombatLog(`🛡 ${mon.name} uses ${skill.name} on ${member.username} — blocked!`);
+        spawnFxText('BLOCK!', '#aaaaee', mfig);
+        if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+        combatState._pendingSyncEvents.push({ target: member.username, monIdx: i, dmg: 0, block: true });
+        await new Promise(r => setTimeout(r, 280));
+        continue;
+      }
+
       const raw  = Math.floor(mon.atk * skill.dmgMult) - Math.floor((member.stats?.def || 10) * 0.5) + randInt(-2, 2);
-      const dmg  = Math.max(1, raw);
+      const mGuardR  = member.ironGuard    ? member.ironGuard.reduction    : 0;
+      const mShieldR = member.divineShield ? member.divineShield.reduction : 0;
+      const mTotalR  = Math.min(1, mGuardR + mShieldR);
+      const dmg = mTotalR >= 1 ? 0 : Math.max(1, Math.floor(Math.max(1, raw) * (1 - mTotalR)));
+      let mGuardMsg = '';
+      if (member.ironGuard) {
+        member.ironGuard.hitsRemaining--;
+        if (member.ironGuard.hitsRemaining <= 0) { member.ironGuard = null; mGuardMsg = ' 🛡️ Iron Guard fades!'; }
+        else mGuardMsg = ` 🛡️ Iron Guard (${member.ironGuard.hitsRemaining} left)`;
+      }
+      if (member.divineShield) {
+        member.divineShield.hitsRemaining--;
+        if (member.divineShield.hitsRemaining <= 0) { member.divineShield = null; mGuardMsg += ' 🔰 Divine Shield fades!'; }
+        else mGuardMsg += ` 🔰 Divine Shield (${member.divineShield.hitsRemaining} left)`;
+      }
       member.curHp = Math.max(0, member.curHp - dmg);
-      addCombatLog(`${mon.name} uses ${skill.name} on ${member.username}: −${dmg}`);
-      spawnFxText(`-${dmg}`, '#ff4444', mfig);
+      addCombatLog(dmg === 0
+        ? `🔰 ${mon.name} uses ${skill.name} on ${member.username} — blocked!${mGuardMsg}`
+        : `${mon.name} uses ${skill.name} on ${member.username}: −${dmg}${mGuardMsg}`);
+      spawnFxText(dmg === 0 ? 'BLOCK!' : `-${dmg}`, dmg === 0 ? '#aaaaee' : '#ff4444', mfig);
       addAnim(mfig, 'anim-hit', 400); addAnim(mfig, 'anim-shake', 450);
+      // Queue event so member's client can show animations + damage number too
+      if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+      combatState._pendingSyncEvents.push({ target: member.username, monIdx: i, dmg });
       renderCombatBars();
       await new Promise(r => setTimeout(r, 280));
       continue;
@@ -2767,44 +3701,100 @@ async function monsterTurn() {
 
     const pfig = document.getElementById('cb-player-figure');
 
-    // Dodge check
-    if (Math.random() * 100 < (combatState.player.stats.dodgeRate || 0)) {
+    // Dodge check (includes Iron Guard bonus while stance is active)
+    const _ironGuardDodge = combatState.player.ironGuard?.dodgeBonus || 0;
+    if (Math.random() * 100 < (combatState.player.stats.dodgeRate || 0) + _ironGuardDodge) {
       addCombatLog(`💨 ${mon.name} uses ${skill.name} — you dodge!`);
       spawnFxText('DODGE!', '#88ccff', pfig);
+      try { SoundEngine.playSfxDodge(); } catch(e) {}
       await new Promise(r => setTimeout(r, 280));
       continue;
     }
 
-    // Block check (only if shield equipped)
-    if (combatState.player.stats.blockRate > 0 && Math.random() * 100 < combatState.player.stats.blockRate) {
+    // Block check (includes Iron Guard bonus while stance is active)
+    const _ironGuardBlock = combatState.player.ironGuard?.blockBonus || 0;
+    if ((combatState.player.stats.blockRate > 0 || _ironGuardBlock > 0) && Math.random() * 100 < (combatState.player.stats.blockRate || 0) + _ironGuardBlock) {
       addCombatLog(`🛡 ${mon.name} uses ${skill.name} — blocked!`);
       spawnFxText('BLOCK!', '#aaaaee', pfig);
+      try { SoundEngine.playSfxBlock(); } catch(e) {}
       await new Promise(r => setTimeout(r, 280));
       continue;
     }
 
     const raw    = Math.floor(mon.atk * skill.dmgMult)
                    - Math.floor(combatState.player.stats.def * 0.5) + randInt(-2, 2);
-    const defPct = (combatState.player.stats.defPct || 0) / 100;
-    const dr     = (combatState.player.stats.dmgReduction || 0) / 100;
-    const dmg    = Math.max(1, Math.floor(Math.max(1, raw) * (1 - defPct) * (1 - dr)));
+    const defPct  = (combatState.player.stats.defPct || 0) / 100;
+    const dr      = (combatState.player.stats.dmgReduction || 0) / 100;
+    const guardR  = combatState.player.ironGuard ? combatState.player.ironGuard.reduction : 0;
+    const shieldR = combatState.player.divineShield ? combatState.player.divineShield.reduction : 0;
+    const totalR  = Math.min(1, guardR + shieldR);
+    const pitouW  = combatState._pitouDebuff?.type === 'weakness' ? 0.7 : 1.0;
+    const dmg     = totalR >= 1 ? 0 : Math.max(1, Math.floor(Math.max(1, raw) * (1 - defPct) * (1 - dr) * (1 - totalR) * pitouW));
     combatState.player.curHp -= dmg;
-    addCombatLog(`${mon.name} uses ${skill.name}: −${dmg}`);
+    try { SoundEngine.playSfxPlayerHit(charCache?.class || 'Warrior'); } catch(e) {}
+    let guardMsg = '';
+    if (combatState.player.ironGuard) {
+      combatState.player.ironGuard.hitsRemaining--;
+      if (combatState.player.ironGuard.hitsRemaining <= 0) {
+        combatState.player.ironGuard = null;
+        guardMsg += ' 🛡️ Iron Guard fades!';
+        renderSkillButtons();
+      } else {
+        guardMsg += ` 🛡️ Iron Guard (${combatState.player.ironGuard.hitsRemaining} hit${combatState.player.ironGuard.hitsRemaining > 1 ? 's' : ''} left)`;
+      }
+    }
+    if (combatState.player.divineShield) {
+      combatState.player.divineShield.hitsRemaining--;
+      if (combatState.player.divineShield.hitsRemaining <= 0) {
+        combatState.player.divineShield = null;
+        guardMsg += ' 🔰 Divine Shield fades!';
+        renderSkillButtons();
+      } else {
+        guardMsg += ` 🔰 Divine Shield (${combatState.player.divineShield.hitsRemaining} hit${combatState.player.divineShield.hitsRemaining > 1 ? 's' : ''} left)`;
+      }
+    }
+    addCombatLog(dmg === 0
+      ? `🔰 ${mon.name} uses ${skill.name} — blocked by Divine Shield!${guardMsg}`
+      : `${mon.name} uses ${skill.name}: −${dmg}${guardMsg}`);
     spawnFxText(`-${dmg}`, '#ff4444', pfig);
+    // Queue event so party members see the monster attack leader
+    if (combatState.isParty && combatState.partyRole === 'leader') {
+      if (!combatState._pendingSyncEvents) combatState._pendingSyncEvents = [];
+      combatState._pendingSyncEvents.push({ target: me.username, monIdx: i, dmg });
+    }
     renderCombatBars();
 
     if (combatState.player.curHp <= 0 && !combatState.player.ko) {
-      combatState.player.curHp = 0;
-      if (combatState.isParty && combatState.partyMembers.some(m => m.curHp > 0)) {
-        // KO the leader — allies fight on
-        combatState.player.ko = true;
-        if (pfig) pfig.classList.add('anim-death');
-        addCombatLog(`💀 ${me.username} has fallen! Allies fight on...`);
-        api('POST', '/api/me/die').catch(() => {});
-        if (charCache) charCache.curHp = 1;
+      // ── Immortal Vow (lastStand): survive with 1 HP once ──────────────────
+      if (combatState.player.stats.lastStand && !combatState._lastStandUsed) {
+        combatState._lastStandUsed = true;
+        combatState.player.curHp = 1;
+        addCombatLog(`⚰️ IMMORTAL VOW! Death refused — you survive with 1 HP!`);
+        spawnFxText('UNDYING!', '#ff8800', pfig);
         renderCombatBars();
+        await new Promise(r => setTimeout(r, 400));
+      // ── Martyr's Resolve: if HP drops below trigger% threshold, auto-heal once ─
+      } else if (combatState.player.stats.martyrTriggerPct && !combatState._martyrUsed) {
+        combatState._martyrUsed = true;
+        const healAmt = combatState.player.maxHp;
+        combatState.player.curHp = healAmt;
+        addCombatLog(`🕊️ Martyr's Resolve! Near death — a divine surge restores full HP!`);
+        spawnFxText('MARTYR!', '#ffe080', pfig);
+        renderCombatBars();
+        await new Promise(r => setTimeout(r, 400));
       } else {
-        await handleCombatLose(); return;
+        combatState.player.curHp = 0;
+        if (combatState.isParty && combatState.partyMembers.some(m => m.curHp > 0)) {
+          // KO the leader — allies fight on
+          combatState.player.ko = true;
+          if (pfig) pfig.classList.add('anim-death');
+          addCombatLog(`💀 ${me.username} has fallen! Allies fight on...`);
+          api('POST', '/api/me/die').catch(() => {});
+          if (charCache) charCache.curHp = 1;
+          renderCombatBars();
+        } else {
+          await handleCombatLose(); return;
+        }
       }
     }
     await new Promise(r => setTimeout(r, 280));
@@ -2815,36 +3805,46 @@ async function monsterTurn() {
     await handleCombatLose(); return;
   }
 
+  // ── Pitou debuff tick-down (weakness / vulnerable) ──────────────────────────
+  if (combatState._pitouDebuff && combatState._pitouDebuff.type !== 'freeze') {
+    const d = combatState._pitouDebuff;
+    d.turnsLeft--;
+    if (d.turnsLeft <= 0) {
+      addCombatLog(`✨ Pitou's ${d.name} wears off.`);
+      combatState._pitouDebuff = null;
+    } else {
+      addCombatLog(`💜 Pitou's ${d.name}: ${d.turnsLeft} turn${d.turnsLeft > 1 ? 's' : ''} remaining.`);
+    }
+    renderPitouDebuffBadge();
+  }
+
   // Sync state to all party members after monsters' attacks
   emitPartySync();
 
   combatState.phase = 'player';
   combatState.busy  = false;
   renderSkillButtons();
-
-  // If leader is KO'd but allies are still standing, give them interactive turns
-  if (combatState.player.ko && combatState.partyMembers.some(m => m.curHp > 0)) {
-    await new Promise(r => setTimeout(r, 1000));
-    await doAllyAutoTurn();
-  }
+  if (combatState.isParty && combatState.partyRole === 'leader') showToast('⚔ Your turn!');
 }
 
-// Called each round when the leader is KO'd but party members are still alive
+// Called each round when the leader is KO'd but party members are still alive.
+// Loops (instead of recursing through monsterTurn) to avoid stack overflow.
 async function doAllyAutoTurn() {
-  if (!combatState || combatState.phase === 'win' || combatState.phase === 'lose') return;
-  combatState.busy = true;
+  while (combatState && combatState.phase !== 'win' && combatState.phase !== 'lose'
+         && combatState.player.ko && combatState.partyMembers.some(m => m.curHp > 0)) {
+    combatState.busy = true;
 
-  // Give each alive member an interactive turn
-  await doPartyMemberTurns();
-  if (!combatState || combatState.phase === 'win' || combatState.phase === 'lose') return;
+    await doPartyMemberTurns();
+    if (!combatState || combatState.phase === 'win' || combatState.phase === 'lose') return;
 
-  renderCombatBars();
-  if (combatState.monsters.every(m => m.curHp <= 0)) { await handleCombatWin(); return; }
+    renderCombatBars();
+    if (combatState.monsters.every(m => m.curHp <= 0)) { await handleCombatWin(); return; }
 
-  // Monster counter-attack
-  combatState.phase = 'enemy';
-  await new Promise(r => setTimeout(r, 400));
-  await monsterTurn();
+    combatState.phase = 'enemy';
+    await new Promise(r => setTimeout(r, 400));
+    await monsterTurn();
+    if (!combatState || combatState.phase === 'win' || combatState.phase === 'lose') return;
+  }
 }
 
 async function handleCombatWin() {
@@ -2860,44 +3860,55 @@ async function handleCombatWin() {
     return s + xp;
   }, 0);
   if (tooWeakCount > 0) showToast(`⚠ ${tooWeakCount} monster${tooWeakCount > 1 ? 's were' : ' was'} too weak — no XP rewarded. Fight stronger enemies!`);
-  addCombatLog(`🏆 All enemies defeated! +${totalXp} XP`);
+  const isPartyFight = !!(combatState.isParty && partyState?.partyId);
+  const finalXp = isPartyFight ? totalXp * 3 : totalXp;
+  addCombatLog(`🏆 All enemies defeated! +${finalXp} XP${isPartyFight ? ' 👥 Party Bonus ×3!' : ''}`);
 
-  // Save XP, then save loot — both must complete before we fetch fresh stats
-  const monsterList = combatState.monsters.map(m => ({ monsterId: m.monsterId, tier: m.tier, level: m.level }));
+  // Save XP, then save loot — deduplicate by monsterId so re-summoned minions don't inflate the list
+  const _seenIds = new Set();
+  const monsterList = combatState.monsters
+    .filter(m => { if (_seenIds.has(m.monsterId)) return false; _seenIds.add(m.monsterId); return true; })
+    .map(m => ({ monsterId: m.monsterId, tier: m.tier, level: m.level }))
+    .slice(0, 9);
 
   let xpRes, lootRes, leveledUp;
   if (combatState.isParty && partyState?.partyId) {
     if (partyState.isLeader) {
       // Only the leader calls the reward endpoint — it awards XP + loot to all members
       const partyMembers = partyState.members || [me.username];
-      const partyReward  = await api('POST', '/api/party/reward', { partyMembers, xp: totalXp, monsters: monsterList }).catch(() => null);
+      const partyReward  = await api('POST', '/api/party/reward', { partyMembers, xp: finalXp, monsters: monsterList }).catch(() => null);
       const myResult     = partyReward?.results?.[me.username];
       xpRes     = myResult;
       lootRes   = { items: myResult?.items || [], gold: myResult?.gold || 0 };
       leveledUp = (myResult?.levelGain || 0) > 0;
       socket.emit('party:end', { partyId: partyState.partyId });
     } else {
-      // Member clients: wait up to 8s for leader to call party:end (which triggers reward)
-      await new Promise(resolve => {
-        const cleanup = () => { socket.off('party:ended', handler); clearTimeout(timer); resolve(); };
-        const handler = () => cleanup();
-        const timer   = setTimeout(cleanup, 8000);
-        socket.once('party:ended', handler);
-      });
+      // Member clients: wait for leader to emit party:end (which triggers party:ended)
+      // Guard against race condition: party:ended may have already arrived and set partyState=null
+      if (partyState?.partyId) {
+        await new Promise(resolve => {
+          const cleanup = () => { socket.off('party:ended', handler); clearTimeout(timer); resolve(); };
+          const handler = () => cleanup();
+          const timer   = setTimeout(cleanup, 4000); // reduced from 8s; solo fallback handles the rest
+          socket.once('party:ended', handler);
+        });
+      }
       xpRes = null; lootRes = null; leveledUp = false;
     }
     partyState = null;
   } else {
-    xpRes     = await api('POST', '/api/me/xp',   { xp: totalXp }).catch(() => null);
-    lootRes   = await api('POST', '/api/me/loot',  { monsters: monsterList }).catch(() => null);
+    [xpRes, lootRes] = await Promise.all([
+      api('POST', '/api/me/xp',   { xp: finalXp }).catch(() => null),
+      api('POST', '/api/me/loot', { monsters: monsterList }).catch(() => null),
+    ]);
     leveledUp = xpRes?.newSkillPoints > 0;
   }
 
-  // Fetch fresh stats NOW — items are already in the DB, this is guaranteed correct
+  // Fetch fresh stats — if it times out, fall back to cached data so loot panel still shows
   const [freshStats, freshSkills] = await Promise.all([
     api('GET', '/api/me/stats').catch(() => null),
     api('GET', '/api/me/skills').catch(() => null),
-  ]);
+  ]).catch(() => [null, null]);
   if (freshStats && freshSkills) {
     charCache = { ...freshStats, skillData: freshSkills };
     const goldEl = document.getElementById('my-gold');
@@ -2919,6 +3930,7 @@ async function handleCombatWin() {
 
   combatState._pendingZoneIdx       = combatState.zoneIdx >= 0 ? combatState.zoneIdx : undefined;
   combatState._pendingDesertZoneIdx = combatState.desertZoneIdx >= 0 ? combatState.desertZoneIdx : undefined;
+  combatState._pendingRiftZoneIdx   = combatState.riftZoneIdx >= 0 ? combatState.riftZoneIdx : undefined;
 
   // If inventory is over 100, make player drop items before seeing loot
   const inv = charCache?.inventory || [];
@@ -2980,6 +3992,12 @@ async function bagDropItem(invId) {
 function showLootPanel(lootRes) {
   const skillsEl = document.getElementById('combat-skills');
   if (!skillsEl) return;
+
+  // Hide arena + log to free vertical space for the loot panel
+  const arenaEl = document.getElementById('combat-arena');
+  const logEl   = document.getElementById('combat-log');
+  if (arenaEl) arenaEl.style.display = 'none';
+  if (logEl)   logEl.style.display   = 'none';
 
   const invCount = (charCache?.inventory || []).length;
   if (invCount >= 100) {
@@ -3125,6 +4143,7 @@ function showDemonLordDeathScene() {
 async function collectLoot() {
   const zoneIdx       = combatState?._pendingZoneIdx;
   const desertZoneIdx = combatState?._pendingDesertZoneIdx;
+  const riftZoneIdx   = combatState?._pendingRiftZoneIdx;
   closeCombat();
 
   // Forest progress
@@ -3134,8 +4153,11 @@ async function collectLoot() {
     const next = FOREST_ZONES[zoneIdx + 1];
     updateEasternGate();
     if (!next) {
-      // Dark Forest fully conquered — show dying Demon Lord scene, then quest complete
-      await showDemonLordDeathScene();
+      // Dark Forest fully conquered — show dying Demon Lord scene only the first time
+      if (!localStorage.getItem('rpg_demon_lord_death_seen')) {
+        localStorage.setItem('rpg_demon_lord_death_seen', '1');
+        await showDemonLordDeathScene();
+      }
       const res = await api('POST', '/api/me/quests/gatehouse/complete').catch(() => null);
       if (res?.ok && !res.alreadyDone) {
         await loadQuestLog();
@@ -3151,9 +4173,53 @@ async function collectLoot() {
     await setDesertProgress(desertZoneIdx + 1);
     renderDesertMap();
     const next = DESERT_ZONES[desertZoneIdx + 1];
-    showToast(next
-      ? `✅ ${DESERT_ZONES[desertZoneIdx].name} cleared! ${next.name} unlocked!`
-      : `🏆 The Desert Saharrrra has been conquered! The Eye of the Forgotten Sun rests in peace.`);
+    if (next) {
+      showToast(`✅ ${DESERT_ZONES[desertZoneIdx].name} cleared! ${next.name} unlocked!`);
+    } else {
+      showToast('🏆 The Desert Saharrrra has been conquered! The Eye of the Forgotten Sun rests in peace.');
+      // Trigger Act 3 transition cutscene the first time Pharaoh is defeated
+      if (!localStorage.getItem('rpg_pharaoh_death_seen')) {
+        localStorage.setItem('rpg_pharaoh_death_seen', '1');
+        // Update the rift gate in case desert map is still visible
+        updateRiftGate();
+        await new Promise(r => setTimeout(r, 1200)); // let loot panel settle
+        await showAct3TransitionScene();
+      }
+    }
+  }
+
+  // Rift progress
+  if (riftZoneIdx !== undefined && riftZoneIdx === getRiftProgress()) {
+    await setRiftProgress(riftZoneIdx + 1);
+    renderRiftMap();
+    const next = RIFT_ZONES[riftZoneIdx + 1];
+    if (next) {
+      showToast(`✅ ${RIFT_ZONES[riftZoneIdx].name} cleared! ${next.name} unlocked!`);
+    } else {
+      // Abyssal God defeated
+      if (!localStorage.getItem('rpg_abyssal_god_death_seen')) {
+        localStorage.setItem('rpg_abyssal_god_death_seen', '1');
+        await new Promise(r => setTimeout(r, 600));
+        // Show victory modal — combat is already closed so we can't use addCombatLog
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = `<div style="text-align:center;color:#c8a8ff;font-family:monospace;padding:40px;max-width:480px;border:1px solid #6633cc;background:#0a0010;border-radius:8px;">
+          <div style="font-size:36px;margin-bottom:16px">🌌</div>
+          <div style="font-size:13px;line-height:2.2;letter-spacing:1px;">
+            ══════════════════════════════════════════<br>
+            &nbsp;THE ABYSSAL GOD HAS BEEN DESTROYED<br>
+            &nbsp;The crack in the sky seals itself shut.<br>
+            &nbsp;The void recedes. Stars blink back into<br>
+            &nbsp;existence. You have saved everything.<br>
+            ══════════════════════════════════════════
+          </div>
+          <button onclick="this.parentElement.parentElement.remove()" style="margin-top:24px;padding:10px 28px;background:#6633cc;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">Continue</button>
+        </div>`;
+        document.body.appendChild(modal);
+      } else {
+        showToast('🌌 THE ABYSSAL RIFT IS SEALED! Existence endures.');
+      }
+    }
   }
 
   // charCache was already refreshed in handleCombatWin after loot was saved —
@@ -3203,13 +4269,24 @@ async function healAtChapel() {
 }
 
 function closeCombat() {
+  const fromOverlay = combatState?._fromOverlay;
   combatState = null;
   document.getElementById('combat-overlay').style.display = 'none';
   document.getElementById('cb-party-members').innerHTML = '';
-  // Return to forest or desert music if overlay is open, else town
-  const forestOpen = document.getElementById('forest-overlay')?.style.display !== 'none';
-  const desertOpen = document.getElementById('desert-overlay')?.style.display !== 'none';
-  try { SoundEngine.play(forestOpen ? 'forest' : desertOpen ? 'desert' : 'town'); } catch(e) {}
+  // Reset arena/log visibility hidden by showLootPanel so the next fight starts clean
+  const arenaEl = document.getElementById('combat-arena');
+  const logEl   = document.getElementById('combat-log');
+  if (arenaEl) arenaEl.style.display = '';
+  if (logEl)   logEl.style.display   = '';
+  // Restore the map overlay the player came from (hidden by showCombat)
+  if (fromOverlay === 'forest') document.getElementById('forest-overlay').style.display = 'block';
+  else if (fromOverlay === 'desert') document.getElementById('desert-overlay').style.display = 'block';
+  else if (fromOverlay === 'rift') document.getElementById('rift-overlay').style.display = 'block';
+  // Return to appropriate ambient music based on which overlay is open, else town
+  const forestOpen = document.getElementById('forest-overlay')?.style.display === 'block';
+  const desertOpen = document.getElementById('desert-overlay')?.style.display === 'block';
+  const riftOpen   = document.getElementById('rift-overlay')?.style.display === 'block';
+  try { SoundEngine.play(forestOpen ? 'forest' : desertOpen ? 'desert' : riftOpen ? 'abyss' : 'town'); } catch(e) {}
 }
 
 // ── Blacksmith Shop ───────────────────────────────────────────────────────────
@@ -3232,16 +4309,100 @@ let _bsmConfirmCallback = null;
 async function openBlacksmith() {
   document.getElementById('bsm-overlay').classList.add('show');
   document.getElementById('bsm-modal').classList.add('show');
+  // Reset to shop tab
+  switchBsmTab('shop');
   document.getElementById('bsm-shop-items').innerHTML =
     '<div style="color:var(--muted);padding:20px;text-align:center;font-size:13px">Loading…</div>';
-  const res = await api('GET', '/api/shop').catch(() => null);
+  const [res] = await Promise.all([
+    api('GET', '/api/shop').catch(() => null),
+    fetchAndCacheStats(),
+  ]);
   _bsmCatalog   = Array.isArray(res?.items) ? res.items : [];
   _bsmExpiresAt = res?.expiresAt || 0;
   _bsmPurchased = new Set();
-  await fetchAndCacheStats();
   _renderBsmShop();
   _renderBsmInv();
   _startBsmTimer();
+}
+
+function switchBsmTab(tab) {
+  const shopCol   = document.getElementById('bsm-shop-col');
+  const invCol    = document.getElementById('bsm-inv-col');
+  const craftView = document.getElementById('bsm-craft-view');
+  const tabShop   = document.getElementById('bsm-tab-shop');
+  const tabCraft  = document.getElementById('bsm-tab-craft');
+  if (tab === 'craft') {
+    if (shopCol)   shopCol.style.display   = 'none';
+    if (invCol)    invCol.style.display    = 'none';
+    if (craftView) craftView.style.display = 'block';
+    if (tabShop)   tabShop.classList.remove('active');
+    if (tabCraft)  tabCraft.classList.add('active');
+    renderCraftRecipes();
+  } else {
+    if (shopCol)   shopCol.style.display   = '';
+    if (invCol)    invCol.style.display    = '';
+    if (craftView) craftView.style.display = 'none';
+    if (tabShop)   tabShop.classList.add('active');
+    if (tabCraft)  tabCraft.classList.remove('active');
+  }
+}
+
+let _craftRecipes = null;
+
+async function renderCraftRecipes() {
+  const el = document.getElementById('bsm-craft-recipes');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;font-size:13px">Loading recipes…</div>';
+  const [recipesRes] = await Promise.all([
+    !_craftRecipes ? api('GET', '/api/crafting/recipes').catch(() => null) : Promise.resolve(null),
+    !charCache      ? fetchAndCacheStats().catch(() => {})                 : Promise.resolve(),
+  ]);
+  if (recipesRes) _craftRecipes = recipesRes?.recipes || [];
+  if (!_craftRecipes) _craftRecipes = [];
+  const playerLv = charCache?.level || 1;
+  if (!_craftRecipes.length) {
+    el.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;font-size:13px">No recipes available.</div>';
+    return;
+  }
+  el.innerHTML = _craftRecipes.map(r => {
+    const canLevel  = playerLv >= r.level_req;
+    const gold      = charCache?.gold ?? 0;
+    const canAfford = gold >= r.gold_cost;
+    const mat2Html  = r.mat2_rarity
+      ? `<span style="color:var(--muted)">+</span><span class="rarity-${r.mat2_rarity}">${r.mat2_rarity} ${r.mat2_slot}</span>` : '';
+    const RARITY_LABEL = { normal:'Normal', magic:'Magic', rare:'Rare', legendary:'Legendary', godly:'Godly' };
+    const outLabel  = RARITY_LABEL[r.out_rarity] || r.out_rarity;
+    const reqHtml   = !canLevel ? `<span style="color:#cc4444">(Req. Lv.${r.level_req})</span>` : `<span style="color:var(--muted)">Lv.${r.level_req}</span>`;
+    return `<div class="craft-recipe">
+      <div class="craft-recipe-name rarity-${r.out_rarity}">${r.name}</div>
+      <div style="font-size:9px;letter-spacing:.08em;font-family:'Cinzel',serif;margin-bottom:5px;display:flex;gap:8px;align-items:center">
+        <span class="rarity-${r.out_rarity}">${outLabel} ${r.slot}</span>
+        ${reqHtml}
+      </div>
+      <div class="craft-recipe-mats">
+        <span style="color:var(--muted);font-size:9px">MATS:</span>
+        <span class="rarity-${r.mat1_rarity}">${r.mat1_rarity} ${r.mat1_slot}</span>
+        ${mat2Html}
+      </div>
+      <div class="craft-recipe-cost">Cost: ${r.gold_cost} 💰${!canAfford ? ' <span style="color:#cc4444">(insufficient gold)</span>' : ''}</div>
+      <button class="craft-btn" onclick="craftItem(${r.id})" ${!canLevel || !canAfford ? 'disabled' : ''}>
+        ⚒ Craft
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function craftItem(recipeId) {
+  const res = await api('POST', '/api/crafting/craft', { recipeId }).catch(() => null);
+  if (!res || res.error) {
+    showToast(`❌ ${res?.error || 'Crafting failed.'}`);
+    return;
+  }
+  _craftRecipes = null; // invalidate cache so gold/level changes reflect
+  await fetchAndCacheStats();
+  _renderBsmInv();
+  renderCraftRecipes();
+  showToast(`⚒ Crafted: ${res.item?.name || 'new item'}! Check your inventory.`);
 }
 
 function closeBlacksmith() {
@@ -3684,6 +4845,12 @@ function _pvpRenderBars(data) {
   document.getElementById('pvp-opp-mp-fill').style.width = pct(oppD.curMp, oppD.maxMp || oppD.curMp);
   document.getElementById('pvp-opp-hp-num').textContent  = `${Math.max(0, oppD.curHp)}/${oppD.maxHp || oppD.curHp}`;
   document.getElementById('pvp-opp-mp-num').textContent  = `${oppD.curMp}/${oppD.maxMp || oppD.curMp}`;
+
+  // Guard indicators
+  const myGuardEl  = document.getElementById('pvp-my-guard');
+  const oppGuardEl = document.getElementById('pvp-opp-guard');
+  if (myGuardEl)  myGuardEl.textContent  = myD.guard  ? `🛡 ${Math.round(myD.guard.reduction * 100)}% · ${myD.guard.hitsRemaining} hit${myD.guard.hitsRemaining > 1 ? 's' : ''}` : '';
+  if (oppGuardEl) oppGuardEl.textContent = oppD.guard ? `🛡 ${Math.round(oppD.guard.reduction * 100)}% · ${oppD.guard.hitsRemaining} hit${oppD.guard.hitsRemaining > 1 ? 's' : ''}` : '';
 }
 
 function _pvpAddLog(msg) {
@@ -3742,9 +4909,16 @@ async function pvpUseSkill(skillId) {
   _pvpRenderSkills();
 
   const stats = getEffectiveStats(charCache);
-  let dmg = 0, healAmt = 0;
+  let dmg = 0, healAmt = 0, buffType = null, buffReduction = 0, buffHits = 0;
+
+  const isBuff = skill.type === 'guard' || skill.type === 'divine_shield';
   if (skill.heal) {
-    healAmt = Math.floor(stats.spirit * 3);
+    healAmt = Math.floor(stats.spirit * (skill.healMult || 3));
+  } else if (isBuff) {
+    const pt = Math.min((skill.pts || 1), skill.type === 'divine_shield' ? 3 : 3) - 1;
+    buffType      = skill.type;
+    buffReduction = (skill.reductionByPt || [0.5, 0.6, 0.6])[pt];
+    buffHits      = skill.type === 'divine_shield' ? (skill.hits || 2) : (skill.hitsByPt || [2, 2, 3])[pt];
   } else {
     const oppDef = oppData?.def ?? 0;
     dmg = Math.max(1, Math.floor(stats.atk * skill.dmgMult) - Math.floor(oppDef * 0.5));
@@ -3766,33 +4940,117 @@ async function pvpUseSkill(skillId) {
     });
   }
 
-  switch (skill.type) {
-    case 'melee': case 'bash': case 'stab':
-      addAnim(myFig, 'anim-atk-r', 700);
-      await new Promise(r => setTimeout(r, 340));
-      addAnim(oppFig, 'anim-hit', 400); addAnim(oppFig, 'anim-shake', 450);
-      await new Promise(r => setTimeout(r, 400));
-      break;
-    case 'heal':
-      addAnim(myFig, 'anim-heal', 650);
-      await new Promise(r => setTimeout(r, 650));
-      break;
-    default:
-      addAnim(myFig, 'anim-magic', 550);
-      await new Promise(r => setTimeout(r, 140));
-      await pvpProjectile();
-      addAnim(oppFig, 'anim-hit', 400);
-      await new Promise(r => setTimeout(r, 340));
+  if (isBuff) {
+    addAnim(myFig, 'anim-buff', 700);
+    spawnFxText(skill.type === 'divine_shield' ? 'DIVINE!' : 'GUARD!', '#88ccff', myFig);
+    await new Promise(r => setTimeout(r, 700));
+  } else {
+    switch (skill.type) {
+      case 'melee': case 'bash': case 'stab':
+        addAnim(myFig, 'anim-atk-r', 700);
+        await new Promise(r => setTimeout(r, 340));
+        addAnim(oppFig, 'anim-hit', 400); addAnim(oppFig, 'anim-shake', 450);
+        await new Promise(r => setTimeout(r, 400));
+        break;
+      case 'heal':
+        addAnim(myFig, 'anim-heal', 650);
+        await new Promise(r => setTimeout(r, 650));
+        break;
+      default:
+        addAnim(myFig, 'anim-magic', 550);
+        await new Promise(r => setTimeout(r, 140));
+        await pvpProjectile();
+        addAnim(oppFig, 'anim-hit', 400);
+        await new Promise(r => setTimeout(r, 340));
+    }
   }
 
   socket.emit('pvp:action', {
-    sessionId:  pvpState.sessionId,
-    skillName:  skill.name,
+    sessionId: pvpState.sessionId,
+    skillName: skill.name,
     dmg,
     healAmt,
     mpCost:     skill.mpCost,
-    targetSelf: !!skill.heal,
+    targetSelf: !!(skill.heal || isBuff),
+    buffType,
+    buffReduction,
+    buffHits,
   });
+}
+
+// ── Fullscreen ────────────────────────────────────────────────────────────────
+function toggleFullscreen() {
+  const btn = document.getElementById('btn-fullscreen');
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    btn.textContent = '✕';
+    btn.title = 'Exit Fullscreen';
+  } else {
+    document.exitFullscreen().catch(() => {});
+    btn.textContent = '⛶';
+    btn.title = 'Fullscreen';
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('btn-fullscreen');
+  if (btn) {
+    btn.textContent = document.fullscreenElement ? '✕' : '⛶';
+    btn.title = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+  }
+});
+
+// ── Royal Keep Resets ─────────────────────────────────────────────────────────
+async function doSkillReset() {
+  showToast('⏳ Resetting skills…');
+  document.getElementById('bld-popup-sub').textContent = '⏳ Processing…';
+  let res;
+  try { res = await api('POST', '/api/me/skills/reset'); }
+  catch (e) {
+    showToast('❌ Skill reset failed — check connection');
+    document.getElementById('bld-popup-sub').textContent = '❌ Request failed. Try again.';
+    return;
+  }
+  if (!res || res.error) {
+    showToast(`❌ ${res?.error || 'Unknown error'}`);
+    document.getElementById('bld-popup-sub').textContent = `❌ ${res?.error || 'Unknown error'}`;
+    return;
+  }
+  showToast(`✅ Skills reset! ${res.skillPoints} points returned`);
+  document.getElementById('bld-popup-sub').innerHTML =
+    `✅ Skills cleared! <b>${res.skillPoints}</b> skill points returned.<br>Remaining gold: <b>${res.gold} 💰</b>`;
+  document.getElementById('bld-popup-actions').innerHTML = '';
+  document.getElementById('my-gold').textContent = `💰 ${res.gold}`;
+  await fetchAndCacheStats().catch(() => {});
+  if (charCache) charCache.skillData = { unspentPoints: res.skillPoints, allocated: {} };
+  if (document.getElementById('char-panel').classList.contains('show') && charTab) {
+    switchCharTab(charTab);
+  }
+}
+
+async function doAttrReset() {
+  showToast('⏳ Resetting attributes…');
+  document.getElementById('bld-popup-sub').textContent = '⏳ Processing…';
+  let res;
+  try { res = await api('POST', '/api/me/attributes/reset'); }
+  catch (e) {
+    showToast('❌ Attribute reset failed — check connection');
+    document.getElementById('bld-popup-sub').textContent = '❌ Request failed. Try again.';
+    return;
+  }
+  if (!res || res.error) {
+    showToast(`❌ ${res?.error || 'Unknown error'}`);
+    document.getElementById('bld-popup-sub').textContent = `❌ ${res?.error || 'Unknown error'}`;
+    return;
+  }
+  showToast(`✅ Attributes reset! ${res.attrPoints} points returned`);
+  document.getElementById('bld-popup-sub').innerHTML =
+    `✅ Attributes cleared! <b>${res.attrPoints}</b> attribute points returned.<br>Remaining gold: <b>${res.gold} 💰</b>`;
+  document.getElementById('bld-popup-actions').innerHTML = '';
+  document.getElementById('my-gold').textContent = `💰 ${res.gold}`;
+  await fetchAndCacheStats().catch(() => {});
+  if (document.getElementById('char-panel').classList.contains('show') && charTab) {
+    switchCharTab(charTab);
+  }
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────

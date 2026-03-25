@@ -20,7 +20,12 @@
       "Bash(timeout 5 node server.js)",
       "Bash(node -e \"const fs=require\\(''fs''\\);const code=fs.readFileSync\\(''c:/workspace/family-rpg/public/game.js'',''utf8''\\);console.log\\(''lines:'',code.split\\(''\\\\n''\\).length\\);[''showDemonLordDeathScene'',''openEasternGate'',''RASHID_LINES'',''travel-east-overlay''].forEach\\(f=>console.log\\(code.includes\\(f\\)?''OK'':''MISSING'',f\\)\\);\")",
       "Bash(node --check c:/workspace/family-rpg/public/game.js)",
-      "Bash(node --check c:/workspace/family-rpg/public/sound.js)"
+      "Bash(node --check c:/workspace/family-rpg/public/sound.js)",
+      "Bash(node --check c:/workspace/family-rpg/public/skilltree.js)",
+      "Bash(node c:/workspace/family-rpg/server.js --check)",
+      "Bash(node -e \"require\\(''''./c:/workspace/family-rpg/server.js''''\\)\")",
+      "Bash(node --check c:/workspace/family-rpg/server.js)",
+      "Bash(curl -s -X POST http://localhost:3000/api/me/skills/reset -H \"Content-Type: application/json\")"
     ]
   }
 }

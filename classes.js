@@ -7,7 +7,7 @@
 const CLASSES = {
   Warrior: { str: 15, dex: 10, int:  5, spirit:  7 },
   Paladin: { str: 13, dex:  8, int:  6, spirit: 12 },
-  Rogue:   { str:  9, dex: 16, int:  7, spirit:  6 },
+  Rogue:   { str:  9, dex: 20, int:  7, spirit:  6 },
   Ranger:  { str: 10, dex: 14, int:  7, spirit:  8 },
   Mage:    { str:  5, dex:  7, int: 16, spirit: 12 },
   Healer:  { str:  6, dex:  7, int: 10, spirit: 16 },

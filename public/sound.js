@@ -745,25 +745,596 @@ const SoundEngine = (() => {
   // ─── PUBLIC API ──────────────────────────────────────────────────────────────
   let _active = null;
 
+  // ─── ABYSSAL RIFT AMBIENCE ───────────────────────────────────────────────────
+  // Cosmic void horror: sub-bass drone, atonal clusters, alien tones, static hiss
+  const AbyssTrack = (() => {
+    let playing = false, masterGain = null;
+    const gains = {};
+    const vols = { bass:0.80, cluster:0.45, alien:0.35, static:0.40, pulse:0.35 };
+    let liveNodes = [], scheduledTimers = [];
+    const ROOT_HZ = 27.5; // A0 — extremely low sub-bass
+
+    function makeRev(ctx, dur=5, decay=2.5) {
+      const len = ctx.sampleRate * dur, buf = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let c=0;c<2;c++) { const d=buf.getChannelData(c); for (let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay); }
+      const cv = ctx.createConvolver(); cv.buffer = buf; return cv;
+    }
+
+    function startBass(ctx) {
+      const rev = makeRev(ctx, 6, 2); rev.connect(gains.bass);
+      [ROOT_HZ, ROOT_HZ * 1.5, ROOT_HZ * 2].forEach((f, i) => {
+        const osc = ctx.createOscillator(), gn = ctx.createGain(), filt = ctx.createBiquadFilter();
+        filt.type = 'lowpass'; filt.frequency.value = 120 + i * 30;
+        osc.type = i === 0 ? 'sawtooth' : 'sine'; osc.frequency.value = f;
+        const lfo = ctx.createOscillator(), lg = ctx.createGain();
+        lfo.frequency.value = 0.04 + i * 0.02; lg.gain.value = f * 0.003;
+        lfo.connect(lg); lg.connect(osc.frequency); lfo.start(); liveNodes.push(lfo);
+        gn.gain.setValueAtTime(0, ctx.currentTime);
+        gn.gain.linearRampToValueAtTime(i === 0 ? 0.6 : 0.2, ctx.currentTime + 4);
+        osc.connect(filt); filt.connect(gn); gn.connect(rev); osc.start(); liveNodes.push(osc);
+      });
+    }
+
+    function startCluster(ctx) {
+      const rev = makeRev(ctx, 4, 2.2); rev.connect(gains.cluster);
+      // Atonal cluster: semitones 0, 1, 6, 11 — maximum dissonance
+      [0, 1, 6, 11, 13].forEach((semi, i) => {
+        const freq = ROOT_HZ * 8 * Math.pow(2, semi / 12);
+        const osc = ctx.createOscillator(), gn = ctx.createGain();
+        osc.type = i % 2 === 0 ? 'triangle' : 'sine'; osc.frequency.value = freq;
+        osc.detune.value = (Math.random() - 0.5) * 8;
+        const lfo2 = ctx.createOscillator(), lg2 = ctx.createGain();
+        lfo2.frequency.value = 0.06 + i * 0.015; lg2.gain.value = 0.5;
+        lfo2.connect(lg2); lg2.connect(gn.gain); lfo2.start(); liveNodes.push(lfo2);
+        gn.gain.setValueAtTime(0, ctx.currentTime);
+        gn.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 3 + i);
+        osc.connect(gn); gn.connect(rev); osc.start(); liveNodes.push(osc);
+      });
+    }
+
+    function startStatic(ctx) {
+      const bufLen = ctx.sampleRate * 4, nBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+      const d = nBuf.getChannelData(0); for (let i=0;i<bufLen;i++) d[i] = Math.random()*2-1;
+      const src = ctx.createBufferSource(); src.buffer = nBuf; src.loop = true;
+      const filt = ctx.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 800; filt.Q.value = 0.3;
+      const gn = ctx.createGain(); gn.gain.value = 0.04;
+      src.connect(filt); filt.connect(gn); gn.connect(gains.static); src.start(); liveNodes.push(src);
+    }
+
+    function scheduleAlienTone(ctx) {
+      if (!playing) return;
+      const delay = 8000 + Math.random() * 12000;
+      scheduledTimers[scheduledTimers.push(setTimeout(() => {
+        if (!playing) return;
+        const freq = ROOT_HZ * (8 + Math.floor(Math.random() * 12)) * Math.pow(2, Math.floor(Math.random()*12)/12);
+        const osc = ctx.createOscillator(), gn = ctx.createGain(), rev = makeRev(ctx, 5, 3);
+        rev.connect(gains.alien);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(freq * 0.98, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(freq, ctx.currentTime + 0.8);
+        gn.gain.setValueAtTime(0, ctx.currentTime);
+        gn.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.8);
+        gn.gain.setTargetAtTime(0, ctx.currentTime + 2.5, 1.2);
+        osc.connect(gn); gn.connect(rev); osc.start(); osc.stop(ctx.currentTime + 6); liveNodes.push(osc);
+        scheduleAlienTone(ctx);
+      }, delay)) - 1];
+    }
+
+    function startPulse(ctx) {
+      const rev = makeRev(ctx, 3, 2); rev.connect(gains.pulse);
+      const interval = 5.5;
+      let i = 0;
+      function beat() {
+        if (!playing) return;
+        const on = ctx.currentTime + 0.05;
+        const osc = ctx.createOscillator(), gn = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = ROOT_HZ * 2;
+        gn.gain.setValueAtTime(0.3, on); gn.gain.exponentialRampToValueAtTime(0.001, on + 2.5);
+        osc.connect(gn); gn.connect(rev); osc.start(on); osc.stop(on + 3); liveNodes.push(osc);
+        i++;
+        scheduledTimers.push(setTimeout(beat, interval * 1000));
+      }
+      beat();
+    }
+
+    function start() {
+      if (playing) return; playing = true;
+      const ctx = _getCtx();
+      masterGain = ctx.createGain(); masterGain.gain.value = 0.0;
+      masterGain.connect(ctx.destination);
+      masterGain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 3);
+      ['bass','cluster','alien','static','pulse'].forEach(k => {
+        const g = ctx.createGain(); g.gain.value = vols[k]; g.connect(masterGain); gains[k] = g;
+      });
+      startBass(ctx); startCluster(ctx); startStatic(ctx);
+      scheduledTimers.push(setTimeout(() => { if (playing) scheduleAlienTone(ctx); }, 2000));
+      scheduledTimers.push(setTimeout(() => { if (playing) startPulse(ctx); }, 4000));
+    }
+
+    function stop() {
+      playing = false;
+      scheduledTimers.forEach(t => clearTimeout(t)); scheduledTimers = [];
+      const now = _ctx ? _ctx.currentTime : 0;
+      liveNodes.forEach(n => { try { n.stop(now + 0.3); } catch(e) {} }); liveNodes = [];
+      if (masterGain) { try { masterGain.gain.setTargetAtTime(0, now, 0.4); } catch(e) {} masterGain = null; }
+      Object.keys(gains).forEach(k => delete gains[k]);
+    }
+
+    return { start, stop };
+  })();
+
+  // ─── ABYSSAL BOSS FIGHT MUSIC ────────────────────────────────────────────────
+  // 3 phases: void_approach (BPM 55) → cosmic_battle (BPM 100) → annihilation (BPM 130)
+  const AbyssBossTrack = (() => {
+    let playing = false, masterGain = null;
+    const gains = {};
+    const vols = { bass:0.85, lead:0.70, perc:0.65, choir:0.55, tension:0.50 };
+    let liveNodes = [], scheduledTimers = [];
+    let currentPhase = 'void_approach';
+    const ROOT_HZ = 55.0; // A1
+    const phases = {
+      void_approach:  { bpm:55,  bassFreqMult:1.0, leadIntensity:0.4, percActive:false },
+      cosmic_battle:  { bpm:100, bassFreqMult:1.5, leadIntensity:0.8, percActive:true  },
+      annihilation:   { bpm:130, bassFreqMult:2.0, leadIntensity:1.2, percActive:true  },
+    };
+
+    function makeRev(ctx, dur=4, decay=2) {
+      const len = ctx.sampleRate * dur, buf = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let c=0;c<2;c++) { const d=buf.getChannelData(c); for (let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay); }
+      const cv = ctx.createConvolver(); cv.buffer = buf; return cv;
+    }
+
+    function startBass(ctx) {
+      const ph = phases[currentPhase];
+      const rev = makeRev(ctx, 5, 2.5); rev.connect(gains.bass);
+      [ROOT_HZ * ph.bassFreqMult, ROOT_HZ * ph.bassFreqMult * 2].forEach((f, i) => {
+        const osc = ctx.createOscillator(), gn = ctx.createGain();
+        osc.type = 'sawtooth'; osc.frequency.value = f;
+        const lfo = ctx.createOscillator(), lg = ctx.createGain();
+        lfo.frequency.value = 0.08 + i * 0.04; lg.gain.value = f * 0.005;
+        lfo.connect(lg); lg.connect(osc.frequency); lfo.start(); liveNodes.push(lfo);
+        gn.gain.setValueAtTime(0, ctx.currentTime);
+        gn.gain.linearRampToValueAtTime(i === 0 ? 0.55 : 0.25, ctx.currentTime + 2);
+        const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 200;
+        osc.connect(filt); filt.connect(gn); gn.connect(rev); osc.start(); liveNodes.push(osc);
+      });
+    }
+
+    function scheduleLead(ctx) {
+      if (!playing) return;
+      const ph = phases[currentPhase];
+      const bpm = ph.bpm, beat = 60 / bpm;
+      const rev = makeRev(ctx, 3, 1.8); rev.connect(gains.lead);
+      // Dissonant lead melody using tritones and minor 2nds
+      const intervals = [0, 1, 6, 8, 11, 6, 1, 0];
+      let t = ctx.currentTime + 0.1;
+      intervals.forEach(semi => {
+        const freq = ROOT_HZ * 4 * Math.pow(2, semi / 12);
+        const osc = ctx.createOscillator(), gn = ctx.createGain();
+        osc.type = currentPhase === 'annihilation' ? 'sawtooth' : 'triangle';
+        osc.frequency.value = freq;
+        const dur = beat * 0.9;
+        gn.gain.setValueAtTime(0, t);
+        gn.gain.linearRampToValueAtTime(0.22 * ph.leadIntensity, t + 0.02);
+        gn.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.connect(gn); gn.connect(rev); osc.start(t); osc.stop(t + dur + 0.1); liveNodes.push(osc);
+        t += beat;
+      });
+      const loopMs = (intervals.length * beat + 1.5) * 1000;
+      scheduledTimers.push(setTimeout(() => { if (playing) scheduleLead(ctx); }, loopMs));
+    }
+
+    function schedulePerc(ctx) {
+      if (!playing || !phases[currentPhase].percActive) return;
+      const bpm = phases[currentPhase].bpm, beat = 60 / bpm;
+      const pattern = currentPhase === 'annihilation'
+        ? [1,0,1,1, 0,1,0,1, 1,1,0,1, 0,1,1,0]
+        : [1,0,0,0, 1,0,0,0, 1,0,1,0, 0,0,1,0];
+      const rev = makeRev(ctx, 1, 3); rev.connect(gains.perc);
+      let t = ctx.currentTime;
+      pattern.forEach((hit, i) => {
+        if (!hit) { t += beat * 0.5; return; }
+        const noise = ctx.createBufferSource();
+        const nb = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+        const d = nb.getChannelData(0); for (let j=0;j<d.length;j++) d[j] = Math.random()*2-1;
+        noise.buffer = nb;
+        const filt = ctx.createBiquadFilter(); filt.type = 'bandpass';
+        filt.frequency.value = i % 4 === 0 ? 80 : 3000; filt.Q.value = 0.5;
+        const gn = ctx.createGain();
+        gn.gain.setValueAtTime(i % 4 === 0 ? 0.9 : 0.5, t);
+        gn.gain.exponentialRampToValueAtTime(0.001, t + (i%4===0 ? 0.25 : 0.06));
+        noise.connect(filt); filt.connect(gn); gn.connect(rev);
+        noise.start(t); noise.stop(t + 0.3); liveNodes.push(noise);
+        t += beat * 0.5;
+      });
+      const loopMs = (pattern.length * beat * 0.5 + 0.2) * 1000;
+      scheduledTimers.push(setTimeout(() => { if (playing) schedulePerc(ctx); }, loopMs));
+    }
+
+    function start() {
+      if (playing) return; playing = true; currentPhase = 'void_approach';
+      const ctx = _getCtx();
+      masterGain = ctx.createGain(); masterGain.gain.value = 0;
+      masterGain.connect(ctx.destination);
+      masterGain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 2);
+      ['bass','lead','perc','choir','tension'].forEach(k => {
+        const g = ctx.createGain(); g.gain.value = vols[k]; g.connect(masterGain); gains[k] = g;
+      });
+      startBass(ctx);
+      scheduledTimers.push(setTimeout(() => { if (playing) scheduleLead(ctx); }, 1000));
+    }
+
+    function setPhase(phase) {
+      if (!phases[phase] || currentPhase === phase) return;
+      currentPhase = phase;
+      if (!playing) return;
+      const ctx = _getCtx();
+      // Fade out current nodes, restart with new phase energy
+      liveNodes.forEach(n => { try { n.stop(_ctx.currentTime + 0.5); } catch(e) {} });
+      liveNodes = [];
+      scheduledTimers.forEach(t => clearTimeout(t)); scheduledTimers = [];
+      setTimeout(() => {
+        if (playing) {
+          startBass(ctx);
+          scheduleLead(ctx);
+          if (phases[phase].percActive) schedulePerc(ctx);
+        }
+      }, 600);
+    }
+
+    function stop() {
+      playing = false;
+      scheduledTimers.forEach(t => clearTimeout(t)); scheduledTimers = [];
+      const now = _ctx ? _ctx.currentTime : 0;
+      liveNodes.forEach(n => { try { n.stop(now + 0.3); } catch(e) {} }); liveNodes = [];
+      if (masterGain) { try { masterGain.gain.setTargetAtTime(0, now, 0.4); } catch(e) {} masterGain = null; }
+      Object.keys(gains).forEach(k => delete gains[k]);
+    }
+
+    return { start, stop, setPhase };
+  })();
+
+  // ─── COMBAT SFX ──────────────────────────────────────────────────────────────
+
+  // Shared helpers
+  function _noise(ctx, dur, env) {
+    // env: function(data, len) that fills the noise buffer
+    const len = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d   = buf.getChannelData(0);
+    env ? env(d, len) : d.forEach((_, i, a) => { a[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.3)); });
+    const src = ctx.createBufferSource(); src.buffer = buf; return src;
+  }
+
+  // Metallic ring: inharmonic sine partials like a real struck plate
+  function _metalRing(ctx, master, baseHz, volScale, ringDur, startT) {
+    [[1.00, 0.70], [2.76, 0.38], [5.40, 0.20], [8.93, 0.10], [13.3, 0.05]].forEach(([r, v]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = baseHz * r;
+      const dec = ringDur / Math.sqrt(r);
+      g.gain.setValueAtTime(v * volScale, startT); g.gain.exponentialRampToValueAtTime(0.001, startT + dec);
+      o.connect(g); g.connect(master); o.start(startT); o.stop(startT + dec + 0.05);
+    });
+  }
+
+  // Voiced moan: sawtooth vocal-cord source through formant filters + vibrato + breathiness
+  function _voicedMoan(ctx, master, pitch, pitchEnd, f1, f2, vibRate, vibDepth, dur, vol, startT) {
+    const src = ctx.createOscillator(); src.type = 'sawtooth';
+    src.frequency.setValueAtTime(pitch, startT);
+    src.frequency.exponentialRampToValueAtTime(pitchEnd, startT + dur * 0.85);
+    // Vibrato
+    const vib = ctx.createOscillator(), vibG = ctx.createGain();
+    vib.frequency.value = vibRate; vibG.gain.value = vibDepth;
+    vib.connect(vibG); vibG.connect(src.frequency); vib.start(startT); vib.stop(startT + dur + 0.1);
+    // Two formant bandpass filters mixed
+    const fa = ctx.createBiquadFilter(), fb = ctx.createBiquadFilter();
+    fa.type = fb.type = 'bandpass';
+    fa.frequency.value = f1; fa.Q.value = 6;
+    fb.frequency.value = f2; fb.Q.value = 9;
+    const mix = ctx.createGain(); mix.gain.value = 0.5;
+    src.connect(fa); src.connect(fb); fa.connect(mix); fb.connect(mix);
+    // Amplitude envelope: quick attack, sustained, long tail
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, startT);
+    env.gain.linearRampToValueAtTime(vol, startT + 0.03);
+    env.gain.setValueAtTime(vol, startT + dur * 0.4);
+    env.gain.exponentialRampToValueAtTime(0.001, startT + dur);
+    mix.connect(env); env.connect(master);
+    // Breathiness noise layer
+    const nSrc = _noise(ctx, dur, (d, l) => { for (let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.75)); });
+    const nF = ctx.createBiquadFilter(); nF.type='bandpass'; nF.frequency.value=f1*0.9; nF.Q.value=2;
+    const nG = ctx.createGain(); nG.gain.value = vol * 0.12;
+    nSrc.connect(nF); nF.connect(nG); nG.connect(master); nSrc.start(startT);
+    src.start(startT); src.stop(startT + dur + 0.12);
+  }
+
+  function playSfxPlayerAttack(cls, isCrit) {
+    const ctx = _getCtx(), t = ctx.currentTime;
+    const master = ctx.createGain(); master.gain.value = isCrit ? 1.3 : 1.0; master.connect(ctx.destination);
+
+    switch (cls) {
+      case 'Warrior': {
+        // Impact noise thud (lowpass)
+        const imp = _noise(ctx, 0.06, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.1)); });
+        const iF = ctx.createBiquadFilter(); iF.type='lowpass'; iF.frequency.value=350;
+        const iG = ctx.createGain(); iG.gain.value = isCrit ? 1.1 : 0.9;
+        imp.connect(iF); iF.connect(iG); iG.connect(master); imp.start(t);
+        // Metallic scrape (bandpass noise, 100ms)
+        const scr = _noise(ctx, 0.18, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*0.6*Math.exp(-i/(l*0.55)); });
+        const sF = ctx.createBiquadFilter(); sF.type='bandpass'; sF.frequency.value=2200; sF.Q.value=0.7;
+        const sG = ctx.createGain(); sG.gain.value=0.32; scr.connect(sF); sF.connect(sG); sG.connect(master); scr.start(t+0.015);
+        // Inharmonic ring — low iron plate
+        _metalRing(ctx, master, 140, isCrit ? 0.9 : 0.72, 1.4, t);
+        break;
+      }
+      case 'Mage': {
+        // Rising arcane charge (sine sweep 150→2200Hz)
+        const sweep = ctx.createOscillator(), sG = ctx.createGain();
+        sweep.type='sine'; sweep.frequency.setValueAtTime(150,t); sweep.frequency.exponentialRampToValueAtTime(2200,t+0.22);
+        sG.gain.setValueAtTime(0.45,t); sG.gain.exponentialRampToValueAtTime(0.001,t+0.28);
+        sweep.connect(sG); sG.connect(master); sweep.start(t); sweep.stop(t+0.3);
+        // Electric crackle burst
+        const cr = _noise(ctx, 0.09, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.2)); });
+        const cF = ctx.createBiquadFilter(); cF.type='highpass'; cF.frequency.value=3500;
+        const cG = ctx.createGain(); cG.gain.value=0.28; cr.connect(cF); cF.connect(cG); cG.connect(master); cr.start(t+0.14);
+        // Sparkle harmonics (3 brief sine tones above 1.5kHz)
+        [1600, 2300, 3100].forEach((f, i) => {
+          const o=ctx.createOscillator(), g=ctx.createGain();
+          o.type='sine'; o.frequency.setValueAtTime(f,t+0.16+i*0.04); o.frequency.exponentialRampToValueAtTime(f*0.7,t+0.5);
+          g.gain.setValueAtTime(0,t+0.16+i*0.04); g.gain.linearRampToValueAtTime(0.22/(i+1),t+0.19+i*0.04); g.gain.exponentialRampToValueAtTime(0.001,t+0.55-i*0.06);
+          o.connect(g); g.connect(master); o.start(t+0.16+i*0.04); o.stop(t+0.6);
+        });
+        break;
+      }
+      case 'Rogue': {
+        // Two quick blade slashes — high hiss + pitch sweep, 90ms apart
+        [0, 0.09].forEach((off, idx) => {
+          // Blade hiss
+          const h = _noise(ctx, 0.08, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.18)); });
+          const hF=ctx.createBiquadFilter(); hF.type='highpass'; hF.frequency.value=3000;
+          const hG=ctx.createGain(); hG.gain.value=0.38; h.connect(hF); hF.connect(hG); hG.connect(master); h.start(t+off);
+          // Pitch cut sweep
+          const o=ctx.createOscillator(), g=ctx.createGain();
+          o.type='sawtooth'; o.frequency.setValueAtTime(1400+idx*200,t+off); o.frequency.exponentialRampToValueAtTime(380,t+off+0.12);
+          g.gain.setValueAtTime(0.5,t+off); g.gain.exponentialRampToValueAtTime(0.001,t+off+0.15);
+          o.connect(g); g.connect(master); o.start(t+off); o.stop(t+off+0.17);
+        });
+        break;
+      }
+      case 'Paladin': {
+        // Heavy thud (mace/warhammer body)
+        const thud = _noise(ctx, 0.08, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.12)); });
+        const tF=ctx.createBiquadFilter(); tF.type='lowpass'; tF.frequency.value=280;
+        const tG=ctx.createGain(); tG.gain.value=0.9; thud.connect(tF); tF.connect(tG); tG.connect(master); thud.start(t);
+        // Holy bell — true inharmonic bell partials (longer ring)
+        _metalRing(ctx, master, 320, 0.65, 2.0, t);
+        // Bright divine shimmer overtone
+        const sh=ctx.createOscillator(), shG=ctx.createGain();
+        sh.type='triangle'; sh.frequency.setValueAtTime(1760,t+0.02); sh.frequency.exponentialRampToValueAtTime(1320,t+0.8);
+        shG.gain.setValueAtTime(0.22,t+0.02); shG.gain.exponentialRampToValueAtTime(0.001,t+1.0);
+        sh.connect(shG); shG.connect(master); sh.start(t+0.02); sh.stop(t+1.05);
+        break;
+      }
+      case 'Ranger': {
+        // Bowstring snap — very short impulsive noise
+        const snap = _noise(ctx, 0.055, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.08)); });
+        const snF=ctx.createBiquadFilter(); snF.type='bandpass'; snF.frequency.value=1800; snF.Q.value=1.2;
+        const snG=ctx.createGain(); snG.gain.value=0.95; snap.connect(snF); snF.connect(snG); snG.connect(master); snap.start(t);
+        // Arrow whistle — Doppler sweep (high → lower as arrow flies away)
+        const wh=ctx.createOscillator(), whG=ctx.createGain();
+        wh.type='sine'; wh.frequency.setValueAtTime(1600,t+0.05); wh.frequency.exponentialRampToValueAtTime(320,t+0.45);
+        whG.gain.setValueAtTime(0.28,t+0.05); whG.gain.setValueAtTime(0.28,t+0.12); whG.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+        wh.connect(whG); whG.connect(master); wh.start(t+0.05); wh.stop(t+0.52);
+        // Bow body resonance
+        const bw=ctx.createOscillator(), bwG=ctx.createGain();
+        bw.type='triangle'; bw.frequency.setValueAtTime(180,t); bw.frequency.exponentialRampToValueAtTime(90,t+0.3);
+        bwG.gain.setValueAtTime(0.25,t); bwG.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+        bw.connect(bwG); bwG.connect(master); bw.start(t); bw.stop(t+0.38);
+        break;
+      }
+      case 'Necromancer': {
+        // Bone crack — short dry transient
+        const cr = _noise(ctx, 0.05, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.07)); });
+        const crF=ctx.createBiquadFilter(); crF.type='bandpass'; crF.frequency.value=900; crF.Q.value=2;
+        const crG=ctx.createGain(); crG.gain.value=0.85; cr.connect(crF); crF.connect(crG); crG.connect(master); cr.start(t);
+        // Void hiss — sustained dark noise
+        const hs = _noise(ctx, 0.7, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*0.4*Math.exp(-i/(l*0.75)); });
+        const hsF=ctx.createBiquadFilter(); hsF.type='lowpass'; hsF.frequency.value=260;
+        const hsG=ctx.createGain(); hsG.gain.value=0.55; hs.connect(hsF); hsF.connect(hsG); hsG.connect(master); hs.start(t+0.03);
+        // Sub-bass pulse
+        const sub=ctx.createOscillator(), subG=ctx.createGain();
+        sub.type='sine'; sub.frequency.setValueAtTime(48,t); sub.frequency.exponentialRampToValueAtTime(28,t+0.5);
+        subG.gain.setValueAtTime(0.6,t); subG.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+        sub.connect(subG); subG.connect(master); sub.start(t); sub.stop(t+0.6);
+        break;
+      }
+      default: {
+        const o=ctx.createOscillator(), g=ctx.createGain();
+        o.type='sawtooth'; o.frequency.setValueAtTime(280,t); o.frequency.exponentialRampToValueAtTime(90,t+0.2);
+        g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t+0.28);
+      }
+    }
+  }
+
+  function playSfxPlayerHit(cls) {
+    const ctx = _getCtx(), t = ctx.currentTime;
+    const master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+    // All player hit sounds use _voicedMoan: (ctx, master, pitch, pitchEnd, F1, F2, vibRate, vibDepth, dur, vol, startT)
+    switch (cls) {
+      case 'Warrior':
+        // Deep "UGHHH" — low, stoic, drops in pitch
+        _voicedMoan(ctx, master, 115, 68, 340, 720, 5.0, 7, 0.85, 0.75, t); break;
+      case 'Mage':
+        // Bright "Aah!" — high, fragile, quick panic rise then fall
+        _voicedMoan(ctx, master, 380, 210, 820, 1700, 7.5, 14, 0.60, 0.65, t); break;
+      case 'Rogue':
+        // Tight "Ngh" — mid, clipped, tense suppressed grunt
+        _voicedMoan(ctx, master, 230, 170, 580, 1200, 6.0, 9, 0.50, 0.70, t); break;
+      case 'Paladin':
+        // Strained "Auunh" — mid-low, long, pained but dignified
+        _voicedMoan(ctx, master, 145, 95, 500, 950, 4.5, 6, 1.00, 0.72, t); break;
+      case 'Ranger':
+        // Breathless "Hahh" — mid, quick, winded and airy
+        _voicedMoan(ctx, master, 265, 190, 700, 1400, 8.0, 11, 0.55, 0.60, t); break;
+      case 'Necromancer':
+        // Hollow rasp "Khhh" — very low, noise-dominant, eerie wheeze
+        _voicedMoan(ctx, master, 88, 60, 220, 480, 14, 18, 0.80, 0.62, t); break;
+      default:
+        _voicedMoan(ctx, master, 180, 100, 500, 1000, 6, 10, 0.65, 0.65, t);
+    }
+  }
+
+  function playSfxEnemyHit(isCrit) {
+    const ctx = _getCtx(), t = ctx.currentTime;
+    const master = ctx.createGain(); master.gain.value = 0.85; master.connect(ctx.destination);
+    if (isCrit) {
+      // Agonised screech: distorted sawtooth + panic overtone + anguish tail
+      const curve = new Float32Array(512);
+      for (let i=0;i<512;i++) { const x=(i*2)/512-1; curve[i]=(Math.PI+220)*x/(Math.PI+220*Math.abs(x)); }
+      const dist = ctx.createWaveShaper(); dist.curve = curve;
+      const o1 = ctx.createOscillator(), g1 = ctx.createGain();
+      o1.type='sawtooth'; o1.frequency.setValueAtTime(900,t); o1.frequency.exponentialRampToValueAtTime(320,t+0.45);
+      g1.gain.setValueAtTime(0.7,t); g1.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+      o1.connect(dist); dist.connect(g1); g1.connect(master); o1.start(t); o1.stop(t+0.58);
+      // High panic layer
+      const o2=ctx.createOscillator(), g2=ctx.createGain();
+      o2.type='square'; o2.frequency.setValueAtTime(1800,t); o2.frequency.exponentialRampToValueAtTime(600,t+0.3);
+      g2.gain.setValueAtTime(0.3,t); g2.gain.exponentialRampToValueAtTime(0.001,t+0.38);
+      o2.connect(g2); g2.connect(master); o2.start(t); o2.stop(t+0.42);
+      // Anguish moan tail
+      _voicedMoan(ctx, master, 280, 140, 650, 1300, 9, 16, 0.55, 0.4, t+0.1);
+    } else {
+      // Creature groan — formant-voiced with low pitch, medium resonance
+      _voicedMoan(ctx, master, 148, 78, 400, 780, 5.5, 8, 0.75, 0.68, t);
+      // Hollow body resonance (impact thud)
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(95,t); o.frequency.exponentialRampToValueAtTime(48,t+0.2);
+      g.gain.setValueAtTime(0.45,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t+0.28);
+    }
+  }
+
+  function playSfxDodge() {
+    const ctx = _getCtx(), t = ctx.currentTime;
+    const master = ctx.createGain(); master.gain.value = 0.72; master.connect(ctx.destination);
+    // Doppler air whoosh — noise with sweeping bandpass (high → lower)
+    const ws = _noise(ctx, 0.38, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.pow(Math.sin(Math.PI*i/l),0.6); });
+    const wF = ctx.createBiquadFilter(); wF.type='bandpass'; wF.frequency.setValueAtTime(3200,t); wF.Q.value=1.2;
+    wF.frequency.exponentialRampToValueAtTime(800,t+0.35);
+    const wG = ctx.createGain(); wG.gain.setValueAtTime(0.85,t); wG.gain.exponentialRampToValueAtTime(0.001,t+0.38);
+    ws.connect(wF); wF.connect(wG); wG.connect(master); ws.start(t);
+    // Cloth flutter
+    const fl = _noise(ctx, 0.22, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*0.5*Math.exp(-i/(l*0.6)); });
+    const flF=ctx.createBiquadFilter(); flF.type='highpass'; flF.frequency.value=1200;
+    const flG=ctx.createGain(); flG.gain.value=0.35; fl.connect(flF); flF.connect(flG); flG.connect(master); fl.start(t+0.05);
+    // Footstep plant — dry click
+    const fp = _noise(ctx, 0.04, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.12)); });
+    const fpF=ctx.createBiquadFilter(); fpF.type='bandpass'; fpF.frequency.value=380; fpF.Q.value=4;
+    const fpG=ctx.createGain(); fpG.gain.value=0.55; fp.connect(fpF); fpF.connect(fpG); fpG.connect(master); fp.start(t+0.28);
+  }
+
+  function playSfxBlock() {
+    const ctx = _getCtx(), t = ctx.currentTime;
+    const master = ctx.createGain(); master.gain.value = 0.95; master.connect(ctx.destination);
+    // Heavy impact thud
+    const imp = _noise(ctx, 0.07, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.09)); });
+    const iF=ctx.createBiquadFilter(); iF.type='lowpass'; iF.frequency.value=320;
+    const iG=ctx.createGain(); iG.gain.value=1.1; imp.connect(iF); iF.connect(iG); iG.connect(master); imp.start(t);
+    // Shield plate metallic ring — higher base for a shield
+    _metalRing(ctx, master, 260, 0.80, 1.8, t);
+    // Sliding scrape (sword edge on shield rim)
+    const scr = _noise(ctx, 0.25, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*0.5*Math.exp(-i/(l*0.6)); });
+    const scF=ctx.createBiquadFilter(); scF.type='bandpass'; scF.frequency.value=2800; scF.Q.value=0.9;
+    const scG=ctx.createGain(); scG.gain.value=0.28; scr.connect(scF); scF.connect(scG); scG.connect(master); scr.start(t+0.02);
+    // Arm brace grunt (very quiet, adds physicality)
+    _voicedMoan(ctx, master, 130, 100, 380, 700, 5, 6, 0.3, 0.18, t+0.05);
+  }
+
+  function playSfxBuff() {
+    const ctx = _getCtx(), t = ctx.currentTime;
+    const master = ctx.createGain(); master.gain.value = 0.72; master.connect(ctx.destination);
+    // 6-note ascending arpeggio (C pentatonic major: C4-E4-G4-A4-C5-E5)
+    const freqs = [261, 330, 392, 440, 523, 659];
+    freqs.forEach((f, i) => {
+      const on = t + i * 0.09;
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type = i < 3 ? 'triangle' : 'sine'; o.frequency.value = f;
+      // Each note: quick attack, long sparkle tail
+      g.gain.setValueAtTime(0,on); g.gain.linearRampToValueAtTime(0.55/(i*0.15+1),on+0.012); g.gain.exponentialRampToValueAtTime(0.001,on+0.55+i*0.06);
+      o.connect(g); g.connect(master); o.start(on); o.stop(on+0.65+i*0.06);
+      // Harmonic overtone for each note (shimmer)
+      const o2=ctx.createOscillator(), g2=ctx.createGain();
+      o2.type='sine'; o2.frequency.value=f*2.003; // slightly detuned 2nd harmonic
+      g2.gain.setValueAtTime(0,on+0.01); g2.gain.linearRampToValueAtTime(0.14/(i*0.15+1),on+0.025); g2.gain.exponentialRampToValueAtTime(0.001,on+0.45+i*0.05);
+      o2.connect(g2); g2.connect(master); o2.start(on+0.01); o2.stop(on+0.55+i*0.05);
+    });
+    // Final chord burst at peak: all notes together
+    freqs.forEach(f => {
+      const on = t + 0.62;
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0,on); g.gain.linearRampToValueAtTime(0.12,on+0.015); g.gain.exponentialRampToValueAtTime(0.001,on+0.7);
+      o.connect(g); g.connect(master); o.start(on); o.stop(on+0.75);
+    });
+  }
+
+  function playSfxCurse() {
+    const ctx = _getCtx(), t = ctx.currentTime;
+    const master = ctx.createGain(); master.gain.value = 0.82; master.connect(ctx.destination);
+    // Opening dark rush — descending noise sweep
+    const rush = _noise(ctx, 0.3, (d,l) => { for(let i=0;i<l;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(l*0.5)); });
+    const rF=ctx.createBiquadFilter(); rF.type='bandpass'; rF.frequency.setValueAtTime(2800,t); rF.Q.value=0.8;
+    rF.frequency.exponentialRampToValueAtTime(300,t+0.28);
+    const rG=ctx.createGain(); rG.gain.value=0.42; rush.connect(rF); rF.connect(rG); rG.connect(master); rush.start(t);
+    // 4-note chromatic descending cluster (dissonant tritone pairs)
+    [[320,452],[240,339],[180,254],[130,184]].forEach(([f1,f2],i) => {
+      const on=t+i*0.1;
+      [f1,f2].forEach(f => {
+        const o=ctx.createOscillator(), g=ctx.createGain();
+        o.type='sawtooth'; o.frequency.setValueAtTime(f,on); o.frequency.exponentialRampToValueAtTime(f*0.6,on+0.5);
+        g.gain.setValueAtTime(0,on); g.gain.linearRampToValueAtTime(0.18/(i+1),on+0.03); g.gain.exponentialRampToValueAtTime(0.001,on+0.55-i*0.04);
+        o.connect(g); g.connect(master); o.start(on); o.stop(on+0.6);
+      });
+    });
+    // Sub-bass rumble pulse
+    const sub=ctx.createOscillator(), subG=ctx.createGain(), subF=ctx.createBiquadFilter();
+    sub.type='sawtooth'; sub.frequency.setValueAtTime(52,t); sub.frequency.exponentialRampToValueAtTime(28,t+0.8);
+    subF.type='lowpass'; subF.frequency.value=120;
+    subG.gain.setValueAtTime(0.5,t); subG.gain.exponentialRampToValueAtTime(0.001,t+0.9);
+    sub.connect(subF); subF.connect(subG); subG.connect(master); sub.start(t); sub.stop(t+0.95);
+    // Eerie high whistle (sinister overtone)
+    const wh=ctx.createOscillator(), whG=ctx.createGain();
+    wh.type='sine'; wh.frequency.setValueAtTime(880,t+0.05); wh.frequency.exponentialRampToValueAtTime(330,t+0.7);
+    whG.gain.setValueAtTime(0.15,t+0.05); whG.gain.exponentialRampToValueAtTime(0.001,t+0.8);
+    wh.connect(whG); whG.connect(master); wh.start(t+0.05); wh.stop(t+0.85);
+  }
+
   function play(track) {
     if (_active === track) return; // already playing
     if (_active) {
-      if (_active === 'town')   TownTrack.stop();
-      if (_active === 'forest') ForestTrack.stop();
-      if (_active === 'boss')   BossTrack.stop();
-      if (_active === 'desert') DesertTrack.stop();
+      if (_active === 'town')       TownTrack.stop();
+      if (_active === 'forest')     ForestTrack.stop();
+      if (_active === 'boss')       BossTrack.stop();
+      if (_active === 'desert')     DesertTrack.stop();
+      if (_active === 'abyss')      AbyssTrack.stop();
+      if (_active === 'abyss_boss') AbyssBossTrack.stop();
     }
     _active = track;
-    if (track === 'town')   TownTrack.start();
-    if (track === 'forest') ForestTrack.start();
-    if (track === 'boss')   BossTrack.start();
-    if (track === 'desert') DesertTrack.start();
-    if (!track)             _active = null;
+    if (track === 'town')       TownTrack.start();
+    if (track === 'forest')     ForestTrack.start();
+    if (track === 'boss')       BossTrack.start();
+    if (track === 'desert')     DesertTrack.start();
+    if (track === 'abyss')      AbyssTrack.start();
+    if (track === 'abyss_boss') AbyssBossTrack.start();
+    if (!track)                 _active = null;
   }
 
   function stop() { play(null); }
 
   function setBossPhase(phase) { BossTrack.setPhase(phase); }
+  function setAbyssBossPhase(phase) { AbyssBossTrack.setPhase(phase); }
 
-  return { play, stop, setBossPhase, playPartyRequest, playPartyJoined };
+  return { play, stop, setBossPhase, setAbyssBossPhase, playPartyRequest, playPartyJoined,
+           playSfxPlayerAttack, playSfxPlayerHit, playSfxEnemyHit,
+           playSfxDodge, playSfxBlock, playSfxBuff, playSfxCurse };
 })();
